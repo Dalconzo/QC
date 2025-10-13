@@ -1,0 +1,1308 @@
+﻿===== 2025-10-13 11:14:15 =====
+Pattern: SYSTEM : HSLHamHeaterShakerLib::SendToUsb - progress
+Count: 1620
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:52
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib::SendToUsb - progress; Send message = T0QU
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:53
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib::SendToUsb - progress; Received answere = T0QUid0001au0 0 0 0 0 0 0 0 0 0
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:54
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib::SendToUsb - progress; Send message = T0QW
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - start
+Count: 474
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:126
+           2025-10-03 11:29:59> SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:133
+           2025-10-03 11:30:00> SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:140
+           2025-10-03 11:30:02> SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - start;
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - complete
+Count: 474
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:130
+           2025-10-03 11:30:00> SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:137
+           2025-10-03 11:30:02> SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:144
+           2025-10-03 11:30:03> SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - complete;
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - progress
+Count: 474
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:127
+           2025-10-03 11:29:59> SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - progress; Send command to USB node ( 1 ).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:134
+           2025-10-03 11:30:00> SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - progress; Send command to USB node ( 2 ).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:141
+           2025-10-03 11:30:02> SYSTEM : HSLHamHeaterShakerLib - SetPlateLock - progress; Send command to USB node ( 3 ).
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - StopShaker - progress
+Count: 276
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:201
+           2025-10-03 11:30:28> SYSTEM : HSLHamHeaterShakerLib - StopShaker - progress; Send command to USB node ( 1 ).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:222
+           2025-10-03 11:30:46> SYSTEM : HSLHamHeaterShakerLib - StopShaker - progress; Send command to USB node ( 1 ).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:241
+           2025-10-03 11:31:10> SYSTEM : HSLHamHeaterShakerLib - StopShaker - progress; Send command to USB node ( 2 ).
+
+Pattern: Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - start
+Count: 256
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:214
+           2025-10-03 11:30:39> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:237
+           2025-10-03 11:31:03> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:254
+           2025-10-03 11:31:15> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - start;
+
+Pattern: Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - complete
+Count: 256
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:213
+           2025-10-03 11:30:39> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - complete;  > Fal_24_FL_0001:
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:234
+           2025-10-03 11:30:54> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - complete;  > Process24_1:
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:253
+           2025-10-03 11:31:15> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - complete;  > Fal_24_FL_0002:
+
+Pattern: Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - complete
+Count: 256
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:215
+           2025-10-03 11:30:45> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - complete;  > Process24_1:
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:238
+           2025-10-03 11:31:10> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - complete;  > Process24_1:
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:258
+           2025-10-03 11:36:16> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - complete;  > Process24_2:
+
+Pattern: Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - start
+Count: 256
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:212
+           2025-10-03 11:30:29> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:233
+           2025-10-03 11:30:50> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:252
+           2025-10-03 11:31:11> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - start;
+
+Pattern: Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - complete
+Count: 133
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:480
+           2025-10-03 11:45:29> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - complete;  > CO-RE 96 Head: Process96_6, 200 uL > channel 1: A1 > channel 2: B1 > channel 3: C1 > channel 4: D1 > channel 5: E1 > channel 6: F1 > channel 7: G1 > channel 8: H1 > channel 9: A2 > channel 10: B2 > channel 11: C2 > channel 12: D2 > channel 13: E2 > channel 14: F2 > channel 15: G2 > channel 16: H2 > channel 17: A3 > channel 18: B3 > channel 19: C3 > channel 20: D3 > channel 21: E3 > channel 22: F3 > channel 23: G3 > channel 24: H3 > channel 25: A4 > channel 26: B4 > channel 27: C4 > channel 28: D4 > channel 29: E4 > channel 30: F4 > channel 31: G4 > channel 32: H4 > channel 33: A5 > channel 34: B5 > channel 35: C5 > channel 36: D5 > channel 37: E5 > channel 38: F5 > channel 39: G5 > channel 40: H5 > channel 41: A6 > channel 42: B6 > channel 43: C6 > channel 44: D6 > channel 45: E6 > channel 46: F6 > channel 47: G6 > channel 48: H6 > channel 49: A7 > channel 50: B7 > channel 51: C7 > channel 52: D7 > channel 53: E7 > channel 54: F7 > channel 55: G7 > channel 56: H7 > channel 57: A8 > channel 58: B8 > channel 59: C8 > channel 60: D8 > channel 61: E8 > channel 62: F8 > channel 63: G8 > channel 64: H8 > channel 65: A9 > channel 66: B9 > channel 67: C9 > channel 68: D9 > channel 69: E9 > channel 70: F9 > channel 71: G9 > channel 72: H9 > channel 73: A10 > channel 74: B10 > channel 75: C10 > channel 76: D10 > channel 77: E10 > channel 78: F10 > channel 79: G10 > channel 80: H10 > channel 81: A11 > channel 82: B11 > channel 83: C11 > channel 84: D11 > channel 85: E11 > channel 86: F11 > channel 87: G11 > channel 88: H11 > channel 89: A12 > channel 90: B12 > channel 91: C12 > channel 92: D12 > channel 93: E12 > channel 94: F12 > channel 95: G12 > channel 96: H12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:586
+           2025-10-03 11:52:57> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - complete;  > CO-RE 96 Head: Process96_8, 200 uL > channel 1: A1 > channel 2: B1 > channel 3: C1 > channel 4: D1 > channel 5: E1 > channel 6: F1 > channel 7: G1 > channel 8: H1 > channel 9: A2 > channel 10: B2 > channel 11: C2 > channel 12: D2 > channel 13: E2 > channel 14: F2 > channel 15: G2 > channel 16: H2 > channel 17: A3 > channel 18: B3 > channel 19: C3 > channel 20: D3 > channel 21: E3 > channel 22: F3 > channel 23: G3 > channel 24: H3 > channel 25: A4 > channel 26: B4 > channel 27: C4 > channel 28: D4 > channel 29: E4 > channel 30: F4 > channel 31: G4 > channel 32: H4 > channel 33: A5 > channel 34: B5 > channel 35: C5 > channel 36: D5 > channel 37: E5 > channel 38: F5 > channel 39: G5 > channel 40: H5 > channel 41: A6 > channel 42: B6 > channel 43: C6 > channel 44: D6 > channel 45: E6 > channel 46: F6 > channel 47: G6 > channel 48: H6 > channel 49: A7 > channel 50: B7 > channel 51: C7 > channel 52: D7 > channel 53: E7 > channel 54: F7 > channel 55: G7 > channel 56: H7 > channel 57: A8 > channel 58: B8 > channel 59: C8 > channel 60: D8 > channel 61: E8 > channel 62: F8 > channel 63: G8 > channel 64: H8 > channel 65: A9 > channel 66: B9 > channel 67: C9 > channel 68: D9 > channel 69: E9 > channel 70: F9 > channel 71: G9 > channel 72: H9 > channel 73: A10 > channel 74: B10 > channel 75: C10 > channel 76: D10 > channel 77: E10 > channel 78: F10 > channel 79: G10 > channel 80: H10 > channel 81: A11 > channel 82: B11 > channel 83: C11 > channel 84: D11 > channel 85: E11 > channel 86: F11 > channel 87: G11 > channel 88: H11 > channel 89: A12 > channel 90: B12 > channel 91: C12 > channel 92: D12 > channel 93: E12 > channel 94: F12 > channel 95: G12 > channel 96: H12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:965
+           2025-10-03 12:26:45> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - complete;  > CO-RE 96 Head: Pump_Buffer2, 400 uL > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+
+Pattern: Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - complete
+Count: 133
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:478
+           2025-10-03 11:45:24> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - complete;  > CO-RE 96 Head: Process96_5, 200 uL > channel 1: A1 > channel 2: B1 > channel 3: C1 > channel 4: D1 > channel 5: E1 > channel 6: F1 > channel 7: G1 > channel 8: H1 > channel 9: A2 > channel 10: B2 > channel 11: C2 > channel 12: D2 > channel 13: E2 > channel 14: F2 > channel 15: G2 > channel 16: H2 > channel 17: A3 > channel 18: B3 > channel 19: C3 > channel 20: D3 > channel 21: E3 > channel 22: F3 > channel 23: G3 > channel 24: H3 > channel 25: A4 > channel 26: B4 > channel 27: C4 > channel 28: D4 > channel 29: E4 > channel 30: F4 > channel 31: G4 > channel 32: H4 > channel 33: A5 > channel 34: B5 > channel 35: C5 > channel 36: D5 > channel 37: E5 > channel 38: F5 > channel 39: G5 > channel 40: H5 > channel 41: A6 > channel 42: B6 > channel 43: C6 > channel 44: D6 > channel 45: E6 > channel 46: F6 > channel 47: G6 > channel 48: H6 > channel 49: A7 > channel 50: B7 > channel 51: C7 > channel 52: D7 > channel 53: E7 > channel 54: F7 > channel 55: G7 > channel 56: H7 > channel 57: A8 > channel 58: B8 > channel 59: C8 > channel 60: D8 > channel 61: E8 > channel 62: F8 > channel 63: G8 > channel 64: H8 > channel 65: A9 > channel 66: B9 > channel 67: C9 > channel 68: D9 > channel 69: E9 > channel 70: F9 > channel 71: G9 > channel 72: H9 > channel 73: A10 > channel 74: B10 > channel 75: C10 > channel 76: D10 > channel 77: E10 > channel 78: F10 > channel 79: G10 > channel 80: H10 > channel 81: A11 > channel 82: B11 > channel 83: C11 > channel 84: D11 > channel 85: E11 > channel 86: F11 > channel 87: G11 > channel 88: H11 > channel 89: A12 > channel 90: B12 > channel 91: C12 > channel 92: D12 > channel 93: E12 > channel 94: F12 > channel 95: G12 > channel 96: H12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:584
+           2025-10-03 11:52:53> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - complete;  > CO-RE 96 Head: Process96_7, 200 uL > channel 1: A1 > channel 2: B1 > channel 3: C1 > channel 4: D1 > channel 5: E1 > channel 6: F1 > channel 7: G1 > channel 8: H1 > channel 9: A2 > channel 10: B2 > channel 11: C2 > channel 12: D2 > channel 13: E2 > channel 14: F2 > channel 15: G2 > channel 16: H2 > channel 17: A3 > channel 18: B3 > channel 19: C3 > channel 20: D3 > channel 21: E3 > channel 22: F3 > channel 23: G3 > channel 24: H3 > channel 25: A4 > channel 26: B4 > channel 27: C4 > channel 28: D4 > channel 29: E4 > channel 30: F4 > channel 31: G4 > channel 32: H4 > channel 33: A5 > channel 34: B5 > channel 35: C5 > channel 36: D5 > channel 37: E5 > channel 38: F5 > channel 39: G5 > channel 40: H5 > channel 41: A6 > channel 42: B6 > channel 43: C6 > channel 44: D6 > channel 45: E6 > channel 46: F6 > channel 47: G6 > channel 48: H6 > channel 49: A7 > channel 50: B7 > channel 51: C7 > channel 52: D7 > channel 53: E7 > channel 54: F7 > channel 55: G7 > channel 56: H7 > channel 57: A8 > channel 58: B8 > channel 59: C8 > channel 60: D8 > channel 61: E8 > channel 62: F8 > channel 63: G8 > channel 64: H8 > channel 65: A9 > channel 66: B9 > channel 67: C9 > channel 68: D9 > channel 69: E9 > channel 70: F9 > channel 71: G9 > channel 72: H9 > channel 73: A10 > channel 74: B10 > channel 75: C10 > channel 76: D10 > channel 77: E10 > channel 78: F10 > channel 79: G10 > channel 80: H10 > channel 81: A11 > channel 82: B11 > channel 83: C11 > channel 84: D11 > channel 85: E11 > channel 86: F11 > channel 87: G11 > channel 88: H11 > channel 89: A12 > channel 90: B12 > channel 91: C12 > channel 92: D12 > channel 93: E12 > channel 94: F12 > channel 95: G12 > channel 96: H12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:963
+           2025-10-03 12:26:42> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - complete;  > CO-RE 96 Head: Pump_Buffer2, 400 uL > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+
+Pattern: Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - start
+Count: 133
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:474
+           2025-10-03 11:44:56> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:580
+           2025-10-03 11:52:25> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:962
+           2025-10-03 12:26:30> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - start;
+
+Pattern: Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - start
+Count: 133
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:479
+           2025-10-03 11:45:24> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:585
+           2025-10-03 11:52:53> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:964
+           2025-10-03 12:26:42> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - start;
+
+Pattern: Microlab� STAR : Start method command - progress
+Count: 87
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:12
+           2025-10-03 11:29:54> Microlab� STAR : Start method command - progress; Microlab� STAR software version: 4.5.0.5217
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:13
+           2025-10-03 11:29:54> Microlab� STAR : Start method command - progress; Serial number of Instrument: D184
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:14
+           2025-10-03 11:29:54> Microlab� STAR : Start method command - progress; Firmware version of main module: 7.5S 14 2017_09_26 (GRU C0 PLE)
+
+Pattern: Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - start
+Count: 79
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:363
+           2025-10-03 11:37:37> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:367
+           2025-10-03 11:37:57> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:371
+           2025-10-03 11:38:21> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - start;
+
+Pattern: Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - complete
+Count: 79
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:364
+           2025-10-03 11:37:48> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - complete;  > channel 1: Waste,  > channel 2: Waste,  > channel 3: Waste,  > channel 4: Waste,  > channel 5: Waste,  > channel 6: Waste,  > channel 7: Waste,  > channel 8: Waste,
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:368
+           2025-10-03 11:38:13> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - complete;  > channel 1: Tips_1000ul_2, 1 > channel 2: Tips_1000ul_2, 3 > channel 3: Tips_1000ul_2, 5 > channel 4: Tips_1000ul_2, 7 > channel 5: Tips_1000ul_2, 17 > channel 6: Tips_1000ul_2, 19 > channel 7: Tips_1000ul_2, 21 > channel 8: Tips_1000ul_2, 23
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:372
+           2025-10-03 11:38:37> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - complete;  > channel 1: Tips_1000ul_2, 33 > channel 2: Tips_1000ul_2, 35 > channel 3: Tips_1000ul_2, 37 > channel 4: Tips_1000ul_2, 39 > channel 5: Tips_1000ul_2, 49 > channel 6: Tips_1000ul_2, 51 > channel 7: Tips_1000ul_2, 53 > channel 8: Tips_1000ul_2, 55
+
+Pattern: Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - start
+Count: 74
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:481
+           2025-10-03 11:45:29> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:587
+           2025-10-03 11:52:57> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:970
+           2025-10-03 12:27:02> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - start;
+
+Pattern: Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - complete
+Count: 74
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:482
+           2025-10-03 11:45:36> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - complete;  > CO-RE 96 Head: core96slidewaste_0001,
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:588
+           2025-10-03 11:53:04> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - complete;  > CO-RE 96 Head: core96slidewaste_0001,
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:971
+           2025-10-03 12:27:09> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - complete;  > CO-RE 96 Head: Tips_1000ul_2, > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+
+Pattern: Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - complete
+Count: 73
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:473
+           2025-10-03 11:44:56> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - complete;  > CO-RE 96 Head: Tips_1000ul_2, > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:579
+           2025-10-03 11:52:25> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - complete;  > CO-RE 96 Head: Tips_1000ul_3, > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:961
+           2025-10-03 12:26:30> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - complete;  > CO-RE 96 Head: Tips_1000ul_2, > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+
+Pattern: Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - start
+Count: 73
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:472
+           2025-10-03 11:44:48> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:578
+           2025-10-03 11:52:16> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:960
+           2025-10-03 12:26:21> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - start;
+
+Pattern: Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - start
+Count: 58
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:365
+           2025-10-03 11:37:48> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:369
+           2025-10-03 11:38:13> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:373
+           2025-10-03 11:38:37> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - start;
+
+Pattern: Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - complete
+Count: 58
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:366
+           2025-10-03 11:37:57> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - complete;  > channel 1: Tips_1000ul_4, 1 > channel 2: Tips_1000ul_4, 2 > channel 3: Tips_1000ul_4, 3 > channel 4: Tips_1000ul_4, 4 > channel 5: Tips_1000ul_4, 5 > channel 6: Tips_1000ul_4, 6 > channel 7: Tips_1000ul_4, 7 > channel 8: Tips_1000ul_4, 8
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:370
+           2025-10-03 11:38:21> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - complete;  > channel 1: Tips_1000ul_4, 9 > channel 2: Tips_1000ul_4, 10 > channel 3: Tips_1000ul_4, 11 > channel 4: Tips_1000ul_4, 12 > channel 5: Tips_1000ul_4, 13 > channel 6: Tips_1000ul_4, 14 > channel 7: Tips_1000ul_4, 15 > channel 8: Tips_1000ul_4, 16
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:374
+           2025-10-03 11:38:45> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - complete;  > channel 1: Tips_1000ul_4, 17 > channel 2: Tips_1000ul_4, 18 > channel 3: Tips_1000ul_4, 19 > channel 4: Tips_1000ul_4, 20 > channel 5: Tips_1000ul_4, 21 > channel 6: Tips_1000ul_4, 22 > channel 7: Tips_1000ul_4, 23 > channel 8: Tips_1000ul_4, 24
+
+Pattern: Microlab� STAR : 1000ul Channel Dispense (Single Step) - start
+Count: 54
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:401
+           2025-10-03 11:40:36> Microlab� STAR : 1000ul Channel Dispense (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:405
+           2025-10-03 11:41:05> Microlab� STAR : 1000ul Channel Dispense (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:409
+           2025-10-03 11:41:33> Microlab� STAR : 1000ul Channel Dispense (Single Step) - start;
+
+Pattern: Microlab� STAR : 1000ul Channel Dispense (Single Step) - complete
+Count: 54
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:402
+           2025-10-03 11:40:48> Microlab� STAR : 1000ul Channel Dispense (Single Step) - complete;  > channel 1: Process24_5, A1, 396 uL > channel 2: Process24_5, B1, 396 uL > channel 3: Process24_5, C1, 396 uL > channel 4: Process24_5, D1, 396 uL > channel 5: Process24_5, A2, 396 uL > channel 6: Process24_5, B2, 396 uL > channel 7: Process24_5, C2, 396 uL > channel 8: Process24_5, D2, 396 uL
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:406
+           2025-10-03 11:41:16> Microlab� STAR : 1000ul Channel Dispense (Single Step) - complete;  > channel 1: Process24_5, A3, 396 uL > channel 2: Process24_5, B3, 396 uL > channel 3: Process24_5, C3, 396 uL > channel 4: Process24_5, D3, 396 uL > channel 5: Process24_5, A4, 396 uL > channel 6: Process24_5, B4, 396 uL > channel 7: Process24_5, C4, 396 uL > channel 8: Process24_5, D4, 396 uL
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:410
+           2025-10-03 11:41:44> Microlab� STAR : 1000ul Channel Dispense (Single Step) - complete;  > channel 1: Process24_5, A5, 396 uL > channel 2: Process24_5, B5, 396 uL > channel 3: Process24_5, C5, 396 uL > channel 4: Process24_5, D5, 396 uL > channel 5: Process24_5, A6, 396 uL
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - StartShaker - progress
+Count: 40
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:638
+           2025-10-03 11:56:20> SYSTEM : HSLHamHeaterShakerLib - StartShaker - progress; Send command to USB node ( 5 ).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:725
+           2025-10-03 11:57:21> SYSTEM : HSLHamHeaterShakerLib - StartShaker - progress; Send command to USB node ( 6 ).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:812
+           2025-10-03 11:58:24> SYSTEM : HSLHamHeaterShakerLib - StartShaker - progress; Send command to USB node ( 7 ).
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - start
+Count: 40
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:436
+           2025-10-08 23:52:01> SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:465
+           2025-10-08 23:52:02> SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:494
+           2025-10-08 23:52:03> SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - start;
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - progress
+Count: 40
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:437
+           2025-10-08 23:52:01> SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - progress; Send command to USB node ( 5 ).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:466
+           2025-10-08 23:52:02> SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - progress; Send command to USB node ( 6 ).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:495
+           2025-10-08 23:52:03> SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - progress; Send command to USB node ( 7 ).
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - StartShaker - complete
+Count: 40
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:643
+           2025-10-03 11:56:20> SYSTEM : HSLHamHeaterShakerLib - StartShaker - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:730
+           2025-10-03 11:57:21> SYSTEM : HSLHamHeaterShakerLib - StartShaker - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:817
+           2025-10-03 11:58:24> SYSTEM : HSLHamHeaterShakerLib - StartShaker - complete;
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - complete
+Count: 40
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:438
+           2025-10-08 23:52:01> SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:467
+           2025-10-08 23:52:02> SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:496
+           2025-10-08 23:52:03> SYSTEM : HSLHamHeaterShakerLib - StartShakerTimed - complete;
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - StartShaker - start
+Count: 40
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:637
+           2025-10-03 11:56:20> SYSTEM : HSLHamHeaterShakerLib - StartShaker - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:724
+           2025-10-03 11:57:21> SYSTEM : HSLHamHeaterShakerLib - StartShaker - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:811
+           2025-10-03 11:58:24> SYSTEM : HSLHamHeaterShakerLib - StartShaker - start;
+
+Pattern: Microlab� STAR : 1000ul Channel Aspirate (Single Step) - complete
+Count: 38
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:400
+           2025-10-03 11:40:36> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - complete;  > channel 1: reservoir_12col_1, A5, 396 uL > channel 2: reservoir_12col_1, B5, 396 uL > channel 3: reservoir_12col_1, C5, 396 uL > channel 4: reservoir_12col_1, D5, 396 uL > channel 5: reservoir_12col_1, E5, 396 uL > channel 6: reservoir_12col_1, F5, 396 uL > channel 7: reservoir_12col_1, G5, 396 uL > channel 8: reservoir_12col_1, H5, 396 uL
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:404
+           2025-10-03 11:41:05> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - complete;  > channel 1: reservoir_12col_1, A5, 396 uL > channel 2: reservoir_12col_1, B5, 396 uL > channel 3: reservoir_12col_1, C5, 396 uL > channel 4: reservoir_12col_1, D5, 396 uL > channel 5: reservoir_12col_1, E5, 396 uL > channel 6: reservoir_12col_1, F5, 396 uL > channel 7: reservoir_12col_1, G5, 396 uL > channel 8: reservoir_12col_1, H5, 396 uL
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:408
+           2025-10-03 11:41:33> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - complete;  > channel 1: reservoir_12col_1, A5, 396 uL > channel 2: reservoir_12col_1, B5, 396 uL > channel 3: reservoir_12col_1, C5, 396 uL > channel 4: reservoir_12col_1, D5, 396 uL > channel 5: reservoir_12col_1, E5, 396 uL
+
+Pattern: Microlab� STAR : 1000ul Channel Aspirate (Single Step) - start
+Count: 38
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:399
+           2025-10-03 11:40:21> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:403
+           2025-10-03 11:40:48> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:407
+           2025-10-03 11:41:16> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - start;
+
+Pattern: Microlab� STAR : 1000ul Channel Aspirate (Single Step) - progress
+Count: 36
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:417
+           2025-10-03 11:42:05> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - progress; Start error handling in walkaway mode (no dialog).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:419
+           2025-10-03 11:42:05> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - progress; Error automatically recovered depending of custom error configuration (Walk-Away).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:420
+           2025-10-03 11:42:16> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - progress; Start error handling in walkaway mode (no dialog).
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - progress
+Count: 27
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:50
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - progress; Version: V1.2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:59
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - progress; Version: V1.2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:62
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - progress; Version: V1.2
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - start
+Count: 27
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:51
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:60
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:63
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - start;
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - complete
+Count: 27
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:58
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:61
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:70
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - complete;
+
+Pattern: Microlab� STAR : Clean up instrument - progress
+Count: 22
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4545
+           2025-10-03 14:49:14> Microlab� STAR : Clean up instrument - progress; Move up 1000ul channels
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4546
+           2025-10-03 14:49:14> Microlab� STAR : Clean up instrument - progress; Move up CO-RE 96 Head
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4547
+           2025-10-03 14:49:15> Microlab� STAR : Clean up instrument - progress; Move down auto load Y drive
+
+Pattern: Microlab� STAR : 1000ul Channel Aspirate (Single Step) - error
+Count: 18
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:418
+           2025-10-03 11:42:05> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - error;  > channel 1: Cos_96_PCR_0002, A1, E:P1:06/71:Bottom  > channel 2: Cos_96_PCR_0002, B1, E:P2:06/71:Bottom  > channel 3: Cos_96_PCR_0002, C1, E:P3:06/71:Bottom  > channel 4: Cos_96_PCR_0002, D1, E:P4:06/71:Bottom  > channel 5: Cos_96_PCR_0002, A2, E:P5:03/00:Repeat  > channel 6: Cos_96_PCR_0002, B2, E:P6:03/00:Repeat  > channel 7: Cos_96_PCR_0002, C2, E:P7:03/00:Repeat  > channel 8: Cos_96_PCR_0002, D2, E:P8:03/00:Repeat
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:421
+           2025-10-03 11:42:16> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - error;  > channel 5: Cos_96_PCR_0002, A2, E:P5:06/71:Bottom  > channel 6: Cos_96_PCR_0002, B2, E:P6:06/71:Bottom  > channel 7: Cos_96_PCR_0002, C2, E:P7:06/71:Bottom  > channel 8: Cos_96_PCR_0002, D2, E:P8:06/71:Bottom
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:436
+           2025-10-03 11:43:04> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - error;  > channel 1: Cos_96_PCR_0002, A3, E:P1:06/71:Bottom  > channel 2: Cos_96_PCR_0002, B3, E:P2:06/71:Bottom  > channel 3: Cos_96_PCR_0002, C3, E:P3:06/71:Bottom  > channel 4: Cos_96_PCR_0002, D3, E:P4:06/71:Bottom  > channel 5: Cos_96_PCR_0002, A4, E:P5:03/00:Repeat  > channel 6: Cos_96_PCR_0002, B4, E:P6:03/00:Repeat  > channel 7: Cos_96_PCR_0002, C4, E:P7:03/00:Repeat  > channel 8: Cos_96_PCR_0002, D4, E:P8:03/00:Repeat
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - progress
+Count: 16
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:57
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - progress; USB node '1' firmware version = 3.2S e 2015-08-17 (Heater Shaker)
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:69
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - progress; USB node '2' firmware version = 3.2S e 2015-08-17 (Heater Shaker)
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:78
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - CreateUsbDevice - progress; USB node '3' firmware version = 3.2S e 2015-08-17 (Heater Shaker)
+
+Pattern: Microlab� STAR : Firmware Command (Single Step) - complete
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4519
+           2025-10-03 14:06:47> Microlab� STAR : Firmware Command (Single Step) - complete;  > EM: er99/00 H001/32
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4521
+           2025-10-03 14:06:49> Microlab� STAR : Firmware Command (Single Step) - complete;  > XR: er00
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4525
+           2025-10-03 14:06:56> Microlab� STAR : Firmware Command (Single Step) - complete;  > ZD: er00
+
+Pattern: Microlab� STAR : 1000ul Channel Dispense - complete
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:430
+           2025-10-03 11:42:51> Microlab� STAR : 1000ul Channel Dispense - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:448
+           2025-10-03 11:43:49> Microlab� STAR : 1000ul Channel Dispense - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:466
+           2025-10-03 11:44:46> Microlab� STAR : 1000ul Channel Dispense - complete;
+
+Pattern: Microlab� STAR : 1000ul Channel Aspirate - start
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:413
+           2025-10-03 11:41:53> Microlab� STAR : 1000ul Channel Aspirate - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:431
+           2025-10-03 11:42:51> Microlab� STAR : 1000ul Channel Aspirate - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:449
+           2025-10-03 11:43:49> Microlab� STAR : 1000ul Channel Aspirate - start;
+
+Pattern: Microlab� STAR : Firmware Command (Single Step) - start
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4518
+           2025-10-03 14:06:46> Microlab� STAR : Firmware Command (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4520
+           2025-10-03 14:06:47> Microlab� STAR : Firmware Command (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4524
+           2025-10-03 14:06:55> Microlab� STAR : Firmware Command (Single Step) - start;
+
+Pattern: Microlab� STAR : 1000ul Channel Dispense - start
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:425
+           2025-10-03 11:42:23> Microlab� STAR : 1000ul Channel Dispense - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:443
+           2025-10-03 11:43:21> Microlab� STAR : 1000ul Channel Dispense - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:461
+           2025-10-03 11:44:18> Microlab� STAR : 1000ul Channel Dispense - start;
+
+Pattern: Microlab� STAR : 1000ul Channel Aspirate - complete
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:424
+           2025-10-03 11:42:23> Microlab� STAR : 1000ul Channel Aspirate - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:442
+           2025-10-03 11:43:21> Microlab� STAR : 1000ul Channel Aspirate - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:460
+           2025-10-03 11:44:18> Microlab� STAR : 1000ul Channel Aspirate - complete;
+
+Pattern: Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - complete
+Count: 12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:236
+           2025-10-03 11:31:03> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - complete;  > Barcode read: TBDR80300001000236
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:279
+           2025-10-03 11:36:31> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - complete;  > Barcode read: TBDR80300001000237
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:319
+           2025-10-03 11:37:02> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - complete;  > Barcode read: TBDR80300001000226
+
+Pattern: Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - start
+Count: 12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:235
+           2025-10-03 11:30:54> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:278
+           2025-10-03 11:36:24> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:318
+           2025-10-03 11:36:56> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - start;
+
+Pattern: Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - progress
+Count: 11
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:255
+           2025-10-03 11:31:20> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - progress; Error handling waiting for manual recovery!
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:257
+           2025-10-03 11:36:12> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - progress; Error manually recovered by user.
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:1187
+           2025-10-03 12:30:44> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - progress; Error handling waiting for manual recovery!
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - StopTempCtrl - progress
+Count: 8
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:622
+           2025-10-02 11:58:41> SYSTEM : HSLHamHeaterShakerLib - StopTempCtrl - progress; Send command to USB node ( 1 ).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:634
+           2025-10-02 11:58:42> SYSTEM : HSLHamHeaterShakerLib - StopTempCtrl - progress; Send command to USB node ( 2 ).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:646
+           2025-10-02 11:58:43> SYSTEM : HSLHamHeaterShakerLib - StopTempCtrl - progress; Send command to USB node ( 3 ).
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - SetSimulation - start
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:46
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - SetSimulation - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:389
+           2025-10-03 11:40:10> SYSTEM : HSLHamHeaterShakerLib - SetSimulation - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:53
+           2025-10-02 11:46:37> SYSTEM : HSLHamHeaterShakerLib - SetSimulation - start;
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - SetSimulation - complete
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:48
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - SetSimulation - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:391
+           2025-10-03 11:40:10> SYSTEM : HSLHamHeaterShakerLib - SetSimulation - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:55
+           2025-10-02 11:46:37> SYSTEM : HSLHamHeaterShakerLib - SetSimulation - complete;
+
+Pattern: Microlab� STAR : Move Auto Load (Single Step) - start
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:198
+           2025-10-03 11:30:27> Microlab� STAR : Move Auto Load (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:3630
+           2025-10-03 13:44:29> Microlab� STAR : Move Auto Load (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:205
+           2025-10-02 11:46:49> Microlab� STAR : Move Auto Load (Single Step) - start;
+
+Pattern: Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - progress
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:475
+           2025-10-03 11:45:01> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - progress; Start error handling in walkaway mode (no dialog).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:477
+           2025-10-03 11:45:01> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - progress; Error automatically recovered depending of custom error configuration (Walk-Away).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:581
+           2025-10-03 11:52:30> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - progress; Start error handling in walkaway mode (no dialog).
+
+Pattern: Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - error
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:256
+           2025-10-03 11:36:12> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - error;  > CO-RE Grip: 1, E:P8:02/62:Repeat
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:1188
+           2025-10-03 12:32:01> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - error;  > CO-RE Grip: 1, E:P7:02/62:Repeat
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:1567
+           2025-10-03 12:38:48> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - error;  > CO-RE Grip: 1, E:P7:02/62:Repeat
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - SetSimulation - progress
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:47
+           2025-10-03 11:29:58> SYSTEM : HSLHamHeaterShakerLib - SetSimulation - progress; Set simulate mode = 0
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:390
+           2025-10-03 11:40:10> SYSTEM : HSLHamHeaterShakerLib - SetSimulation - progress; Set simulate mode = 0
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:54
+           2025-10-02 11:46:37> SYSTEM : HSLHamHeaterShakerLib - SetSimulation - progress; Set simulate mode = 0
+
+Pattern: Microlab� STAR : Move Auto Load (Single Step) - complete
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:199
+           2025-10-03 11:30:28> Microlab� STAR : Move Auto Load (Single Step) - complete;  > position: 54
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:3631
+           2025-10-03 13:44:34> Microlab� STAR : Move Auto Load (Single Step) - complete;  > position: 54
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:206
+           2025-10-02 11:46:54> Microlab� STAR : Move Auto Load (Single Step) - complete;  > position: 54
+
+Pattern: SYSTEM : Execute method - start
+Count: 5
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:43
+           2025-10-03 11:29:58> SYSTEM : Execute method - start; Method file C:\Program Files (x86)\HAMILTON\Methods\TSP\24 Well Plate Assays - 12-Column Reservoir\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1.hsl
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:43
+           2025-10-02 11:44:34> SYSTEM : Execute method - start; Method file C:\Program Files (x86)\HAMILTON\Methods\TSP\24 Well Plate Assays - 12-Column Reservoir\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1.hsl
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:52
+           2025-10-02 11:46:37> SYSTEM : Execute method - start;
+
+Pattern: SYSTEM : HSLMapReport::DeleteFile - complete
+Count: 5
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:188
+           2025-10-03 11:30:22> SYSTEM : HSLMapReport::DeleteFile - complete;  > File 'C:\Program Files (x86)\HAMILTON\Logfiles\TemporaryFileForSorting.xls' successfully deleted
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:3618
+           2025-10-03 13:43:59> SYSTEM : HSLMapReport::DeleteFile - complete;  > File 'C:\Program Files (x86)\HAMILTON\Logfiles\TemporaryFileForSorting.xls' successfully deleted
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:195
+           2025-10-02 11:46:45> SYSTEM : HSLMapReport::DeleteFile - complete;  > File 'C:\Program Files (x86)\HAMILTON\Logfiles\TemporaryFileForSorting.xls' successfully deleted
+
+Pattern: SYSTEM : HSLMapReport::DeleteFile - start
+Count: 5
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:187
+           2025-10-03 11:30:22> SYSTEM : HSLMapReport::DeleteFile - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:3617
+           2025-10-03 13:43:59> SYSTEM : HSLMapReport::DeleteFile - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:194
+           2025-10-02 11:46:45> SYSTEM : HSLMapReport::DeleteFile - start;
+
+Pattern: Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - progress
+Count: 4
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:484
+           2025-10-03 11:45:44> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - progress; Error handling waiting for manual recovery!
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:486
+           2025-10-03 11:46:12> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - progress; Error manually recovered by user.
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:590
+           2025-10-03 11:53:12> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - progress; Error handling waiting for manual recovery!
+
+Pattern: SYSTEM : Start method - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:42
+           2025-10-03 11:29:58> SYSTEM : Start method - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:42
+           2025-10-02 11:44:34> SYSTEM : Start method - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:42
+           2025-10-08 23:51:29> SYSTEM : Start method - complete;
+
+Pattern: Microlab� STAR : Resume command - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:51
+           2025-10-02 11:46:37> Microlab� STAR : Resume command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:398
+           2025-10-02 11:52:44> Microlab� STAR : Resume command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:501
+           2025-10-02 11:58:15> Microlab� STAR : Resume command - complete;
+
+Pattern: Microlab� STAR : Resume command - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:50
+           2025-10-02 11:46:37> Microlab� STAR : Resume command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:397
+           2025-10-02 11:52:44> Microlab� STAR : Resume command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:500
+           2025-10-02 11:58:15> Microlab� STAR : Resume command - start;
+
+Pattern: Microlab� STAR : Pause command - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:47
+           2025-10-02 11:46:13> Microlab� STAR : Pause command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:394
+           2025-10-02 11:51:42> Microlab� STAR : Pause command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:495
+           2025-10-02 11:58:09> Microlab� STAR : Pause command - complete;
+
+Pattern: Microlab� STAR : Initialize (Single Step) - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:44
+           2025-10-03 11:29:58> Microlab� STAR : Initialize (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:44
+           2025-10-02 11:44:34> Microlab� STAR : Initialize (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:44
+           2025-10-08 23:51:29> Microlab� STAR : Initialize (Single Step) - start;
+
+Pattern: SYSTEM : Pause method - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:48
+           2025-10-02 11:46:13> SYSTEM : Pause method - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:395
+           2025-10-02 11:51:42> SYSTEM : Pause method - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:496
+           2025-10-02 11:58:09> SYSTEM : Pause method - complete;
+
+Pattern: Microlab� STAR : Start method command - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:41
+           2025-10-03 11:29:57> Microlab� STAR : Start method command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:41
+           2025-10-02 11:44:34> Microlab� STAR : Start method command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:41
+           2025-10-08 23:51:29> Microlab� STAR : Start method command - complete;
+
+Pattern: Microlab� STAR : End method command - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4556
+           2025-10-03 14:49:35> Microlab� STAR : End method command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:723
+           2025-10-02 11:58:54> Microlab� STAR : End method command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2519
+           2025-10-08 23:54:10> Microlab� STAR : End method command - complete;
+
+Pattern: SYSTEM : Pause method - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:45
+           2025-10-02 11:45:56> SYSTEM : Pause method - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:392
+           2025-10-02 11:51:41> SYSTEM : Pause method - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:493
+           2025-10-02 11:58:03> SYSTEM : Pause method - start;
+
+Pattern: Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - error
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:476
+           2025-10-03 11:45:01> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - error;  > CO-RE 96 Head: 1, E:H0:06/71:Bottom
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:582
+           2025-10-03 11:52:30> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - error;  > CO-RE 96 Head: 1, E:H0:06/71:Bottom
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:487
+           2025-10-02 11:57:34> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - error;  > CO-RE 96 Head: 1, E:H0:102/70:Bottom
+
+Pattern: Microlab� STAR : Initialize (Single Step) - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:45
+           2025-10-03 11:29:58> Microlab� STAR : Initialize (Single Step) - complete;  > channel 1: Waste,  > channel 2: Waste,  > channel 3: Waste,  > channel 4: Waste,  > channel 5: Waste,  > channel 6: Waste,  > channel 7: Waste,  > channel 8: Waste,
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:49
+           2025-10-02 11:46:13> Microlab� STAR : Initialize (Single Step) - complete;  > channel 1: Waste,  > channel 2: Waste,  > channel 3: Waste,  > channel 4: Waste,  > channel 5: Waste,  > channel 6: Waste,  > channel 7: Waste,  > channel 8: Waste,
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:45
+           2025-10-08 23:51:29> Microlab� STAR : Initialize (Single Step) - complete;  > channel 1: Waste,  > channel 2: Waste,  > channel 3: Waste,  > channel 4: Waste,  > channel 5: Waste,  > channel 6: Waste,  > channel 7: Waste,  > channel 8: Waste,
+
+Pattern: Microlab� STAR : Start method command - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:11
+           2025-10-03 11:29:54> Microlab� STAR : Start method command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:11
+           2025-10-02 11:44:30> Microlab� STAR : Start method command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:11
+           2025-10-08 23:51:27> Microlab� STAR : Start method command - start;
+
+Pattern: Microlab� STAR : Communication - progress
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:2
+           2025-10-03 11:29:48> Microlab� STAR : Communication - progress; Connection to instrument is created.
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:2
+           2025-10-02 11:44:15> Microlab� STAR : Communication - progress; Connection to instrument is created.
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2
+           2025-10-08 23:51:22> Microlab� STAR : Communication - progress; Connection to instrument is created.
+
+Pattern: Microlab� STAR : End method command - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4544
+           2025-10-03 14:49:14> Microlab� STAR : End method command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:717
+           2025-10-02 11:58:48> Microlab� STAR : End method command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2510
+           2025-10-08 23:54:09> Microlab� STAR : End method command - start;
+
+Pattern: Microlab� STAR : Pause command - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:46
+           2025-10-02 11:45:56> Microlab� STAR : Pause command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:393
+           2025-10-02 11:51:41> Microlab� STAR : Pause command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:494
+           2025-10-02 11:58:03> Microlab� STAR : Pause command - start;
+
+Pattern: Microlab� STAR : Lock/Unlock Front Cover (Single Step) - complete
+Count: 2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4539
+           2025-10-03 14:07:20> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - complete;  > Front Cover: unlocked
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2505
+           2025-10-08 23:53:47> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - complete;  > Front Cover: unlocked
+
+Pattern: Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - error
+Count: 2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:485
+           2025-10-03 11:46:12> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - error;  > channel 1: Tips_1000ul_4, 49, E:P1:08/75:Next  > channel 2: Tips_1000ul_4, 50, E:P2:08/75:Next  > channel 3: Tips_1000ul_4, 51, E:P3:08/75:Next  > channel 4: Tips_1000ul_4, 52, E:P4:08/75:Next  > channel 5: Tips_1000ul_4, 53, E:P5:08/75:Next  > channel 6: Tips_1000ul_4, 54, E:P6:08/75:Next  > channel 7: Tips_1000ul_4, 55, E:P7:08/75:Next  > channel 8: Tips_1000ul_4, 56, E:P8:08/75:Next
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:591
+           2025-10-03 11:54:43> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - error;  > channel 1: Tips_1000ul_4, 81, E:P1:08/75:Next  > channel 2: Tips_1000ul_4, 82, E:P2:08/75:Next  > channel 3: Tips_1000ul_4, 83, E:P3:08/75:Next  > channel 4: Tips_1000ul_4, 84, E:P4:08/75:Next  > channel 5: Tips_1000ul_4, 85, E:P5:08/75:Next  > channel 6: Tips_1000ul_4, 86, E:P6:08/75:Next  > channel 7: Tips_1000ul_4, 87, E:P7:08/75:Next  > channel 8: Tips_1000ul_4, 88, E:P8:08/75:Next
+
+Pattern: Microlab� STAR : - progress
+Count: 2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4548
+           2025-10-03 14:49:20> Microlab� STAR :  - progress; User action: Message box 'Clean up instrument' message 'Please check the traverse height!   Is there any indication for a collision when moving horizontally?' was closed with button 'No'.
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4550
+           2025-10-03 14:49:25> Microlab� STAR :  - progress; User action: Message box 'Microlab� STAR' message 'Check the positions under following channels: '7,8'.   Are the positions for the listed channels empty?' was closed with button 'Yes'.
+
+Pattern: Microlab� STAR : Lock/Unlock Front Cover (Single Step) - start
+Count: 2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4538
+           2025-10-03 14:07:20> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2504
+           2025-10-08 23:53:47> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - start;
+
+Pattern: Microlab� STAR : Abort command - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:713
+           2025-10-02 11:58:48> Microlab� STAR : Abort command - complete;
+
+Pattern: Microlab� STAR : Abort requested command - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:503
+           2025-10-02 11:58:15> Microlab� STAR : Abort requested command - complete;
+
+Pattern: Microlab� STAR : Abort requested command - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:502
+           2025-10-02 11:58:15> Microlab� STAR : Abort requested command - start;
+
+Pattern: SYSTEM : Abort method - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:499
+           2025-10-02 11:58:15> SYSTEM : Abort method - start;
+
+Pattern: Microlab� STAR : Abort command - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:712
+           2025-10-02 11:58:48> Microlab� STAR : Abort command - start;
+
+Pattern: SYSTEM : Edit Sequence Dialog - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:3628
+           2025-10-03 13:44:29> SYSTEM : Edit Sequence Dialog - start; <>,   Prompt: <>
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - StopAllShaker - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:573
+           2025-10-02 11:58:40> SYSTEM : HSLHamHeaterShakerLib - StopAllShaker - complete;
+
+Pattern: Microlab� STAR : Start Method Abort Handler command - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:505
+           2025-10-02 11:58:16> Microlab� STAR : Start Method Abort Handler command - complete;
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - Terminate - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:711
+           2025-10-02 11:58:48> SYSTEM : HSLHamHeaterShakerLib - Terminate - complete;
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - Terminate - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:710
+           2025-10-02 11:58:48> SYSTEM : HSLHamHeaterShakerLib - Terminate - start;
+
+Pattern: SYSTEM : User Input Dialog - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:49
+           2025-10-08 23:51:30> SYSTEM : User Input Dialog - start; <>,   Available button(s): <OK>,   Default button: <OK>,   Input row 1 - Prompt: <1 for shaker simulation(no shaking). 0 for shaking/heating>, Default value: <1>, Type: <Integer>, Minimum: <0>, Maximum: <1>
+
+Pattern: SYSTEM : Method has been aborted by the user - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:498
+           2025-10-02 11:58:15> SYSTEM : Method has been aborted by the user - complete;
+
+Pattern: Microlab� STAR : Start Method Abort Handler command - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:504
+           2025-10-02 11:58:15> Microlab� STAR : Start Method Abort Handler command - start;
+
+Pattern: SYSTEM : Edit Sequence Dialog - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:3629
+           2025-10-03 13:44:29> SYSTEM : Edit Sequence Dialog - complete; <>
+
+Pattern: SYSTEM : HSLHamHeaterShakerLib - StopAllShaker - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:516
+           2025-10-02 11:58:25> SYSTEM : HSLHamHeaterShakerLib - StopAllShaker - start;
+
+Pattern: SYSTEM : User Input Dialog - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:50
+           2025-10-08 23:51:32> SYSTEM : User Input Dialog - complete; <>,   Closed with: <OK (1)>,   Input row 1 - Prompt: <1 for shaker simulation(no shaking). 0 for shaking/heating>, Value: <1>
+
+===== 2025-10-13 11:15:37 =====
+Pattern: Microlabr STAR : Lock/Unlock Front Cover (Single Step) - start
+Count: 2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4538
+           2025-10-03 14:07:20> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2504
+           2025-10-08 23:53:47> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - start;
+
+Pattern: Microlabr STAR : Lock/Unlock Front Cover (Single Step) - complete
+Count: 2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4539
+           2025-10-03 14:07:20> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - complete;  > Front Cover: unlocked
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2505
+           2025-10-08 23:53:47> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - complete;  > Front Cover: unlocked
+
+===== 2025-10-13 11:52:11 =====
+Pattern: Microlabr STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - start
+Count: 256
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:212
+           2025-10-03 11:30:29> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:233
+           2025-10-03 11:30:50> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:252
+           2025-10-03 11:31:11> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - start;
+
+Pattern: Microlabr STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - complete
+Count: 256
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:215
+           2025-10-03 11:30:45> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - complete;  > Process24_1:
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:238
+           2025-10-03 11:31:10> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - complete;  > Process24_1:
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:258
+           2025-10-03 11:36:16> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - complete;  > Process24_2:
+
+Pattern: Microlabr STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - complete
+Count: 256
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:213
+           2025-10-03 11:30:39> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - complete;  > Fal_24_FL_0001:
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:234
+           2025-10-03 11:30:54> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - complete;  > Process24_1:
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:253
+           2025-10-03 11:31:15> Microlab� STAR : 1000ul Channel CO-RE Grip Get Plate (Single Step) - complete;  > Fal_24_FL_0002:
+
+Pattern: Microlabr STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - start
+Count: 256
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:214
+           2025-10-03 11:30:39> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:237
+           2025-10-03 11:31:03> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:254
+           2025-10-03 11:31:15> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - start;
+
+Pattern: Microlabr STAR : CO-RE 96 Head Dispense (Single Step) - start
+Count: 133
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:479
+           2025-10-03 11:45:24> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:585
+           2025-10-03 11:52:53> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:964
+           2025-10-03 12:26:42> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - start;
+
+Pattern: Microlabr STAR : CO-RE 96 Head Aspirate (Single Step) - complete
+Count: 133
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:478
+           2025-10-03 11:45:24> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - complete;  > CO-RE 96 Head: Process96_5, 200 uL > channel 1: A1 > channel 2: B1 > channel 3: C1 > channel 4: D1 > channel 5: E1 > channel 6: F1 > channel 7: G1 > channel 8: H1 > channel 9: A2 > channel 10: B2 > channel 11: C2 > channel 12: D2 > channel 13: E2 > channel 14: F2 > channel 15: G2 > channel 16: H2 > channel 17: A3 > channel 18: B3 > channel 19: C3 > channel 20: D3 > channel 21: E3 > channel 22: F3 > channel 23: G3 > channel 24: H3 > channel 25: A4 > channel 26: B4 > channel 27: C4 > channel 28: D4 > channel 29: E4 > channel 30: F4 > channel 31: G4 > channel 32: H4 > channel 33: A5 > channel 34: B5 > channel 35: C5 > channel 36: D5 > channel 37: E5 > channel 38: F5 > channel 39: G5 > channel 40: H5 > channel 41: A6 > channel 42: B6 > channel 43: C6 > channel 44: D6 > channel 45: E6 > channel 46: F6 > channel 47: G6 > channel 48: H6 > channel 49: A7 > channel 50: B7 > channel 51: C7 > channel 52: D7 > channel 53: E7 > channel 54: F7 > channel 55: G7 > channel 56: H7 > channel 57: A8 > channel 58: B8 > channel 59: C8 > channel 60: D8 > channel 61: E8 > channel 62: F8 > channel 63: G8 > channel 64: H8 > channel 65: A9 > channel 66: B9 > channel 67: C9 > channel 68: D9 > channel 69: E9 > channel 70: F9 > channel 71: G9 > channel 72: H9 > channel 73: A10 > channel 74: B10 > channel 75: C10 > channel 76: D10 > channel 77: E10 > channel 78: F10 > channel 79: G10 > channel 80: H10 > channel 81: A11 > channel 82: B11 > channel 83: C11 > channel 84: D11 > channel 85: E11 > channel 86: F11 > channel 87: G11 > channel 88: H11 > channel 89: A12 > channel 90: B12 > channel 91: C12 > channel 92: D12 > channel 93: E12 > channel 94: F12 > channel 95: G12 > channel 96: H12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:584
+           2025-10-03 11:52:53> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - complete;  > CO-RE 96 Head: Process96_7, 200 uL > channel 1: A1 > channel 2: B1 > channel 3: C1 > channel 4: D1 > channel 5: E1 > channel 6: F1 > channel 7: G1 > channel 8: H1 > channel 9: A2 > channel 10: B2 > channel 11: C2 > channel 12: D2 > channel 13: E2 > channel 14: F2 > channel 15: G2 > channel 16: H2 > channel 17: A3 > channel 18: B3 > channel 19: C3 > channel 20: D3 > channel 21: E3 > channel 22: F3 > channel 23: G3 > channel 24: H3 > channel 25: A4 > channel 26: B4 > channel 27: C4 > channel 28: D4 > channel 29: E4 > channel 30: F4 > channel 31: G4 > channel 32: H4 > channel 33: A5 > channel 34: B5 > channel 35: C5 > channel 36: D5 > channel 37: E5 > channel 38: F5 > channel 39: G5 > channel 40: H5 > channel 41: A6 > channel 42: B6 > channel 43: C6 > channel 44: D6 > channel 45: E6 > channel 46: F6 > channel 47: G6 > channel 48: H6 > channel 49: A7 > channel 50: B7 > channel 51: C7 > channel 52: D7 > channel 53: E7 > channel 54: F7 > channel 55: G7 > channel 56: H7 > channel 57: A8 > channel 58: B8 > channel 59: C8 > channel 60: D8 > channel 61: E8 > channel 62: F8 > channel 63: G8 > channel 64: H8 > channel 65: A9 > channel 66: B9 > channel 67: C9 > channel 68: D9 > channel 69: E9 > channel 70: F9 > channel 71: G9 > channel 72: H9 > channel 73: A10 > channel 74: B10 > channel 75: C10 > channel 76: D10 > channel 77: E10 > channel 78: F10 > channel 79: G10 > channel 80: H10 > channel 81: A11 > channel 82: B11 > channel 83: C11 > channel 84: D11 > channel 85: E11 > channel 86: F11 > channel 87: G11 > channel 88: H11 > channel 89: A12 > channel 90: B12 > channel 91: C12 > channel 92: D12 > channel 93: E12 > channel 94: F12 > channel 95: G12 > channel 96: H12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:963
+           2025-10-03 12:26:42> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - complete;  > CO-RE 96 Head: Pump_Buffer2, 400 uL > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+
+Pattern: Microlabr STAR : CO-RE 96 Head Aspirate (Single Step) - start
+Count: 133
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:474
+           2025-10-03 11:44:56> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:580
+           2025-10-03 11:52:25> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:962
+           2025-10-03 12:26:30> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - start;
+
+Pattern: Microlabr STAR : CO-RE 96 Head Dispense (Single Step) - complete
+Count: 133
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:480
+           2025-10-03 11:45:29> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - complete;  > CO-RE 96 Head: Process96_6, 200 uL > channel 1: A1 > channel 2: B1 > channel 3: C1 > channel 4: D1 > channel 5: E1 > channel 6: F1 > channel 7: G1 > channel 8: H1 > channel 9: A2 > channel 10: B2 > channel 11: C2 > channel 12: D2 > channel 13: E2 > channel 14: F2 > channel 15: G2 > channel 16: H2 > channel 17: A3 > channel 18: B3 > channel 19: C3 > channel 20: D3 > channel 21: E3 > channel 22: F3 > channel 23: G3 > channel 24: H3 > channel 25: A4 > channel 26: B4 > channel 27: C4 > channel 28: D4 > channel 29: E4 > channel 30: F4 > channel 31: G4 > channel 32: H4 > channel 33: A5 > channel 34: B5 > channel 35: C5 > channel 36: D5 > channel 37: E5 > channel 38: F5 > channel 39: G5 > channel 40: H5 > channel 41: A6 > channel 42: B6 > channel 43: C6 > channel 44: D6 > channel 45: E6 > channel 46: F6 > channel 47: G6 > channel 48: H6 > channel 49: A7 > channel 50: B7 > channel 51: C7 > channel 52: D7 > channel 53: E7 > channel 54: F7 > channel 55: G7 > channel 56: H7 > channel 57: A8 > channel 58: B8 > channel 59: C8 > channel 60: D8 > channel 61: E8 > channel 62: F8 > channel 63: G8 > channel 64: H8 > channel 65: A9 > channel 66: B9 > channel 67: C9 > channel 68: D9 > channel 69: E9 > channel 70: F9 > channel 71: G9 > channel 72: H9 > channel 73: A10 > channel 74: B10 > channel 75: C10 > channel 76: D10 > channel 77: E10 > channel 78: F10 > channel 79: G10 > channel 80: H10 > channel 81: A11 > channel 82: B11 > channel 83: C11 > channel 84: D11 > channel 85: E11 > channel 86: F11 > channel 87: G11 > channel 88: H11 > channel 89: A12 > channel 90: B12 > channel 91: C12 > channel 92: D12 > channel 93: E12 > channel 94: F12 > channel 95: G12 > channel 96: H12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:586
+           2025-10-03 11:52:57> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - complete;  > CO-RE 96 Head: Process96_8, 200 uL > channel 1: A1 > channel 2: B1 > channel 3: C1 > channel 4: D1 > channel 5: E1 > channel 6: F1 > channel 7: G1 > channel 8: H1 > channel 9: A2 > channel 10: B2 > channel 11: C2 > channel 12: D2 > channel 13: E2 > channel 14: F2 > channel 15: G2 > channel 16: H2 > channel 17: A3 > channel 18: B3 > channel 19: C3 > channel 20: D3 > channel 21: E3 > channel 22: F3 > channel 23: G3 > channel 24: H3 > channel 25: A4 > channel 26: B4 > channel 27: C4 > channel 28: D4 > channel 29: E4 > channel 30: F4 > channel 31: G4 > channel 32: H4 > channel 33: A5 > channel 34: B5 > channel 35: C5 > channel 36: D5 > channel 37: E5 > channel 38: F5 > channel 39: G5 > channel 40: H5 > channel 41: A6 > channel 42: B6 > channel 43: C6 > channel 44: D6 > channel 45: E6 > channel 46: F6 > channel 47: G6 > channel 48: H6 > channel 49: A7 > channel 50: B7 > channel 51: C7 > channel 52: D7 > channel 53: E7 > channel 54: F7 > channel 55: G7 > channel 56: H7 > channel 57: A8 > channel 58: B8 > channel 59: C8 > channel 60: D8 > channel 61: E8 > channel 62: F8 > channel 63: G8 > channel 64: H8 > channel 65: A9 > channel 66: B9 > channel 67: C9 > channel 68: D9 > channel 69: E9 > channel 70: F9 > channel 71: G9 > channel 72: H9 > channel 73: A10 > channel 74: B10 > channel 75: C10 > channel 76: D10 > channel 77: E10 > channel 78: F10 > channel 79: G10 > channel 80: H10 > channel 81: A11 > channel 82: B11 > channel 83: C11 > channel 84: D11 > channel 85: E11 > channel 86: F11 > channel 87: G11 > channel 88: H11 > channel 89: A12 > channel 90: B12 > channel 91: C12 > channel 92: D12 > channel 93: E12 > channel 94: F12 > channel 95: G12 > channel 96: H12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:965
+           2025-10-03 12:26:45> Microlab� STAR : CO-RE 96 Head Dispense (Single Step) - complete;  > CO-RE 96 Head: Pump_Buffer2, 400 uL > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+
+Pattern: Microlabr STAR : Start method command - progress
+Count: 87
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:12
+           2025-10-03 11:29:54> Microlab� STAR : Start method command - progress; Microlab� STAR software version: 4.5.0.5217
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:13
+           2025-10-03 11:29:54> Microlab� STAR : Start method command - progress; Serial number of Instrument: D184
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:14
+           2025-10-03 11:29:54> Microlab� STAR : Start method command - progress; Firmware version of main module: 7.5S 14 2017_09_26 (GRU C0 PLE)
+
+Pattern: Microlabr STAR : 1000ul Channel Tip Eject (Single Step) - start
+Count: 79
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:363
+           2025-10-03 11:37:37> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:367
+           2025-10-03 11:37:57> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:371
+           2025-10-03 11:38:21> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - start;
+
+Pattern: Microlabr STAR : 1000ul Channel Tip Eject (Single Step) - complete
+Count: 79
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:364
+           2025-10-03 11:37:48> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - complete;  > channel 1: Waste,  > channel 2: Waste,  > channel 3: Waste,  > channel 4: Waste,  > channel 5: Waste,  > channel 6: Waste,  > channel 7: Waste,  > channel 8: Waste,
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:368
+           2025-10-03 11:38:13> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - complete;  > channel 1: Tips_1000ul_2, 1 > channel 2: Tips_1000ul_2, 3 > channel 3: Tips_1000ul_2, 5 > channel 4: Tips_1000ul_2, 7 > channel 5: Tips_1000ul_2, 17 > channel 6: Tips_1000ul_2, 19 > channel 7: Tips_1000ul_2, 21 > channel 8: Tips_1000ul_2, 23
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:372
+           2025-10-03 11:38:37> Microlab� STAR : 1000ul Channel Tip Eject (Single Step) - complete;  > channel 1: Tips_1000ul_2, 33 > channel 2: Tips_1000ul_2, 35 > channel 3: Tips_1000ul_2, 37 > channel 4: Tips_1000ul_2, 39 > channel 5: Tips_1000ul_2, 49 > channel 6: Tips_1000ul_2, 51 > channel 7: Tips_1000ul_2, 53 > channel 8: Tips_1000ul_2, 55
+
+Pattern: Microlabr STAR : CO-RE 96 Head Tip Eject (Single Step) - complete
+Count: 74
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:482
+           2025-10-03 11:45:36> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - complete;  > CO-RE 96 Head: core96slidewaste_0001,
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:588
+           2025-10-03 11:53:04> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - complete;  > CO-RE 96 Head: core96slidewaste_0001,
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:971
+           2025-10-03 12:27:09> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - complete;  > CO-RE 96 Head: Tips_1000ul_2, > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+
+Pattern: Microlabr STAR : CO-RE 96 Head Tip Eject (Single Step) - start
+Count: 74
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:481
+           2025-10-03 11:45:29> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:587
+           2025-10-03 11:52:57> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:970
+           2025-10-03 12:27:02> Microlab� STAR : CO-RE 96 Head Tip Eject (Single Step) - start;
+
+Pattern: Microlabr STAR : CO-RE 96 Head Tip Pick Up (Single Step) - complete
+Count: 73
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:473
+           2025-10-03 11:44:56> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - complete;  > CO-RE 96 Head: Tips_1000ul_2, > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:579
+           2025-10-03 11:52:25> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - complete;  > CO-RE 96 Head: Tips_1000ul_3, > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:961
+           2025-10-03 12:26:30> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - complete;  > CO-RE 96 Head: Tips_1000ul_2, > channel 1: 1 > channel 2: 2 > channel 3: 3 > channel 4: 4 > channel 5: 5 > channel 6: 6 > channel 7: 7 > channel 8: 8 > channel 9: 9 > channel 10: 10 > channel 11: 11 > channel 12: 12 > channel 13: 13 > channel 14: 14 > channel 15: 15 > channel 16: 16 > channel 17: 17 > channel 18: 18 > channel 19: 19 > channel 20: 20 > channel 21: 21 > channel 22: 22 > channel 23: 23 > channel 24: 24 > channel 25: 25 > channel 26: 26 > channel 27: 27 > channel 28: 28 > channel 29: 29 > channel 30: 30 > channel 31: 31 > channel 32: 32 > channel 33: 33 > channel 34: 34 > channel 35: 35 > channel 36: 36 > channel 37: 37 > channel 38: 38 > channel 39: 39 > channel 40: 40 > channel 41: 41 > channel 42: 42 > channel 43: 43 > channel 44: 44 > channel 45: 45 > channel 46: 46 > channel 47: 47 > channel 48: 48 > channel 49: 49 > channel 50: 50 > channel 51: 51 > channel 52: 52 > channel 53: 53 > channel 54: 54 > channel 55: 55 > channel 56: 56 > channel 57: 57 > channel 58: 58 > channel 59: 59 > channel 60: 60 > channel 61: 61 > channel 62: 62 > channel 63: 63 > channel 64: 64 > channel 65: 65 > channel 66: 66 > channel 67: 67 > channel 68: 68 > channel 69: 69 > channel 70: 70 > channel 71: 71 > channel 72: 72 > channel 73: 73 > channel 74: 74 > channel 75: 75 > channel 76: 76 > channel 77: 77 > channel 78: 78 > channel 79: 79 > channel 80: 80 > channel 81: 81 > channel 82: 82 > channel 83: 83 > channel 84: 84 > channel 85: 85 > channel 86: 86 > channel 87: 87 > channel 88: 88 > channel 89: 89 > channel 90: 90 > channel 91: 91 > channel 92: 92 > channel 93: 93 > channel 94: 94 > channel 95: 95 > channel 96: 96
+
+Pattern: Microlabr STAR : CO-RE 96 Head Tip Pick Up (Single Step) - start
+Count: 73
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:472
+           2025-10-03 11:44:48> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:578
+           2025-10-03 11:52:16> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:960
+           2025-10-03 12:26:21> Microlab� STAR : CO-RE 96 Head Tip Pick Up (Single Step) - start;
+
+Pattern: Microlabr STAR : 1000ul Channel Tip Pick Up (Single Step) - start
+Count: 58
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:365
+           2025-10-03 11:37:48> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:369
+           2025-10-03 11:38:13> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:373
+           2025-10-03 11:38:37> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - start;
+
+Pattern: Microlabr STAR : 1000ul Channel Tip Pick Up (Single Step) - complete
+Count: 58
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:366
+           2025-10-03 11:37:57> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - complete;  > channel 1: Tips_1000ul_4, 1 > channel 2: Tips_1000ul_4, 2 > channel 3: Tips_1000ul_4, 3 > channel 4: Tips_1000ul_4, 4 > channel 5: Tips_1000ul_4, 5 > channel 6: Tips_1000ul_4, 6 > channel 7: Tips_1000ul_4, 7 > channel 8: Tips_1000ul_4, 8
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:370
+           2025-10-03 11:38:21> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - complete;  > channel 1: Tips_1000ul_4, 9 > channel 2: Tips_1000ul_4, 10 > channel 3: Tips_1000ul_4, 11 > channel 4: Tips_1000ul_4, 12 > channel 5: Tips_1000ul_4, 13 > channel 6: Tips_1000ul_4, 14 > channel 7: Tips_1000ul_4, 15 > channel 8: Tips_1000ul_4, 16
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:374
+           2025-10-03 11:38:45> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - complete;  > channel 1: Tips_1000ul_4, 17 > channel 2: Tips_1000ul_4, 18 > channel 3: Tips_1000ul_4, 19 > channel 4: Tips_1000ul_4, 20 > channel 5: Tips_1000ul_4, 21 > channel 6: Tips_1000ul_4, 22 > channel 7: Tips_1000ul_4, 23 > channel 8: Tips_1000ul_4, 24
+
+Pattern: Microlabr STAR : 1000ul Channel Dispense (Single Step) - complete
+Count: 54
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:402
+           2025-10-03 11:40:48> Microlab� STAR : 1000ul Channel Dispense (Single Step) - complete;  > channel 1: Process24_5, A1, 396 uL > channel 2: Process24_5, B1, 396 uL > channel 3: Process24_5, C1, 396 uL > channel 4: Process24_5, D1, 396 uL > channel 5: Process24_5, A2, 396 uL > channel 6: Process24_5, B2, 396 uL > channel 7: Process24_5, C2, 396 uL > channel 8: Process24_5, D2, 396 uL
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:406
+           2025-10-03 11:41:16> Microlab� STAR : 1000ul Channel Dispense (Single Step) - complete;  > channel 1: Process24_5, A3, 396 uL > channel 2: Process24_5, B3, 396 uL > channel 3: Process24_5, C3, 396 uL > channel 4: Process24_5, D3, 396 uL > channel 5: Process24_5, A4, 396 uL > channel 6: Process24_5, B4, 396 uL > channel 7: Process24_5, C4, 396 uL > channel 8: Process24_5, D4, 396 uL
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:410
+           2025-10-03 11:41:44> Microlab� STAR : 1000ul Channel Dispense (Single Step) - complete;  > channel 1: Process24_5, A5, 396 uL > channel 2: Process24_5, B5, 396 uL > channel 3: Process24_5, C5, 396 uL > channel 4: Process24_5, D5, 396 uL > channel 5: Process24_5, A6, 396 uL
+
+Pattern: Microlabr STAR : 1000ul Channel Dispense (Single Step) - start
+Count: 54
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:401
+           2025-10-03 11:40:36> Microlab� STAR : 1000ul Channel Dispense (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:405
+           2025-10-03 11:41:05> Microlab� STAR : 1000ul Channel Dispense (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:409
+           2025-10-03 11:41:33> Microlab� STAR : 1000ul Channel Dispense (Single Step) - start;
+
+Pattern: Microlabr STAR : 1000ul Channel Aspirate (Single Step) - complete
+Count: 38
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:400
+           2025-10-03 11:40:36> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - complete;  > channel 1: reservoir_12col_1, A5, 396 uL > channel 2: reservoir_12col_1, B5, 396 uL > channel 3: reservoir_12col_1, C5, 396 uL > channel 4: reservoir_12col_1, D5, 396 uL > channel 5: reservoir_12col_1, E5, 396 uL > channel 6: reservoir_12col_1, F5, 396 uL > channel 7: reservoir_12col_1, G5, 396 uL > channel 8: reservoir_12col_1, H5, 396 uL
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:404
+           2025-10-03 11:41:05> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - complete;  > channel 1: reservoir_12col_1, A5, 396 uL > channel 2: reservoir_12col_1, B5, 396 uL > channel 3: reservoir_12col_1, C5, 396 uL > channel 4: reservoir_12col_1, D5, 396 uL > channel 5: reservoir_12col_1, E5, 396 uL > channel 6: reservoir_12col_1, F5, 396 uL > channel 7: reservoir_12col_1, G5, 396 uL > channel 8: reservoir_12col_1, H5, 396 uL
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:408
+           2025-10-03 11:41:33> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - complete;  > channel 1: reservoir_12col_1, A5, 396 uL > channel 2: reservoir_12col_1, B5, 396 uL > channel 3: reservoir_12col_1, C5, 396 uL > channel 4: reservoir_12col_1, D5, 396 uL > channel 5: reservoir_12col_1, E5, 396 uL
+
+Pattern: Microlabr STAR : 1000ul Channel Aspirate (Single Step) - start
+Count: 38
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:399
+           2025-10-03 11:40:21> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:403
+           2025-10-03 11:40:48> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:407
+           2025-10-03 11:41:16> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - start;
+
+Pattern: Microlabr STAR : 1000ul Channel Aspirate (Single Step) - progress
+Count: 36
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:417
+           2025-10-03 11:42:05> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - progress; Start error handling in walkaway mode (no dialog).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:419
+           2025-10-03 11:42:05> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - progress; Error automatically recovered depending of custom error configuration (Walk-Away).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:420
+           2025-10-03 11:42:16> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - progress; Start error handling in walkaway mode (no dialog).
+
+Pattern: Microlabr STAR : Clean up instrument - progress
+Count: 22
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4545
+           2025-10-03 14:49:14> Microlab� STAR : Clean up instrument - progress; Move up 1000ul channels
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4546
+           2025-10-03 14:49:14> Microlab� STAR : Clean up instrument - progress; Move up CO-RE 96 Head
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4547
+           2025-10-03 14:49:15> Microlab� STAR : Clean up instrument - progress; Move down auto load Y drive
+
+Pattern: Microlabr STAR : 1000ul Channel Aspirate (Single Step) - error
+Count: 18
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:418
+           2025-10-03 11:42:05> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - error;  > channel 1: Cos_96_PCR_0002, A1, E:P1:06/71:Bottom  > channel 2: Cos_96_PCR_0002, B1, E:P2:06/71:Bottom  > channel 3: Cos_96_PCR_0002, C1, E:P3:06/71:Bottom  > channel 4: Cos_96_PCR_0002, D1, E:P4:06/71:Bottom  > channel 5: Cos_96_PCR_0002, A2, E:P5:03/00:Repeat  > channel 6: Cos_96_PCR_0002, B2, E:P6:03/00:Repeat  > channel 7: Cos_96_PCR_0002, C2, E:P7:03/00:Repeat  > channel 8: Cos_96_PCR_0002, D2, E:P8:03/00:Repeat
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:421
+           2025-10-03 11:42:16> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - error;  > channel 5: Cos_96_PCR_0002, A2, E:P5:06/71:Bottom  > channel 6: Cos_96_PCR_0002, B2, E:P6:06/71:Bottom  > channel 7: Cos_96_PCR_0002, C2, E:P7:06/71:Bottom  > channel 8: Cos_96_PCR_0002, D2, E:P8:06/71:Bottom
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:436
+           2025-10-03 11:43:04> Microlab� STAR : 1000ul Channel Aspirate (Single Step) - error;  > channel 1: Cos_96_PCR_0002, A3, E:P1:06/71:Bottom  > channel 2: Cos_96_PCR_0002, B3, E:P2:06/71:Bottom  > channel 3: Cos_96_PCR_0002, C3, E:P3:06/71:Bottom  > channel 4: Cos_96_PCR_0002, D3, E:P4:06/71:Bottom  > channel 5: Cos_96_PCR_0002, A4, E:P5:03/00:Repeat  > channel 6: Cos_96_PCR_0002, B4, E:P6:03/00:Repeat  > channel 7: Cos_96_PCR_0002, C4, E:P7:03/00:Repeat  > channel 8: Cos_96_PCR_0002, D4, E:P8:03/00:Repeat
+
+Pattern: Microlabr STAR : 1000ul Channel Dispense - start
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:425
+           2025-10-03 11:42:23> Microlab� STAR : 1000ul Channel Dispense - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:443
+           2025-10-03 11:43:21> Microlab� STAR : 1000ul Channel Dispense - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:461
+           2025-10-03 11:44:18> Microlab� STAR : 1000ul Channel Dispense - start;
+
+Pattern: Microlabr STAR : Firmware Command (Single Step) - start
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4518
+           2025-10-03 14:06:46> Microlab� STAR : Firmware Command (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4520
+           2025-10-03 14:06:47> Microlab� STAR : Firmware Command (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4524
+           2025-10-03 14:06:55> Microlab� STAR : Firmware Command (Single Step) - start;
+
+Pattern: Microlabr STAR : 1000ul Channel Aspirate - complete
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:424
+           2025-10-03 11:42:23> Microlab� STAR : 1000ul Channel Aspirate - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:442
+           2025-10-03 11:43:21> Microlab� STAR : 1000ul Channel Aspirate - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:460
+           2025-10-03 11:44:18> Microlab� STAR : 1000ul Channel Aspirate - complete;
+
+Pattern: Microlabr STAR : 1000ul Channel Dispense - complete
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:430
+           2025-10-03 11:42:51> Microlab� STAR : 1000ul Channel Dispense - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:448
+           2025-10-03 11:43:49> Microlab� STAR : 1000ul Channel Dispense - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:466
+           2025-10-03 11:44:46> Microlab� STAR : 1000ul Channel Dispense - complete;
+
+Pattern: Microlabr STAR : Firmware Command (Single Step) - complete
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4519
+           2025-10-03 14:06:47> Microlab� STAR : Firmware Command (Single Step) - complete;  > EM: er99/00 H001/32
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4521
+           2025-10-03 14:06:49> Microlab� STAR : Firmware Command (Single Step) - complete;  > XR: er00
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4525
+           2025-10-03 14:06:56> Microlab� STAR : Firmware Command (Single Step) - complete;  > ZD: er00
+
+Pattern: Microlabr STAR : 1000ul Channel Aspirate - start
+Count: 15
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:413
+           2025-10-03 11:41:53> Microlab� STAR : 1000ul Channel Aspirate - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:431
+           2025-10-03 11:42:51> Microlab� STAR : 1000ul Channel Aspirate - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:449
+           2025-10-03 11:43:49> Microlab� STAR : 1000ul Channel Aspirate - start;
+
+Pattern: Microlabr STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - start
+Count: 12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:235
+           2025-10-03 11:30:54> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:278
+           2025-10-03 11:36:24> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:318
+           2025-10-03 11:36:56> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - start;
+
+Pattern: Microlabr STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - complete
+Count: 12
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:236
+           2025-10-03 11:31:03> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - complete;  > Barcode read: TBDR80300001000236
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:279
+           2025-10-03 11:36:31> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - complete;  > Barcode read: TBDR80300001000237
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:319
+           2025-10-03 11:37:02> Microlab� STAR : 1000ul Channel CO-RE Grip Read Barcode (Single Step) - complete;  > Barcode read: TBDR80300001000226
+
+Pattern: Microlabr STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - progress
+Count: 11
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:255
+           2025-10-03 11:31:20> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - progress; Error handling waiting for manual recovery!
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:257
+           2025-10-03 11:36:12> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - progress; Error manually recovered by user.
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:1187
+           2025-10-03 12:30:44> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - progress; Error handling waiting for manual recovery!
+
+Pattern: Microlabr STAR : CO-RE 96 Head Aspirate (Single Step) - progress
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:475
+           2025-10-03 11:45:01> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - progress; Start error handling in walkaway mode (no dialog).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:477
+           2025-10-03 11:45:01> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - progress; Error automatically recovered depending of custom error configuration (Walk-Away).
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:581
+           2025-10-03 11:52:30> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - progress; Start error handling in walkaway mode (no dialog).
+
+Pattern: Microlabr STAR : Move Auto Load (Single Step) - start
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:198
+           2025-10-03 11:30:27> Microlab� STAR : Move Auto Load (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:3630
+           2025-10-03 13:44:29> Microlab� STAR : Move Auto Load (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:205
+           2025-10-02 11:46:49> Microlab� STAR : Move Auto Load (Single Step) - start;
+
+Pattern: Microlabr STAR : Move Auto Load (Single Step) - complete
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:199
+           2025-10-03 11:30:28> Microlab� STAR : Move Auto Load (Single Step) - complete;  > position: 54
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:3631
+           2025-10-03 13:44:34> Microlab� STAR : Move Auto Load (Single Step) - complete;  > position: 54
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:206
+           2025-10-02 11:46:54> Microlab� STAR : Move Auto Load (Single Step) - complete;  > position: 54
+
+Pattern: Microlabr STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - error
+Count: 6
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:256
+           2025-10-03 11:36:12> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - error;  > CO-RE Grip: 1, E:P8:02/62:Repeat
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:1188
+           2025-10-03 12:32:01> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - error;  > CO-RE Grip: 1, E:P7:02/62:Repeat
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:1567
+           2025-10-03 12:38:48> Microlab� STAR : 1000ul Channel CO-RE Grip Place Plate (Single Step) - error;  > CO-RE Grip: 1, E:P7:02/62:Repeat
+
+Pattern: Microlabr STAR : 1000ul Channel Tip Pick Up (Single Step) - progress
+Count: 4
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:484
+           2025-10-03 11:45:44> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - progress; Error handling waiting for manual recovery!
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:486
+           2025-10-03 11:46:12> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - progress; Error manually recovered by user.
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:590
+           2025-10-03 11:53:12> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - progress; Error handling waiting for manual recovery!
+
+Pattern: Microlabr STAR : Pause command - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:46
+           2025-10-02 11:45:56> Microlab� STAR : Pause command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:393
+           2025-10-02 11:51:41> Microlab� STAR : Pause command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:494
+           2025-10-02 11:58:03> Microlab� STAR : Pause command - start;
+
+Pattern: Microlabr STAR : Start method command - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:41
+           2025-10-03 11:29:57> Microlab� STAR : Start method command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:41
+           2025-10-02 11:44:34> Microlab� STAR : Start method command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:41
+           2025-10-08 23:51:29> Microlab� STAR : Start method command - complete;
+
+Pattern: Microlabr STAR : Initialize (Single Step) - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:44
+           2025-10-03 11:29:58> Microlab� STAR : Initialize (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:44
+           2025-10-02 11:44:34> Microlab� STAR : Initialize (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:44
+           2025-10-08 23:51:29> Microlab� STAR : Initialize (Single Step) - start;
+
+Pattern: Microlabr STAR : Initialize (Single Step) - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:45
+           2025-10-03 11:29:58> Microlab� STAR : Initialize (Single Step) - complete;  > channel 1: Waste,  > channel 2: Waste,  > channel 3: Waste,  > channel 4: Waste,  > channel 5: Waste,  > channel 6: Waste,  > channel 7: Waste,  > channel 8: Waste,
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:49
+           2025-10-02 11:46:13> Microlab� STAR : Initialize (Single Step) - complete;  > channel 1: Waste,  > channel 2: Waste,  > channel 3: Waste,  > channel 4: Waste,  > channel 5: Waste,  > channel 6: Waste,  > channel 7: Waste,  > channel 8: Waste,
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:45
+           2025-10-08 23:51:29> Microlab� STAR : Initialize (Single Step) - complete;  > channel 1: Waste,  > channel 2: Waste,  > channel 3: Waste,  > channel 4: Waste,  > channel 5: Waste,  > channel 6: Waste,  > channel 7: Waste,  > channel 8: Waste,
+
+Pattern: Microlabr STAR : Communication - progress
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:2
+           2025-10-03 11:29:48> Microlab� STAR : Communication - progress; Connection to instrument is created.
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:2
+           2025-10-02 11:44:15> Microlab� STAR : Communication - progress; Connection to instrument is created.
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2
+           2025-10-08 23:51:22> Microlab� STAR : Communication - progress; Connection to instrument is created.
+
+Pattern: Microlabr STAR : CO-RE 96 Head Aspirate (Single Step) - error
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:476
+           2025-10-03 11:45:01> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - error;  > CO-RE 96 Head: 1, E:H0:06/71:Bottom
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:582
+           2025-10-03 11:52:30> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - error;  > CO-RE 96 Head: 1, E:H0:06/71:Bottom
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:487
+           2025-10-02 11:57:34> Microlab� STAR : CO-RE 96 Head Aspirate (Single Step) - error;  > CO-RE 96 Head: 1, E:H0:102/70:Bottom
+
+Pattern: Microlabr STAR : Resume command - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:51
+           2025-10-02 11:46:37> Microlab� STAR : Resume command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:398
+           2025-10-02 11:52:44> Microlab� STAR : Resume command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:501
+           2025-10-02 11:58:15> Microlab� STAR : Resume command - complete;
+
+Pattern: Microlabr STAR : Resume command - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:50
+           2025-10-02 11:46:37> Microlab� STAR : Resume command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:397
+           2025-10-02 11:52:44> Microlab� STAR : Resume command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:500
+           2025-10-02 11:58:15> Microlab� STAR : Resume command - start;
+
+Pattern: Microlabr STAR : Pause command - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:47
+           2025-10-02 11:46:13> Microlab� STAR : Pause command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:394
+           2025-10-02 11:51:42> Microlab� STAR : Pause command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:495
+           2025-10-02 11:58:09> Microlab� STAR : Pause command - complete;
+
+Pattern: Microlabr STAR : Start method command - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:11
+           2025-10-03 11:29:54> Microlab� STAR : Start method command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:11
+           2025-10-02 11:44:30> Microlab� STAR : Start method command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:11
+           2025-10-08 23:51:27> Microlab� STAR : Start method command - start;
+
+Pattern: Microlabr STAR : End method command - complete
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4556
+           2025-10-03 14:49:35> Microlab� STAR : End method command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:723
+           2025-10-02 11:58:54> Microlab� STAR : End method command - complete;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2519
+           2025-10-08 23:54:10> Microlab� STAR : End method command - complete;
+
+Pattern: Microlabr STAR : End method command - start
+Count: 3
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4544
+           2025-10-03 14:49:14> Microlab� STAR : End method command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:717
+           2025-10-02 11:58:48> Microlab� STAR : End method command - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2510
+           2025-10-08 23:54:09> Microlab� STAR : End method command - start;
+
+Pattern: Microlabr STAR : Lock/Unlock Front Cover (Single Step) - complete
+Count: 2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4539
+           2025-10-03 14:07:20> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - complete;  > Front Cover: unlocked
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2505
+           2025-10-08 23:53:47> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - complete;  > Front Cover: unlocked
+
+Pattern: Microlabr STAR : - progress
+Count: 2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4548
+           2025-10-03 14:49:20> Microlab� STAR :  - progress; User action: Message box 'Clean up instrument' message 'Please check the traverse height!   Is there any indication for a collision when moving horizontally?' was closed with button 'No'.
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4550
+           2025-10-03 14:49:25> Microlab� STAR :  - progress; User action: Message box 'Microlab� STAR' message 'Check the positions under following channels: '7,8'.   Are the positions for the listed channels empty?' was closed with button 'Yes'.
+
+Pattern: Microlabr STAR : 1000ul Channel Tip Pick Up (Single Step) - error
+Count: 2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:485
+           2025-10-03 11:46:12> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - error;  > channel 1: Tips_1000ul_4, 49, E:P1:08/75:Next  > channel 2: Tips_1000ul_4, 50, E:P2:08/75:Next  > channel 3: Tips_1000ul_4, 51, E:P3:08/75:Next  > channel 4: Tips_1000ul_4, 52, E:P4:08/75:Next  > channel 5: Tips_1000ul_4, 53, E:P5:08/75:Next  > channel 6: Tips_1000ul_4, 54, E:P6:08/75:Next  > channel 7: Tips_1000ul_4, 55, E:P7:08/75:Next  > channel 8: Tips_1000ul_4, 56, E:P8:08/75:Next
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:591
+           2025-10-03 11:54:43> Microlab� STAR : 1000ul Channel Tip Pick Up (Single Step) - error;  > channel 1: Tips_1000ul_4, 81, E:P1:08/75:Next  > channel 2: Tips_1000ul_4, 82, E:P2:08/75:Next  > channel 3: Tips_1000ul_4, 83, E:P3:08/75:Next  > channel 4: Tips_1000ul_4, 84, E:P4:08/75:Next  > channel 5: Tips_1000ul_4, 85, E:P5:08/75:Next  > channel 6: Tips_1000ul_4, 86, E:P6:08/75:Next  > channel 7: Tips_1000ul_4, 87, E:P7:08/75:Next  > channel 8: Tips_1000ul_4, 88, E:P8:08/75:Next
+
+Pattern: Microlabr STAR : Lock/Unlock Front Cover (Single Step) - start
+Count: 2
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_4921934b5cd34c42bbe1ea566208df04_Trace.trc:4538
+           2025-10-03 14:07:20> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - start;
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc:2504
+           2025-10-08 23:53:47> Microlab� STAR : Lock/Unlock Front Cover (Single Step) - start;
+
+Pattern: Microlabr STAR : Abort command - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:713
+           2025-10-02 11:58:48> Microlab� STAR : Abort command - complete;
+
+Pattern: Microlabr STAR : Abort requested command - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:503
+           2025-10-02 11:58:15> Microlab� STAR : Abort requested command - complete;
+
+Pattern: Microlabr STAR : Start Method Abort Handler command - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:504
+           2025-10-02 11:58:15> Microlab� STAR : Start Method Abort Handler command - start;
+
+Pattern: Microlabr STAR : Abort requested command - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:502
+           2025-10-02 11:58:15> Microlab� STAR : Abort requested command - start;
+
+Pattern: Microlabr STAR : Abort command - start
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:712
+           2025-10-02 11:58:48> Microlab� STAR : Abort command - start;
+
+Pattern: Microlabr STAR : Start Method Abort Handler command - complete
+Count: 1
+  Sample: C:\QC\HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc:505
+           2025-10-02 11:58:16> Microlab� STAR : Start Method Abort Handler command - complete;
+
