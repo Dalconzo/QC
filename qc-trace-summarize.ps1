@@ -14,17 +14,55 @@ param(
   [int]$MaxPreview = 10
 )
 
+$script:TestMachines = @("H14","H13","H7")
+$script:NormalizedRoot = [System.IO.Path]::GetFullPath($SourceRoot)
+
+function Get-MachineFromPath([string]$Path) {
+  $parts = $Path -split '[\\/]'
+  $idx = [Array]::IndexOf($parts, "Logs")
+  if ($idx -ge 0 -and $idx + 1 -lt $parts.Length) {
+    return $parts[$idx + 1]
+  }
+  # fallback: use immediate parent directory
+  if ($parts.Length -ge 2) {
+    return $parts[$parts.Length - 2]
+  }
+  return ""
+}
+
+function Get-RelativePath([string]$FullPath) {
+  $root = $script:NormalizedRoot
+  if ($FullPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $FullPath.Substring($root.Length).TrimStart('\','/')
+  }
+  return $FullPath
+}
+
 function New-TraceSummary {
   param(
     [System.IO.FileInfo]$File
   )
 
+  $machine = Get-MachineFromPath -Path $File.DirectoryName
+  $environment = if ($script:TestMachines -contains $machine) { "Test" } else { "Production" }
+
+  $startUtc = $null
+  $endUtc = $null
+  $lastTimestamp = $null
+  $isSimulation = $false
+
   $summary = [ordered]@{
     file           = $File.FullName
     name           = $File.Name
     size_bytes     = $File.Length
+    relative_path  = Get-RelativePath -FullPath $File.FullName
+    machine        = $machine
+    environment    = $environment
+    run_local_date = $null
     start_utc      = $null
+    start_local    = $null
     end_utc        = $null
+    end_local      = $null
     duration_min   = $null
     user           = $null
     method         = $null
@@ -34,10 +72,10 @@ function New-TraceSummary {
     error_lines    = 0
     warning_lines  = 0
     dialog_count   = 0
+    is_simulation  = $false
   }
 
   $preview = @()
-  $lastTimestamp = $null
 
   $sr = [System.IO.StreamReader]::new($File.FullName)
   try {
@@ -48,7 +86,7 @@ function New-TraceSummary {
 
       if ($line -match '^(?<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})>') {
         $ts = [datetime]::ParseExact($Matches.ts, "yyyy-MM-dd HH:mm:ss", $null).ToUniversalTime()
-        if (-not $summary.start_utc) { $summary.start_utc = $ts }
+        if (-not $startUtc) { $startUtc = $ts }
         $lastTimestamp = $ts
       }
 
@@ -78,8 +116,12 @@ function New-TraceSummary {
         }
         if ($rest -match 'time=([^$]+)') {
           $endLocal = [datetime]::ParseExact($Matches[1], "yyyy-MM-dd HH:mm", $null)
-          $summary.end_utc = $endLocal.ToUniversalTime()
+          $endUtc = $endLocal.ToUniversalTime()
         }
+      }
+
+      if ($line -match 'SetSimulation - progress' -and $line -match 'simulate mode\s*=\s*1') {
+        $isSimulation = $true
       }
 
       if ($line -match '(?i)\berror\b') {
@@ -98,13 +140,35 @@ function New-TraceSummary {
     $sr.Dispose()
   }
 
-  if (-not $summary.end_utc -and $lastTimestamp) {
-    $summary.end_utc = $lastTimestamp
+  if ($lastTimestamp) {
+    if (-not $endUtc) {
+      $endUtc = $lastTimestamp
+    } elseif ($lastTimestamp -gt $endUtc) {
+      $endUtc = $lastTimestamp
+    }
   }
 
-  if ($summary.start_utc -and $summary.end_utc) {
-    $summary.duration_min = [math]::Round(($summary.end_utc - $summary.start_utc).TotalMinutes,2)
+  if ($startUtc -and $endUtc) {
+    if ($endUtc -lt $startUtc) {
+      $endUtc = $startUtc
+    }
+    $summary.duration_min = [math]::Round(($endUtc - $startUtc).TotalMinutes,2)
   }
+
+  if ($startUtc) {
+    $summary.start_utc = $startUtc.ToString("o")
+    $startLocal = $startUtc.ToLocalTime()
+    $summary.start_local = $startLocal.ToString("o")
+    $summary.run_local_date = $startLocal.ToString("yyyy-MM-dd")
+  }
+
+  if ($endUtc) {
+    $summary.end_utc = $endUtc.ToString("o")
+    $endLocal = $endUtc.ToLocalTime()
+    $summary.end_local = $endLocal.ToString("o")
+  }
+
+  $summary.is_simulation = $isSimulation
 
   return [pscustomobject]@{
     Summary = $summary

@@ -24,6 +24,10 @@
 6. **Private GitHub backup**  
    - Initialize a private GitHub repository and push this toolkit (scripts, docs, TODOs) with clear setup instructions so the lab can collaborate outside this local workspace.
 
+7. **MySQL enrichment pipeline**  
+   - Implement a read-only connector to the lab MySQL database (instrument_status, instrument_ocupation, vibrant_test_tracking tables) and join relevant records into the trace summaries.  
+   - Surface additional fields (current instrument status, plate IDs, assays) and expose them via the consolidated dataset for dashboard consumption.
+
 ## Follow-up Enhancements
 
 Once the above is complete, plan the next data-layer steps (database ingestion, alerting hooks, richer visualizations) with stakeholders.
