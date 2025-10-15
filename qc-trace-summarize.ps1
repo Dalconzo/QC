@@ -11,7 +11,9 @@ param(
   [switch]$Recurse,
   [switch]$AsJson,
   [switch]$IncludeEvents,  # when set, emit per-file event preview (first 10 error lines)
-  [int]$MaxPreview = 10
+  [int]$MaxPreview = 10,
+  [string]$OutDir,         # when provided, append JSONL to this directory grouped by date
+  [switch]$ByLocalDate     # group output files by run_local_date instead of UTC date
 )
 
 $script:TestMachines = @("H14","H13","H7")
@@ -23,9 +25,9 @@ function Get-MachineFromPath([string]$Path) {
   if ($idx -ge 0 -and $idx + 1 -lt $parts.Length) {
     return $parts[$idx + 1]
   }
-  # fallback: use immediate parent directory
-  if ($parts.Length -ge 2) {
-    return $parts[$parts.Length - 2]
+  # fallback: use the last path segment (immediate parent directory name for DirectoryName inputs)
+  if ($parts.Length -ge 1) {
+    return $parts[$parts.Length - 1]
   }
   return ""
 }
@@ -52,6 +54,7 @@ function New-TraceSummary {
   $isSimulation = $false
 
   $summary = [ordered]@{
+    run_id        = $null
     file           = $File.FullName
     name           = $File.Name
     size_bytes     = $File.Length
@@ -170,6 +173,9 @@ function New-TraceSummary {
 
   $summary.is_simulation = $isSimulation
 
+  # derive run_id (stable per file/machine)
+  $summary.run_id = if ($summary.machine) { "$($summary.machine):$($summary.name)" } else { $summary.name }
+
   return [pscustomobject]@{
     Summary = $summary
     Preview = $preview
@@ -207,4 +213,26 @@ if ($AsJson) {
   $outputs | ForEach-Object { Write-Output $_ }
 } else {
   $outputs
+}
+
+# Optional: write JSONL to summaries folder for nightly aggregation
+if ($OutDir) {
+  $outRoot = [System.IO.Path]::GetFullPath($OutDir)
+  if (-not (Test-Path -LiteralPath $outRoot)) {
+    $null = New-Item -ItemType Directory -Path $outRoot -Force
+  }
+  foreach ($line in $outputs) {
+    $obj = $null
+    if ($AsJson) {
+      try { $obj = $line | ConvertFrom-Json } catch { continue }
+    } else {
+      $obj = $line
+    }
+    if (-not $obj) { continue }
+    $dateKey = if ($ByLocalDate -and $obj.run_local_date) { $obj.run_local_date } elseif ($obj.start_utc) { ([datetime]::Parse($obj.start_utc)).ToString('yyyy-MM-dd') } else { (Get-Date).ToString('yyyy-MM-dd') }
+    $outFile = Join-Path $outRoot ("runs-" + $dateKey + ".jsonl")
+    $json = ($obj | ConvertTo-Json -Compress)
+    Add-Content -Path $outFile -Value $json
+  }
+  Write-Host ("Wrote JSONL summaries to: " + (Get-ChildItem -Path $outRoot -Filter 'runs-*.jsonl' | Select-Object -ExpandProperty FullName | Sort-Object | Select-Object -Last 1)) -ForegroundColor Green
 }

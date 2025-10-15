@@ -63,3 +63,11 @@ Backfill runs log to `Z:\Logs\<COMPUTERNAME>\backfill.log` (same rotation parame
 - The script writes progress to STDOUT as well as the shared rolling log; capture Task Scheduler output if you also want a local transcript.
 - Exit code `0` means success, `1` indicates some files failed to copy. Logs also land
   in the shared log directory if you need a centralised history.
+
+## Compatibility notes
+
+- PowerShell versions prior to 3.0 do not support `Get-ChildItem -File`. The scripts
+  now filter out directories explicitly so they run on PS 2.0 as well.
+- On 32-bit Windows, the default `SourceRoot` may be under `C:\Program Files\HAMILTON\LogFiles`
+  instead of `C:\Program Files (x86)\...`. The scripts auto-fallback to the 32-bit path
+  when the default does not exist.

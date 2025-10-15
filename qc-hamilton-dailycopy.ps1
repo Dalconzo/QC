@@ -85,8 +85,14 @@ $sourceRoot = Normalize-FullPath $SourceRoot
 $networkRoot = Normalize-FullPath $NetworkRoot
 $logRoot = Normalize-FullPath $LogRoot
 
+# Fallback for 32-bit installs where Program Files (x86) doesn't exist
 if (-not (Test-Path -LiteralPath $sourceRoot)) {
-  throw "Source root '$sourceRoot' does not exist."
+  $alt = $SourceRoot -replace '(?i)Program Files \(x86\)','Program Files'
+  if ($SourceRoot -ne $alt -and (Test-Path -LiteralPath $alt)) {
+    $sourceRoot = Normalize-FullPath $alt
+  } else {
+    throw "Source root '$sourceRoot' does not exist."
+  }
 }
 
 if (-not (Test-Path -LiteralPath $networkRoot)) {
@@ -107,7 +113,10 @@ if (-not $DryRun) {
 Write-Log "Collecting logs from '$sourceRoot' written on $targetDateLabel"
 Write-Log "Staging destination: '$targetRoot' (machine '$MachineName')"
 
-$files = Get-ChildItem -Path $sourceRoot -Recurse -File -ErrorAction SilentlyContinue |
+# PowerShell 2.0 compatibility: `-File` was added in PS 3.0.
+# Filter out directories explicitly so this runs on older systems.
+$files = Get-ChildItem -Path $sourceRoot -Recurse -ErrorAction SilentlyContinue |
+         Where-Object { -not $_.PSIsContainer } |
          Where-Object {
            $_.LastWriteTime.Date -eq $targetDate -and (Matches-Extension $_.Name $Extensions)
          } |

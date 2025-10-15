@@ -10,7 +10,8 @@ param(
   [string]$ExpectedPatternsPath = ".\expected-patterns.json",
   [string]$UnknownLogPath = ".\qc-unknown-patterns.log",
   [switch]$Recurse,
-  [int]$SampleLimit = 3
+  [int]$SampleLimit = 3,
+  [switch]$DeltaOnly  # when set, highlight only patterns not seen in prior unknown log
 )
 
 function Get-DefaultExpectedPatterns {
@@ -99,6 +100,17 @@ foreach ($pattern in $expectedPatterns) {
 }
 
 $unknownPatterns = @{}
+$previouslySeen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+if (Test-Path -LiteralPath $unknownLogPath) {
+  try {
+    # Extract prior patterns from the unknown log
+    $regex = '^Pattern:\s*(.+)$'
+    Select-String -Path $unknownLogPath -Pattern $regex |
+      ForEach-Object { $previouslySeen.Add($_.Matches[0].Groups[1].Value.Trim()) | Out-Null }
+  } catch {
+    Write-Warning "Failed to parse prior unknown log: $_"
+  }
+}
 
 Write-Host "Scanning root: $rootPath" -ForegroundColor Gray
 $searchParams = @{
@@ -177,9 +189,23 @@ if ($unknownPatterns.Count -gt 0) {
       "{0} (Count={1})" -f $_.Key, $_.Value.Count
     } | Write-Output
 
+  # Compute delta vs historical unknowns
+  $newOnly = @{}
+  foreach ($kvp in $unknownPatterns.GetEnumerator()) {
+    if (-not $previouslySeen.Contains($kvp.Key)) { $newOnly[$kvp.Key] = $kvp.Value }
+  }
+
+  if ($DeltaOnly) {
+    Write-Host ""; Write-Host ("Newly observed patterns: {0}" -f $newOnly.Count) -ForegroundColor Cyan
+    $newOnly.GetEnumerator() |
+      Sort-Object { $_.Value.Count } -Descending |
+      ForEach-Object { "{0} (Count={1})" -f $_.Key, $_.Value.Count } | Write-Output
+  }
+
   $sb = New-Object System.Text.StringBuilder
   $null = $sb.AppendLine("===== $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') =====")
-  foreach ($kvp in ($unknownPatterns.GetEnumerator() | Sort-Object { $_.Value.Count } -Descending)) {
+  $toLog = if ($DeltaOnly) { $newOnly } else { $unknownPatterns }
+  foreach ($kvp in ($toLog.GetEnumerator() | Sort-Object { $_.Value.Count } -Descending)) {
     $pattern = $kvp.Key
     $data = $kvp.Value
     $null = $sb.AppendLine("Pattern: $pattern")
@@ -193,6 +219,9 @@ if ($unknownPatterns.Count -gt 0) {
   [System.IO.File]::AppendAllText($unknownLogPath, $sb.ToString(), [System.Text.Encoding]::UTF8)
   Write-Host ""
   Write-Host "Logged new patterns to $unknownLogPath" -ForegroundColor Yellow
+
+  Write-Host ""
+  Write-Host "Tip: To whitelist patterns, add them to expected-patterns.json (exact match after normalization)." -ForegroundColor Gray
 } else {
   Write-Host ""
   Write-Host "No new patterns detected." -ForegroundColor Green

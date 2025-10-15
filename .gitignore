@@ -1,2 +1,9 @@
 /mysql-data-lib
 agents.md
+
+# Beads local SQLite caches (never commit)
+.beads/*.db
+.beads/*.db-wal
+.beads/*.db-shm
+/outbox
+/summaries
