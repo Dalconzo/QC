@@ -1,8 +1,0 @@
-[ODBC]
-DRIVER=MySQL ODBC 8.0 Unicode Driver
-SERVER=192.168.60.4
-PORT=3307
-USER=labsite
-PASSWORD=vibrant
-DATABASE=information_schema
-OPTION=3

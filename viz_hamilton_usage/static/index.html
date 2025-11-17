@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hamilton Usage</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Hamilton Usage</h1>
+      <div id="meta"></div>
+    </header>
+    <main>
+      <div id="cards" class="cards"></div>
+    </main>
+
+    <script>
+      const $cards = document.getElementById('cards');
+      const $meta = document.getElementById('meta');
+
+      function badge(state) {
+        const map = { busy: 'busy', idle: 'idle', unknown: 'unknown' };
+        const cls = map[state] || 'unknown';
+        return `<span class="badge ${cls}">${state.toUpperCase()}</span>`;
+      }
+
+      function card(item) {
+        const d = item.details || {};
+        const rows = [];
+        if (d.test_name) rows.push(`<div><b>Test</b>: ${d.test_name}</div>`);
+        if (d.assay_name) rows.push(`<div><b>Assay</b>: ${d.assay_name}</div>`);
+        if (d.operator) rows.push(`<div><b>Operator</b>: ${d.operator}</div>`);
+        if (d.plate_id) rows.push(`<div><b>Plate</b>: ${d.plate_id}</div>`);
+        const tStart = d.start_time ? new Date(d.start_time).toLocaleString() : '-';
+        const tEnd = d.finish_time || d.end_time ? new Date(d.finish_time || d.end_time).toLocaleString() : '-';
+        rows.push(`<div><b>Start</b>: ${tStart}</div>`);
+        rows.push(`<div><b>End</b>: ${tEnd}</div>`);
+        if (item.last_event_age) rows.push(`<div><b>Last Event</b>: ${item.last_event_age} ago</div>`);
+        if (Array.isArray(d.aliases) && d.aliases.length) rows.push(`<div><b>Aliases</b>: ${d.aliases.join(', ')}</div>`);
+        if (d.raw_instrument_name && d.raw_instrument_name !== item.id) rows.push(`<div><b>Alias</b>: ${d.raw_instrument_name}</div>`);
+        rows.push(`<div class="src">source: ${item.source}</div>`);
+
+        return `
+          <div class="card ${item.state}">
+            <div class="card-head">
+              <div class="title">${item.id}${item.is_test ? ' <span class="test-tag">TEST</span>' : ''}</div>
+              <div>${badge(item.state)}</div>
+            </div>
+            <div class="card-body">${rows.join('')}</div>
+          </div>
+        `;
+      }
+
+      async function refresh() {
+        try {
+          const res = await fetch('/api/status');
+          const data = await res.json();
+          $meta.textContent = `Last refresh: ${new Date(data.generated_at).toLocaleString()} • ${data.items.length} instruments`;
+          $cards.innerHTML = data.items.map(card).join('');
+        } catch (e) {
+          $meta.textContent = 'Failed to load status';
+          console.error(e);
+        }
+      }
+
+      refresh();
+      setInterval(refresh, 15000);
+    </script>
+  </body>
+  </html>

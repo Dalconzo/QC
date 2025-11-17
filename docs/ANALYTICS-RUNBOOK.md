@@ -1,0 +1,33 @@
+# Analytics Runbook
+
+Scope
+- Summarize Hamilton traces, aggregate to a consolidated dataset, enrich from MySQL (read‑only), and feed dashboards.
+
+Daily cadence
+- 23:55 (or 00:05 with -DaysBack 1): mirror logs to Z:\\Logs using daily copy.
+- 00:15: summarize traces to JSONL by run date into .\\summaries.
+- 00:25: aggregate to CSV at .\\outbox\\run-summaries.csv and helper metrics under .\\outbox\\metrics.
+- 00:30: enrich CSV with read‑only MySQL data into .\\outbox\\run-summaries-enriched.csv.
+- Ad‑hoc: run pattern scan and review new unknown patterns.
+
+Commands
+- Daily copy: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-hamilton-dailycopy.ps1`
+- Backfill: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-hamilton-backfill.ps1`
+- Summaries: `scripts/ps/qc-trace-summarize.ps1 -SourceRoot Z:\\Logs -Recurse -AsJson -OutDir .\\summaries -ByLocalDate`
+- Aggregate: `scripts/ps/qc-aggregate-summaries.ps1 -SummariesDir .\\summaries -OutCsv .\\outbox\\run-summaries.csv -WriteHelperMetrics`
+- Enrich (RO): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\\outbox\\run-summaries.csv -DsnFile .\\config\\mysql_labsite.dsn -Database operation_data -TestsDatabase lab_scheduler`
+- Patterns: `scripts/ps/qc-trace-patterns.ps1 -Root Z:\\Logs -Recurse -ExpectedPatternsPath .\\config\\expected-patterns.json -UnknownLogPath .\\logs\\qc-unknown-patterns.log -DeltaOnly`
+
+Data sources
+- Traces: `Z:\\Logs\\<Machine>\\YYYY-MM-DD\\*.trc`
+- MySQL (RO): `192.168.60.4:3307` user `labsite`.
+
+Conventions
+- Test machines: H14, H13, H7.
+- Simulation detected via SetSimulation.
+- Do not perform DB writes; connector enforces READ ONLY.
+
+Troubleshooting
+- No JSONL found: confirm summaries step ran and paths are correct.
+- Empty enrichment: verify config/mysql_labsite.dsn and network reachability; script still writes base CSV.
+- Pattern deltas: check logs/qc-unknown-patterns.log; whitelist updates in config/expected-patterns.json.

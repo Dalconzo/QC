@@ -5,5 +5,17 @@ agents.md
 .beads/*.db
 .beads/*.db-wal
 .beads/*.db-shm
+.beads/
 /outbox
 /summaries
+/summaries*
+ /logs
+ /tmp/
+ /archive/
+viz_hamilton_usage/.venv/
+/viz-hamilton-usage/.venv/
+/viz_hamilton_usage.venv/
+/venv/
+**/.venv/
+**/__pycache__/
+tmp/
