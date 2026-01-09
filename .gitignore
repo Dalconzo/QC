@@ -11,7 +11,12 @@ agents.md
 /summaries*
  /logs
  /tmp/
- /archive/
+/archive/
+/video_clips/
+/error_clips/
+ /cameras/marks/
+/*.stop
+*.stop
 viz_hamilton_usage/.venv/
 /viz-hamilton-usage/.venv/
 /viz_hamilton_usage.venv/
@@ -19,3 +24,7 @@ viz_hamilton_usage/.venv/
 **/.venv/
 **/__pycache__/
 tmp/
+**/build
+**/dist
+**/examples
+.beads/
