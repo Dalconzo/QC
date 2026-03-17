@@ -28,3 +28,6 @@ tmp/
 **/dist
 **/examples
 .beads/
+
+# Dolt database files
+.dolt/
