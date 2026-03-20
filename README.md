@@ -1,6 +1,6 @@
 # Trace Monitor Toolkit
 
-Organizes Hamilton trace ingestion, summarization, enrichment, and dashboards.
+Organizes Hamilton trace ingestion, summarization, optional enrichment, and dashboards.
 
 Key entry points moved into a clean layout for easier navigation:
 
@@ -26,9 +26,17 @@ Quick commands
 - Daily copy: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-hamilton-dailycopy.ps1`
 - Backfill: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-hamilton-backfill.ps1`
 - Summaries: `scripts/ps/qc-trace-summarize.ps1 -SourceRoot Z:\\Logs -Recurse -AsJson -OutDir .\\summaries -ByLocalDate`
+- Summarizer regression check: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-test-trace-summarize.ps1`
 - Aggregate: `scripts/ps/qc-aggregate-summaries.ps1 -SummariesDir .\\summaries -OutCsv .\\outbox\\run-summaries.csv -WriteHelperMetrics`
 - Enrich (RO): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\\outbox\\run-summaries.csv -DsnFile .\\config\\mysql_labsite.dsn -Database operation_data -TestsDatabase lab_scheduler`
+- Enrich (skip DB): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\\outbox\\run-summaries.csv -OutCsv .\\outbox\\run-summaries-enriched.csv -SkipDb`
 - Patterns: `scripts/ps/qc-trace-patterns.ps1 -Root Z:\\Logs -Recurse -ExpectedPatternsPath .\\config\\expected-patterns.json -UnknownLogPath .\\logs\\qc-unknown-patterns.log -DeltaOnly`
+
+Notes
+
+- The trace pipeline is trace-first: summarize, aggregate, and pattern-scan work without MySQL.
+- MySQL is best-effort read-only enrichment for extra context and the live usage dashboard.
+- If DB access is unavailable or unreliable, run enrichment with `-SkipDb`; output still includes the enrichment columns, left blank.
 
 Beads (work tracking)
 
@@ -37,4 +45,3 @@ Beads (work tracking)
 - Create task: `bd create "<title>" -t task -p 1 --json`
 - Update: `bd update <id> --status in_progress --actor Codex --json`
 - Close: `bd close <id> --reason "Implemented" --actor Codex --json`
-
