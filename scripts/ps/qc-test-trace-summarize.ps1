@@ -43,10 +43,75 @@ function Assert-Eq([string]$Label, $Actual, $Expected) {
   }
 }
 
+function Assert-True([string]$Label, [bool]$Condition) {
+  if (-not $Condition) {
+    throw "$Label failed"
+  }
+}
+
+function Test-IsoTimestamp([string]$Value) {
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return $false
+  }
+  $parsed = [datetimeoffset]::MinValue
+  return [datetimeoffset]::TryParse($Value, [ref]$parsed)
+}
+
+function Assert-SummaryContract($Summary) {
+  $requiredStrings = @(
+    "run_id",
+    "file",
+    "name",
+    "relative_path",
+    "environment",
+    "run_local_date",
+    "start_utc",
+    "start_local",
+    "end_utc",
+    "end_local",
+    "user",
+    "method",
+    "status"
+  )
+
+  foreach ($propertyName in $requiredStrings) {
+    $value = [string]$Summary.$propertyName
+    Assert-True -Label "$($Summary.name) missing $propertyName" -Condition (-not [string]::IsNullOrWhiteSpace($value))
+  }
+
+  Assert-True -Label "$($Summary.name) invalid environment" -Condition (@("Test", "Production") -contains [string]$Summary.environment)
+  Assert-True -Label "$($Summary.name) invalid status" -Condition (@("Completed", "Aborted") -contains [string]$Summary.status)
+  Assert-True -Label "$($Summary.name) invalid start_utc" -Condition (Test-IsoTimestamp -Value ([string]$Summary.start_utc))
+  Assert-True -Label "$($Summary.name) invalid start_local" -Condition (Test-IsoTimestamp -Value ([string]$Summary.start_local))
+  Assert-True -Label "$($Summary.name) invalid end_utc" -Condition (Test-IsoTimestamp -Value ([string]$Summary.end_utc))
+  Assert-True -Label "$($Summary.name) invalid end_local" -Condition (Test-IsoTimestamp -Value ([string]$Summary.end_local))
+  Assert-True -Label "$($Summary.name) invalid run_local_date" -Condition ([string]$Summary.run_local_date -match '^\d{4}-\d{2}-\d{2}$')
+  Assert-True -Label "$($Summary.name) negative duration" -Condition ([double]$Summary.duration_min -ge 0)
+  Assert-True -Label "$($Summary.name) negative error_lines" -Condition ([int]$Summary.error_lines -ge 0)
+  Assert-True -Label "$($Summary.name) negative warning_lines" -Condition ([int]$Summary.warning_lines -ge 0)
+  Assert-True -Label "$($Summary.name) negative dialog_count" -Condition ([int]$Summary.dialog_count -ge 0)
+
+  $startUtc = [datetimeoffset]::Parse([string]$Summary.start_utc)
+  $endUtc = [datetimeoffset]::Parse([string]$Summary.end_utc)
+  Assert-True -Label "$($Summary.name) end before start" -Condition ($endUtc -ge $startUtc)
+
+  if ([string]::IsNullOrWhiteSpace([string]$Summary.machine)) {
+    Assert-Eq -Label "$($Summary.name) run_id without machine" -Actual ([string]$Summary.run_id) -Expected ([string]$Summary.name)
+  } else {
+    Assert-True -Label "$($Summary.name) invalid machine format" -Condition ([string]$Summary.machine -match '^H\d+$')
+    Assert-Eq -Label "$($Summary.name) run_id with machine" -Actual ([string]$Summary.run_id) -Expected ("$($Summary.machine):$($Summary.name)")
+    $expectedEnvironment = if (@("H14", "H13", "H7") -contains [string]$Summary.machine) { "Test" } else { "Production" }
+    Assert-Eq -Label "$($Summary.name) machine/environment mismatch" -Actual ([string]$Summary.environment) -Expected $expectedEnvironment
+  }
+}
+
 $knownSerialSample = "HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_74c6417c93394663a3119e13e4a7f77e_Trace.trc"
 $unknownSerialSample = "HamiltonStar_Vibrant_TBDS_NZPS_12col_Ver1.4.1_d2046f0a60364136bc646cd5eb6b0f28_Trace.trc"
 
 $sampleSummaries = Invoke-Summarizer -Root $sampleRootFull
+foreach ($summary in $sampleSummaries) {
+  Assert-SummaryContract -Summary $summary
+}
 $knownFromTrace = Get-SummaryByName -Summaries $sampleSummaries -Name $knownSerialSample
 $unknownFromTrace = Get-SummaryByName -Summaries $sampleSummaries -Name $unknownSerialSample
 
@@ -66,6 +131,9 @@ try {
   Copy-Item -LiteralPath (Join-Path $sampleRootFull $unknownSerialSample) -Destination (Join-Path $fallbackDir $unknownSerialSample)
 
   $pathSummaries = Invoke-Summarizer -Root $tempRoot
+  foreach ($summary in $pathSummaries) {
+    Assert-SummaryContract -Summary $summary
+  }
   $knownFromPath = Get-SummaryByName -Summaries $pathSummaries -Name $knownSerialSample
   $unknownFromPath = Get-SummaryByName -Summaries $pathSummaries -Name $unknownSerialSample
 
