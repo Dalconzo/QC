@@ -28,6 +28,7 @@ Quick commands
 - Summaries: `scripts/ps/qc-trace-summarize.ps1 -SourceRoot Z:\\Logs -Recurse -AsJson -OutDir .\\summaries -ByLocalDate`
 - Summarizer regression check: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-test-trace-summarize.ps1`
 - Aggregate: `scripts/ps/qc-aggregate-summaries.ps1 -SummariesDir .\\summaries -OutCsv .\\outbox\\run-summaries.csv -WriteHelperMetrics`
+- Aggregation regression check: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-test-aggregate-summaries.ps1`
 - Enrich (RO): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\\outbox\\run-summaries.csv -DsnFile .\\config\\mysql_labsite.dsn -Database operation_data -TestsDatabase lab_scheduler`
 - Enrich (skip DB): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\\outbox\\run-summaries.csv -OutCsv .\\outbox\\run-summaries-enriched.csv -SkipDb`
 - Patterns: `scripts/ps/qc-trace-patterns.ps1 -Root Z:\\Logs -Recurse -ExpectedPatternsPath .\\config\\expected-patterns.json -UnknownLogPath .\\logs\\qc-unknown-patterns.log -DeltaOnly`

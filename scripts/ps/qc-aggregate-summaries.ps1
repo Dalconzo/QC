@@ -78,9 +78,11 @@ if ($WriteHelperMetrics) {
   $records |
     Group-Object machine, run_local_date |
     ForEach-Object {
+      $groupRows = @($_.Group)
+      $first = $groupRows[0]
       [pscustomobject]@{
-        machine       = $_.Name.Split(',')[0]
-        run_local_date= $_.Name.Split(',')[1]
+        machine       = $first.machine
+        run_local_date= $first.run_local_date
         run_count     = $_.Count
       }
     } |
@@ -90,10 +92,12 @@ if ($WriteHelperMetrics) {
   # Abort rate per machine/day
   $abort = $records | Group-Object machine, run_local_date |
     ForEach-Object {
-      $machine = $_.Name.Split(',')[0]
-      $date = $_.Name.Split(',')[1]
+      $groupRows = @($_.Group)
+      $first = $groupRows[0]
+      $machine = $first.machine
+      $date = $first.run_local_date
       $total = $_.Count
-      $aborted = ($_.Group | Where-Object { $_.status -eq 'Aborted' }).Count
+      $aborted = @($groupRows | Where-Object { $_.status -eq 'Aborted' }).Count
       [pscustomobject]@{
         machine        = $machine
         run_local_date = $date
@@ -110,8 +114,10 @@ if ($WriteHelperMetrics) {
     Where-Object { $_.duration_min -ne $null } |
     Group-Object machine, run_local_date |
     ForEach-Object {
-      $machine = $_.Name.Split(',')[0]
-      $date = $_.Name.Split(',')[1]
+      $groupRows = @($_.Group)
+      $first = $groupRows[0]
+      $machine = $first.machine
+      $date = $first.run_local_date
       $vals = $_.Group | ForEach-Object { [double]$_.duration_min } | Sort-Object
       $n = $vals.Count
       $median = if ($n -eq 0) { $null } elseif ($n % 2 -eq 1) { $vals[[int]([math]::Floor($n/2))] } else { ([double]$vals[$n/2 - 1] + [double]$vals[$n/2]) / 2 }
@@ -126,4 +132,3 @@ if ($WriteHelperMetrics) {
 
   Write-Host ("Wrote helper metrics to " + $metricsDir) -ForegroundColor Green
 }
-

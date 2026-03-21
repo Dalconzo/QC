@@ -16,6 +16,7 @@ Commands
 - Summaries: `scripts/ps/qc-trace-summarize.ps1 -SourceRoot Z:\Logs -Recurse -AsJson -OutDir .\summaries -ByLocalDate`
 - Summarizer regression check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-trace-summarize.ps1`
 - Aggregate: `scripts/ps/qc-aggregate-summaries.ps1 -SummariesDir .\summaries -OutCsv .\outbox\run-summaries.csv -WriteHelperMetrics`
+- Aggregation regression check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-aggregate-summaries.ps1`
 - Enrich (RO): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\outbox\run-summaries.csv -DsnFile .\config\mysql_labsite.dsn -Database operation_data -TestsDatabase lab_scheduler`
 - Enrich (no DB): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\outbox\run-summaries.csv -OutCsv .\outbox\run-summaries-enriched.csv -SkipDb`
 - Patterns: `scripts/ps/qc-trace-patterns.ps1 -Root Z:\Logs -Recurse -ExpectedPatternsPath .\config\expected-patterns.json -UnknownLogPath .\logs\qc-unknown-patterns.log -DeltaOnly`
@@ -37,5 +38,6 @@ Operating stance
 Troubleshooting
 - No JSONL found: confirm summaries step ran and paths are correct.
 - Unexpected machine IDs in sample validation: run the summarizer regression check to confirm path-based and serial-based machine resolution still behaves as expected.
+- Unexpected aggregate output: run the aggregation regression check to confirm row preservation, CSV schema, and helper metrics are still aligned.
 - Empty enrichment: verify `config/mysql_labsite.dsn` and network reachability, or run with `-SkipDb` to intentionally produce blank enrichment columns without failing the pipeline.
 - Pattern deltas: check `logs/qc-unknown-patterns.log`; whitelist updates in `config/expected-patterns.json`.
