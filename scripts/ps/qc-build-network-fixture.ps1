@@ -7,6 +7,10 @@
     fixture root while preserving the canonical Logs\<Machine>\<YYYY-MM-DD>
     layout that the analytics pipeline expects.
 
+    This builder intentionally stages only method traces (*_Trace.trc). The
+    HxUsbComm firmware-command logs travel in a separate ingest stream and are
+    intentionally excluded from the run-analytics fixture.
+
     Selection rules:
       1. Pick the latest day for each target machine that actually contains
          method trace files (*_Trace.trc).

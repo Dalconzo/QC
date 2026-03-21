@@ -24,6 +24,7 @@ Commands
 - Enrichment live smoke check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-mysql-enrich-live.ps1`
 - Build network verification fixture: `powershell -NoProfile -File C:\QC\scripts\ps\qc-build-network-fixture.ps1 -SourceRoot \\192.168.10.99\home\Logs -Force`
 - Network fixture pipeline check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-network-fixture.ps1`
+- Inventory HxUsbComm logs: `powershell -NoProfile -File C:\QC\scripts\ps\qc-inventory-usbcomm-traces.ps1 -SourceRoot \\192.168.10.99\home\Logs -Recurse`
 - Patterns: `scripts/ps/qc-trace-patterns.ps1 -Root Z:\Logs -Recurse -ExpectedPatternsPath .\config\expected-patterns.json -UnknownLogPath .\logs\qc-unknown-patterns.log -DeltaOnly`
 
 Data sources
@@ -37,6 +38,7 @@ Conventions
 
 Operating stance
 - Treat `.trc` files as the system of record for historical analytics.
+- Keep method traces and `HxUsbComm*.trc` logs in separate storage lanes; usbcomm logs are useful firmware/command evidence, but they are not run-summary records.
 - Treat MySQL enrichment as best-effort context only; do not make critical analytics depend on it.
 - If the database is degraded, continue the trace pipeline and defer only the optional enrichment/dashboard layer.
 

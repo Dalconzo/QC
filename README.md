@@ -36,11 +36,13 @@ Quick commands
 - Enrichment live smoke check: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-test-mysql-enrich-live.ps1`
 - Build network verification fixture: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-build-network-fixture.ps1 -SourceRoot \\\\192.168.10.99\\home\\Logs -Force`
 - Network fixture pipeline check: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-test-network-fixture.ps1`
+- Inventory HxUsbComm logs: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-inventory-usbcomm-traces.ps1 -SourceRoot \\\\192.168.10.99\\home\\Logs -Recurse`
 - Patterns: `scripts/ps/qc-trace-patterns.ps1 -Root Z:\\Logs -Recurse -ExpectedPatternsPath .\\config\\expected-patterns.json -UnknownLogPath .\\logs\\qc-unknown-patterns.log -DeltaOnly`
 
 Notes
 
 - The trace pipeline is trace-first: summarize, aggregate, and pattern-scan work without MySQL.
+- `*_Trace.trc` files feed run analytics; `HxUsbComm*.trc` files are inventoried separately for a future firmware-command store.
 - MySQL is best-effort read-only enrichment for extra context and the live usage dashboard.
 - If DB access is unavailable or unreliable, run enrichment with `-SkipDb`; output still includes the enrichment columns, left blank.
 
