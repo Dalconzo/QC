@@ -20,6 +20,7 @@ Commands
 - Enrich (RO): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\outbox\run-summaries.csv -DsnFile .\config\mysql_labsite.dsn -Database operation_data -TestsDatabase lab_scheduler`
 - Enrich (no DB): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\outbox\run-summaries.csv -OutCsv .\outbox\run-summaries-enriched.csv -SkipDb`
 - Enrichment regression check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-mysql-enrich.ps1`
+- Enrichment live smoke check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-mysql-enrich-live.ps1`
 - Patterns: `scripts/ps/qc-trace-patterns.ps1 -Root Z:\Logs -Recurse -ExpectedPatternsPath .\config\expected-patterns.json -UnknownLogPath .\logs\qc-unknown-patterns.log -DeltaOnly`
 
 Data sources
