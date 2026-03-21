@@ -34,6 +34,8 @@ Quick commands
 - Full pipeline regression check: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-test-analytics-pipeline.ps1`
 - Enrichment regression check: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-test-mysql-enrich.ps1`
 - Enrichment live smoke check: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-test-mysql-enrich-live.ps1`
+- Build network verification fixture: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-build-network-fixture.ps1 -SourceRoot \\\\192.168.10.99\\home\\Logs -Force`
+- Network fixture pipeline check: `powershell -NoProfile -File C:\\QC\\scripts\\ps\\qc-test-network-fixture.ps1`
 - Patterns: `scripts/ps/qc-trace-patterns.ps1 -Root Z:\\Logs -Recurse -ExpectedPatternsPath .\\config\\expected-patterns.json -UnknownLogPath .\\logs\\qc-unknown-patterns.log -DeltaOnly`
 
 Notes
