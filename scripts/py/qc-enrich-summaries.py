@@ -30,6 +30,8 @@ from typing import Dict, List, Optional, Tuple
 
 
 def parse_args() -> argparse.Namespace:
+    # Keep the CLI explicit because this script is used both directly and
+    # through the PowerShell wrapper in scheduled pipeline runs.
     p = argparse.ArgumentParser(description="Enrich run summaries with MySQL data (read-only)")
     p.add_argument("--input-csv", default=os.path.join("outbox", "run-summaries.csv"), help="Input consolidated CSV")
     p.add_argument("--out-csv", default=os.path.join("outbox", "run-summaries-enriched.csv"), help="Output CSV path")
@@ -42,6 +44,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--runtime-table", default=None, help="Override instrument runtime table name (for plate_id)")
     p.add_argument("--tracking-table", default=None, help="Override test tracking table name")
     p.add_argument("--aliases-file", default=os.path.join("config", "machine-aliases.json"), help="JSON mapping of H-machines to DB instrument names/codes")
+    p.add_argument("--skip-db", action="store_true", help="Skip all DB lookups and still write an output CSV with blank enrichment columns")
     return p.parse_args()
 
 
@@ -74,7 +77,9 @@ def parse_iso8601(s: str) -> Optional[dt.datetime]:
 
 def load_rows(path: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
     rows: List[Dict[str, str]] = []
-    with open(path, "r", newline="", encoding="utf-8") as f:
+    # PowerShell Export-Csv commonly emits a UTF-8 BOM. utf-8-sig strips it so
+    # the first header remains run_id instead of a BOM-prefixed variant.
+    with open(path, "r", newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for i, row in enumerate(reader):
             rows.append(row)
@@ -84,6 +89,8 @@ def load_rows(path: str, limit: Optional[int] = None) -> List[Dict[str, str]]:
 
 
 def save_rows(path: str, rows: List[Dict[str, str]], fieldnames: List[str]) -> None:
+    # The output file is the contract for downstream reporting. Always create
+    # parent directories so skip-db mode can still materialize a usable CSV.
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -129,7 +136,8 @@ def connect_mysql_readonly(dsn: Dict[str, str], database: Optional[str]):
     }
 
     cnx = mysql.connector.connect(**params)
-    # Enforce read-only for the session
+    # Enforce read-only at the session level. If the server ignores the command,
+    # we still protect ourselves by issuing SELECT queries only.
     try:
         cur = cnx.cursor()
         cur.execute("SET SESSION TRANSACTION READ ONLY")
@@ -377,7 +385,8 @@ def main() -> int:
         save_rows(args.out_csv, rows, [])
         return 0
 
-    # Prepare enrichment columns on all rows
+    # Pre-seed enrichment columns before any DB work. This guarantees that the
+    # output schema is stable in skip-db mode and during transient DB failures.
     enrich_cols = [
         "instrument_status_start",
         "occupied_during_run",
@@ -390,12 +399,13 @@ def main() -> int:
         for c in enrich_cols:
             r.setdefault(c, "")
 
-    dsn = parse_dsn(args.dsn_file)
+    dsn = {} if args.skip_db else (parse_dsn(args.dsn_file) if (args.dsn_file and os.path.exists(args.dsn_file)) else {})
     aliases = load_aliases(args.aliases_file)
     database = args.database or dsn.get("DATABASE") or dsn.get("DB")
 
     machines = sorted({(r.get("machine") or "").strip() for r in rows if (r.get("machine") or "").strip()})
-    # Map H-machines to DB instrument names/codes
+    # Machine aliases let us translate trace-native machine IDs like H7 into
+    # whichever instrument names or serials the database happens to use.
     machine_to_instruments = {}
     for m in machines:
         vals = aliases.get(m, [])
@@ -403,10 +413,11 @@ def main() -> int:
         if not vals and m.upper().startswith('H'):
             vals = aliases.get(m.upper(), [])
         machine_to_instruments[m] = [v for v in vals if v]
-    # Build union of instrument names to query
+    # Query a single combined instrument set once, then fan back out per row.
     db_instruments = sorted({inst for lst in machine_to_instruments.values() for inst in lst if inst})
     methods = sorted({(r.get("method") or "").strip() for r in rows if (r.get("method") or "").strip()})
-    # compute time bounds
+    # Bound the DB queries to the observed run window so enrichment stays fast
+    # and does not scan unrelated historical data.
     start_times: List[dt.datetime] = []
     end_times: List[dt.datetime] = []
     for r in rows:
@@ -432,10 +443,13 @@ def main() -> int:
     assay_map: Dict[str, str] = {}
 
     cnx = None
-    if database:
+    if args.skip_db:
+        print("INFO: --skip-db set; writing output with blank enrichment fields.")
+    elif database:
         try:
             cnx = connect_mysql_readonly(dsn, database)
-            # Determine actual table names (auto-detect or overrides)
+            # Auto-detect the relevant tables because lab schemas have drifted
+            # over time and naming is not stable across environments.
             status_tbl = resolve_table(cnx, database, args.status_table, [
                 "instrument_status",
                 "instrument_statuses",
@@ -454,7 +468,8 @@ def main() -> int:
             ])
 
             if status_tbl and db_instruments:
-                # Try interval-based first; fall back to point-based log
+                # Prefer interval-style status data because it gives direct
+                # overlap semantics. Fall back to point-in-time status logs.
                 status_intervals = fetch_status_intervals(cnx, database, status_tbl, db_instruments, start_min, end_max)
                 if not status_intervals:
                     status_map = fetch_status_maps(cnx, database, status_tbl, db_instruments, start_min, end_max)
@@ -473,6 +488,8 @@ def main() -> int:
             if track_tbl:
                 assay_map = fetch_assay_tracking(cnx, database, track_tbl, methods, start_min, end_max)
         except Exception as e:
+            # DB failures should degrade enrichment quality, not pipeline
+            # availability. The pre-seeded columns stay blank in that case.
             print(f"WARNING: Enrichment skipped due to DB error: {e}", file=sys.stderr)
         finally:
             try:
@@ -484,8 +501,10 @@ def main() -> int:
     else:
         print("INFO: No primary database specified; skipping status/occupation enrichment.")
 
-    # Optional: fetch test/assay names to heuristically map from method/file names
-    tests_db = args.tests_database or dsn.get("TESTS_DATABASE") or None
+    # Optional assay-name loading is used only for a best-effort guess. It is
+    # intentionally separate from the core enrichment path so failure here does
+    # not block status/occupation/plate joins.
+    tests_db = None if args.skip_db else (args.tests_database or dsn.get("TESTS_DATABASE") or None)
     test_names: List[str] = []
     if tests_db:
         try:
@@ -505,7 +524,8 @@ def main() -> int:
         except Exception as e:
             print(f"WARNING: Failed to load test names from {tests_db}: {e}", file=sys.stderr)
 
-    # Assign enrichment to rows
+    # Row assignment is intentionally conservative: if we cannot match a field
+    # confidently, leave it blank rather than inventing a hard claim.
     for r in rows:
         m = (r.get("machine") or "").strip()
         inst_candidates = machine_to_instruments.get(m, [])
@@ -538,7 +558,8 @@ def main() -> int:
                 break
         r["instrument_status_start"] = status_val
 
-        # occupation overlap
+        # Occupation is modeled as any overlap between the run window and an
+        # instrument occupation/status interval.
         occupied = 0
         for inst in inst_candidates:
             intervals = occ_map.get(inst) or []
@@ -550,12 +571,13 @@ def main() -> int:
                 break
         r["occupied_during_run"] = str(occupied)
 
-        # assay (heuristic mapping via method)
+        # Assay uses a direct method mapping when available.
         method = (r.get("method") or "").strip()
         a = assay_map.get(method) or assay_map.get("__GLOBAL__", "")
         r["assay"] = a
 
-        # assay_guess from tokens vs test_names
+        # assay_guess is weaker than assay. It is a token match against known
+        # test names so analysts can inspect likely candidates later.
         guess = ""
         if test_names:
             import re
@@ -565,7 +587,7 @@ def main() -> int:
                 guess = ",".join(sorted(set(candidates)))
         r["assay_guess"] = guess
 
-        # plate_id from runtime intervals, if available
+        # plate_id is taken from the closest overlapping runtime interval.
         plate = r.get("plate_id", "")
         if not plate and inst_candidates:
             for inst in inst_candidates:
@@ -584,7 +606,8 @@ def main() -> int:
 
         r["enrich_source_db"] = database or ""
 
-    # Write output
+    # Preserve the original field order and append enrichment fields in a fixed
+    # position so downstream imports do not churn when enrichment is disabled.
     base_fields = list(rows[0].keys())
     # Ensure enrichment columns are at the end in stable order
     for c in enrich_cols:
