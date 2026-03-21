@@ -19,6 +19,7 @@ Commands
 - Aggregation regression check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-aggregate-summaries.ps1`
 - Enrich (RO): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\outbox\run-summaries.csv -DsnFile .\config\mysql_labsite.dsn -Database operation_data -TestsDatabase lab_scheduler`
 - Enrich (no DB): `scripts/ps/qc-mysql-enrich.ps1 -InputCsv .\outbox\run-summaries.csv -OutCsv .\outbox\run-summaries-enriched.csv -SkipDb`
+- Full pipeline regression check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-analytics-pipeline.ps1`
 - Enrichment regression check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-mysql-enrich.ps1`
 - Enrichment live smoke check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-mysql-enrich-live.ps1`
 - Patterns: `scripts/ps/qc-trace-patterns.ps1 -Root Z:\Logs -Recurse -ExpectedPatternsPath .\config\expected-patterns.json -UnknownLogPath .\logs\qc-unknown-patterns.log -DeltaOnly`
