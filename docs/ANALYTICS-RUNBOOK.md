@@ -24,6 +24,9 @@ Commands
 - Enrichment live smoke check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-mysql-enrich-live.ps1`
 - Build network verification fixture: `powershell -NoProfile -File C:\QC\scripts\ps\qc-build-network-fixture.ps1 -SourceRoot \\192.168.10.99\home\Logs -Force`
 - Network fixture pipeline check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-network-fixture.ps1`
+- Raw trace ingest: `powershell -NoProfile -File C:\QC\scripts\ps\qc-ingest-raw-traces.ps1 -SourceRoot \\192.168.10.99\home\Logs -DatabasePath C:\QC\archive\raw-trace-store\raw-traces.sqlite -Stream All -Recurse`
+- Raw trace ingest regression check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-raw-trace-ingest.ps1`
+- Raw trace ingest live smoke check: `powershell -NoProfile -File C:\QC\scripts\ps\qc-test-raw-trace-ingest-live.ps1`
 - Inventory HxUsbComm logs: `powershell -NoProfile -File C:\QC\scripts\ps\qc-inventory-usbcomm-traces.ps1 -SourceRoot \\192.168.10.99\home\Logs -Recurse`
 - Patterns: `scripts/ps/qc-trace-patterns.ps1 -Root Z:\Logs -Recurse -ExpectedPatternsPath .\config\expected-patterns.json -UnknownLogPath .\logs\qc-unknown-patterns.log -DeltaOnly`
 
@@ -39,6 +42,8 @@ Conventions
 Operating stance
 - Treat `.trc` files as the system of record for historical analytics.
 - Keep method traces and `HxUsbComm*.trc` logs in separate storage lanes; usbcomm logs are useful firmware/command evidence, but they are not run-summary records.
+- Use the compressed raw-trace SQLite store as the first durable landing zone before any retention action on the network share. Retention should key off verified payload hashes and completed ingest, not just summary output.
+- The raw-trace store records one ingest batch per run plus one ingest event per observed file so later deletion/archive decisions can be audited.
 - Treat MySQL enrichment as best-effort context only; do not make critical analytics depend on it.
 - If the database is degraded, continue the trace pipeline and defer only the optional enrichment/dashboard layer.
 
