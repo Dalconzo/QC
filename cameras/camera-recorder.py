@@ -94,14 +94,31 @@ def ts_label(t: dt.datetime) -> str:
     return t.strftime("%Y%m%d_%H%M%S")
 
 
-def _is_proc_running(proc_name: str) -> bool:
-    if not proc_name:
+def _normalize_proc_names(proc_names: str | list[str] | tuple[str, ...]) -> list[str]:
+    """Normalize a process selector into a list of executable names.
+
+    We accept either a single name, a semicolon/comma-separated string, or an
+    already-expanded list. That keeps the CLI ergonomic for operators while
+    letting the recorder watch multiple candidate Run Manager executable names.
+    """
+    if isinstance(proc_names, (list, tuple)):
+        items = [str(item).strip() for item in proc_names]
+    else:
+        text = str(proc_names or "").replace(";", ",")
+        items = [item.strip() for item in text.split(",")]
+    return [item for item in items if item]
+
+
+def _is_any_proc_running(proc_names: str | list[str] | tuple[str, ...]) -> bool:
+    normalized = _normalize_proc_names(proc_names)
+    if not normalized:
         return True
     try:
         import psutil  # type: ignore
         for p in psutil.process_iter(attrs=["name"]):
             try:
-                if (p.info.get("name") or "").lower() == proc_name.lower():
+                proc_name = (p.info.get("name") or "").lower()
+                if any(proc_name == expected.lower() for expected in normalized):
                     return True
             except Exception:
                 continue
@@ -109,11 +126,50 @@ def _is_proc_running(proc_name: str) -> bool:
     except Exception:
         # Fallback: Windows 'tasklist'
         try:
-            import subprocess
             res = subprocess.run(["tasklist"], capture_output=True, text=True, check=False)
-            return proc_name.lower() in (res.stdout or "").lower()
+            output = (res.stdout or "").lower()
+            return any(expected.lower() in output for expected in normalized)
         except Exception:
             return True
+
+
+def wait_for_process_start(
+    proc_names: str | list[str] | tuple[str, ...],
+    *,
+    poll_sec: float,
+    timeout_sec: int,
+    verbose: bool = False,
+) -> bool:
+    """Block until one of the target processes appears.
+
+    The recorder needs this startup gate so it does not create idle video while
+    no Hamilton run is active. A timeout of 0 means "wait indefinitely".
+    """
+    normalized = _normalize_proc_names(proc_names)
+    if not normalized:
+        return True
+
+    started = time.monotonic()
+    last_status = 0.0
+    while True:
+        if _is_any_proc_running(normalized):
+            if verbose:
+                names = ", ".join(normalized)
+                print(f"[recorder] Startup gate satisfied by process: {names}")
+            return True
+
+        if timeout_sec > 0 and (time.monotonic() - started) >= timeout_sec:
+            if verbose:
+                names = ", ".join(normalized)
+                print(f"[recorder] Startup gate timed out waiting for: {names}")
+            return False
+
+        now = time.monotonic()
+        if verbose and (now - last_status) >= max(1.0, poll_sec):
+            names = ", ".join(normalized)
+            print(f"[recorder] Waiting for process start: {names}")
+            last_status = now
+        time.sleep(max(0.25, poll_sec))
 
 
 def _parse_segment_ts(name: str) -> dt.datetime | None:
@@ -206,7 +262,7 @@ def _promote_segment_to_error(ffmpeg_bin: str, segment: Path, error_dir: Path, l
             print(f"[recorder] Failed to promote segment {segment} to error clip: {e}")
 
 
-def run_ffmpeg(ffmpeg_bin: str, source: str, out_dir: Path, segment_sec: int, label: str, stop_file: Path, stop_when_exe: str = "", verbose: bool = False, error_dir: Path | None = None, error_window_sec: int = 30):
+def run_ffmpeg(ffmpeg_bin: str, source: str, out_dir: Path, segment_sec: int, label: str, stop_file: Path, stop_when_exe: str = "", verbose: bool = False, error_dir: Path | None = None, error_window_sec: int = 30, poll_sec: float = 1.0):
     out_dir.mkdir(parents=True, exist_ok=True)
     # Build output pattern with timestamp at segment boundaries
     # ffmpeg time pattern uses strftime-like expansion when using -strftime 1
@@ -272,7 +328,7 @@ def run_ffmpeg(ffmpeg_bin: str, source: str, out_dir: Path, segment_sec: int, la
     try:
         while True:
             # Stop if sentinel file exists or watched process has exited
-            if stop_file.exists() or (stop_when_exe and not _is_proc_running(stop_when_exe)):
+            if stop_file.exists() or (stop_when_exe and not _is_any_proc_running(stop_when_exe)):
                 proc.terminate()
                 try:
                     proc.wait(timeout=5)
@@ -347,7 +403,7 @@ def run_ffmpeg(ffmpeg_bin: str, source: str, out_dir: Path, segment_sec: int, la
                     print("Troubleshooting: ensure the dshow device name is quoted, e.g., --source 'dshow:video=\"Arducam USB Camera\"'", file=sys.stderr)
                 break
 
-            time.sleep(1)
+            time.sleep(max(0.25, poll_sec))
     finally:
         try:
             stop_file.unlink(missing_ok=True)
@@ -355,7 +411,7 @@ def run_ffmpeg(ffmpeg_bin: str, source: str, out_dir: Path, segment_sec: int, la
             pass
 
 
-def run_opencv(source: str, out_dir: Path, segment_sec: int, label: str, stop_file: Path, stop_when_exe: str = "", fps: int = 20, fourcc: str = "mp4v"):
+def run_opencv(source: str, out_dir: Path, segment_sec: int, label: str, stop_file: Path, stop_when_exe: str = "", fps: int = 20, fourcc: str = "mp4v", poll_sec: float = 1.0):
     # Lazy import to avoid hard dependency if ffmpeg is present
     import cv2  # type: ignore
 
@@ -388,8 +444,9 @@ def run_opencv(source: str, out_dir: Path, segment_sec: int, label: str, stop_fi
                 start = now
                 seg_end = start + dt.timedelta(seconds=segment_sec)
                 path, writer = new_writer(start)
-            if stop_file.exists() or (stop_when_exe and not _is_proc_running(stop_when_exe)):
+            if stop_file.exists() or (stop_when_exe and not _is_any_proc_running(stop_when_exe)):
                 break
+            time.sleep(max(0.01, min(0.25, poll_sec)))
     finally:
         try:
             writer.release()
@@ -409,7 +466,10 @@ def main() -> int:
     ap.add_argument("--segment-sec", type=int, default=60, help="Segment length in seconds (default: 60)")
     ap.add_argument("--label", default="cam", help="Label to include in filenames (default: cam)")
     ap.add_argument("--stop-file", default="cameras.recorder.stop", help="Path to stop file to end recording")
-    ap.add_argument("--stop-when-exe", default="", help="Stop when the given process name is no longer running (e.g., 'Microlab STAR.exe')")
+    ap.add_argument("--start-when-exe", default="", help="Wait to begin recording until one of these process names is running (comma/semicolon-separated)")
+    ap.add_argument("--stop-when-exe", default="", help="Stop when the given process name is no longer running (for Hamilton, usually 'HxRun.exe')")
+    ap.add_argument("--startup-timeout-sec", type=int, default=0, help="How long to wait for --start-when-exe before exiting. 0 waits indefinitely.")
+    ap.add_argument("--poll-sec", type=float, default=1.0, help="Polling interval for process-gate checks (default: 1.0)")
     ap.add_argument("--ffmpeg", default="", help="Optional path to ffmpeg.exe; if provided, recorder uses ffmpeg backend")
     ap.add_argument("--verbose", action="store_true", help="Print backend selection and underlying ffmpeg command")
     ap.add_argument("--list-devices", action="store_true", help="List DirectShow cameras and exit (requires ffmpeg)")
@@ -424,9 +484,25 @@ def main() -> int:
     stop_file = Path(args.stop_file)
     error_dir = Path(args.error_dir)
     msg = f"Recording segments to {out} (every {args.segment_sec}s). Create '{stop_file}' to stop. Error clips in '{error_dir}'."
+    if args.start_when_exe:
+        msg += f" Startup gate: {args.start_when_exe}."
     if args.stop_when_exe:
-        msg += f" Also watching process: {args.stop_when_exe}"
+        msg += f" Stop gate: {args.stop_when_exe}."
     print(msg)
+
+    if args.start_when_exe and not wait_for_process_start(
+        args.start_when_exe,
+        poll_sec=args.poll_sec,
+        timeout_sec=args.startup_timeout_sec,
+        verbose=args.verbose,
+    ):
+        print("Recorder exited before capture because the startup gate was never satisfied.", file=sys.stderr)
+        return 3
+
+    # If the caller wants startup gating but does not explicitly provide a stop
+    # gate, reuse the same process selector so the recorder starts and stops on
+    # the same Run Manager lifecycle by default.
+    effective_stop_when_exe = args.stop_when_exe or args.start_when_exe
 
     ok, ff = find_ffmpeg(args.ffmpeg or None)
     if ok and ff and (args.list_devices or args.select_device):
@@ -464,12 +540,35 @@ def main() -> int:
             os.environ["QC_CAM_FPS"] = str(args.framerate)
         if args.video_size:
             os.environ["QC_CAM_VSIZE"] = str(args.video_size)
-        run_ffmpeg(ff, args.source, out, args.segment_sec, args.label, stop_file, args.stop_when_exe, args.verbose, error_dir, args.error_window_sec)
+        run_ffmpeg(
+            ff,
+            args.source,
+            out,
+            args.segment_sec,
+            args.label,
+            stop_file,
+            effective_stop_when_exe,
+            args.verbose,
+            error_dir,
+            args.error_window_sec,
+            args.poll_sec,
+        )
         return 0
     # Fallback to OpenCV if ffmpeg not found
     try:
         print("Using OpenCV backend (ffmpeg not found)") if args.verbose else None
-        return int(run_opencv(args.source, out, args.segment_sec, args.label, stop_file, args.stop_when_exe) or 0)
+        return int(
+            run_opencv(
+                args.source,
+                out,
+                args.segment_sec,
+                args.label,
+                stop_file,
+                effective_stop_when_exe,
+                poll_sec=args.poll_sec,
+            )
+            or 0
+        )
     except Exception as e:
         print("ERROR: OpenCV backend failed and ffmpeg not found.", file=sys.stderr)
         print("Install OpenCV: python -m pip install opencv-python", file=sys.stderr)
