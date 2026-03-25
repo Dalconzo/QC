@@ -1,0 +1,8 @@
+{
+  "hamilton_log_dir": "C:\\Program Files (x86)\\HAMILTON\\LogFiles",
+  "hamilton_log_glob": "*.trc",
+  "default_source": "0",
+  "default_poll_sec": 1.0,
+  "default_max_record_sec": 0,
+  "manifest_dir": ""
+}

@@ -2,17 +2,21 @@
 """
 camera-recorder.py
 
-Segmented camera recorder that writes timestamped mp4 clips to a directory.
+Continuous camera recorder for Hamilton runs.
 
-Filenames: YYYYMMDD_HHMMSS_<label>.mp4 where timestamp is the start time of the segment.
-Stops gracefully when a stop file appears.
+The recorder now creates one finalized MP4 per HxRun session instead of fixed
+time segments. Once the recording stops, it looks in the configured Hamilton
+log directory for the trace file whose last-write time is closest to the stop
+time and writes a manifest that pairs the video with that trace file.
 
-Prefers ffmpeg for robust segmentation; falls back to OpenCV if ffmpeg not available.
+This script still prefers ffmpeg for capture and falls back to OpenCV if
+ffmpeg is unavailable.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
 import shutil
 import subprocess
@@ -21,36 +25,34 @@ import time
 from pathlib import Path
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CONFIG = REPO_ROOT / "config" / "camera-recorder.json"
+
+
 def find_ffmpeg(explicit: str | None = None) -> tuple[bool, str | None]:
-    # 1) explicit path argument
+    """Locate ffmpeg, preferring an explicit or repo-local copy."""
     if explicit:
-        p = Path(explicit)
-        if p.exists():
-            return True, str(p)
-    # 2) side-by-side ffmpeg.exe next to this script
+        explicit_path = Path(explicit)
+        if explicit_path.exists():
+            return True, str(explicit_path)
+
     here = Path(__file__).parent
-    local_ff = here / "ffmpeg.exe"
-    if local_ff.exists():
-        return True, str(local_ff)
-    local_ff2 = here / "dist" / "ffmpeg.exe"
-    if local_ff2.exists():
-        return True, str(local_ff2)
-    # 3) repo-level cameras/ffmpeg.exe (if run from repo root)
-    repo_ff = Path.cwd() / "cameras" / "ffmpeg.exe"
-    if repo_ff.exists():
-        return True, str(repo_ff)
-    repo_ff2 = Path.cwd() / "cameras" / "dist" / "ffmpeg.exe"
-    if repo_ff2.exists():
-        return True, str(repo_ff2)
-    # 4) PATH
+    for candidate in (
+        here / "ffmpeg.exe",
+        here / "dist" / "ffmpeg.exe",
+        Path.cwd() / "cameras" / "ffmpeg.exe",
+        Path.cwd() / "cameras" / "dist" / "ffmpeg.exe",
+    ):
+        if candidate.exists():
+            return True, str(candidate)
+
     exe = shutil.which("ffmpeg")
-    return (exe is not None), exe
+    return exe is not None, exe
 
 
 def list_dshow_devices(ffmpeg_bin: str) -> list[dict]:
-    """Return a list of video devices using ffmpeg dshow probe: [{index,name,alt}]"""
+    """Return DirectShow video devices using ffmpeg probe output."""
     try:
-        # Run the device probe
         proc = subprocess.run(
             [ffmpeg_bin, "-hide_banner", "-f", "dshow", "-list_devices", "true", "-i", "dummy"],
             capture_output=True,
@@ -62,25 +64,27 @@ def list_dshow_devices(ffmpeg_bin: str) -> list[dict]:
         devices: list[dict] = []
         pending: dict | None = None
         import re
-        re_name = re.compile(r"\] \"([^\"]+)\" \(video\)")
-        re_alt = re.compile(r"Alternative name \"([^\"]+)\"")
-        for ln in lines:
-            m = re_name.search(ln)
-            if m:
-                # Start a new device record
+
+        re_name = re.compile(r'\] "([^"]+)" \(video\)')
+        re_alt = re.compile(r'Alternative name "([^"]+)"')
+        for line in lines:
+            match_name = re_name.search(line)
+            if match_name:
                 if pending:
                     devices.append(pending)
-                pending = {"name": m.group(1), "alt": None}
+                pending = {"name": match_name.group(1), "alt": None}
                 continue
+
             if pending:
-                m2 = re_alt.search(ln)
-                if m2:
-                    pending["alt"] = m2.group(1)
+                match_alt = re_alt.search(line)
+                if match_alt:
+                    pending["alt"] = match_alt.group(1)
+
         if pending:
             devices.append(pending)
-        # Add indices
-        for i, d in enumerate(devices):
-            d["index"] = i
+
+        for index, device in enumerate(devices):
+            device["index"] = index
         return devices
     except Exception:
         return []
@@ -90,17 +94,38 @@ def ts_now() -> dt.datetime:
     return dt.datetime.now()
 
 
-def ts_label(t: dt.datetime) -> str:
-    return t.strftime("%Y%m%d_%H%M%S")
+def ts_label(timestamp: dt.datetime) -> str:
+    return timestamp.strftime("%Y%m%d_%H%M%S")
+
+
+def emit_log(message: str, *, log_path: Path | None = None, is_error: bool = False) -> None:
+    """Write recorder diagnostics to stdout/stderr and an optional log file.
+
+    The live recorder is often run from an operator shell. Mirroring the same
+    messages into a log file gives us a durable audit trail for startup gating,
+    backend selection, stop reasons, and trace pairing without requiring the
+    operator to keep the original terminal open.
+    """
+    stream = sys.stderr if is_error else sys.stdout
+    print(message, file=stream)
+    if not log_path:
+        return
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    line = f"{dt.datetime.now().isoformat()} {message}\n"
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(line)
+
+
+def load_camera_config(config_path: Path) -> dict:
+    """Read machine-local recorder settings from JSON if present."""
+    if not config_path.exists():
+        return {}
+    with config_path.open("r", encoding="utf-8-sig") as handle:
+        return json.load(handle)
 
 
 def _normalize_proc_names(proc_names: str | list[str] | tuple[str, ...]) -> list[str]:
-    """Normalize a process selector into a list of executable names.
-
-    We accept either a single name, a semicolon/comma-separated string, or an
-    already-expanded list. That keeps the CLI ergonomic for operators while
-    letting the recorder watch multiple candidate Run Manager executable names.
-    """
+    """Normalize process selectors into executable names."""
     if isinstance(proc_names, (list, tuple)):
         items = [str(item).strip() for item in proc_names]
     else:
@@ -110,24 +135,25 @@ def _normalize_proc_names(proc_names: str | list[str] | tuple[str, ...]) -> list
 
 
 def _is_any_proc_running(proc_names: str | list[str] | tuple[str, ...]) -> bool:
+    """Return True when any named executable is running."""
     normalized = _normalize_proc_names(proc_names)
     if not normalized:
         return True
     try:
         import psutil  # type: ignore
-        for p in psutil.process_iter(attrs=["name"]):
+
+        for proc in psutil.process_iter(attrs=["name"]):
             try:
-                proc_name = (p.info.get("name") or "").lower()
+                proc_name = (proc.info.get("name") or "").lower()
                 if any(proc_name == expected.lower() for expected in normalized):
                     return True
             except Exception:
                 continue
         return False
     except Exception:
-        # Fallback: Windows 'tasklist'
         try:
-            res = subprocess.run(["tasklist"], capture_output=True, text=True, check=False)
-            output = (res.stdout or "").lower()
+            result = subprocess.run(["tasklist"], capture_output=True, text=True, check=False)
+            output = (result.stdout or "").lower()
             return any(expected.lower() in output for expected in normalized)
         except Exception:
             return True
@@ -139,12 +165,9 @@ def wait_for_process_start(
     poll_sec: float,
     timeout_sec: int,
     verbose: bool = False,
+    log_path: Path | None = None,
 ) -> bool:
-    """Block until one of the target processes appears.
-
-    The recorder needs this startup gate so it does not create idle video while
-    no Hamilton run is active. A timeout of 0 means "wait indefinitely".
-    """
+    """Block until one of the target processes appears."""
     normalized = _normalize_proc_names(proc_names)
     if not normalized:
         return True
@@ -154,427 +177,498 @@ def wait_for_process_start(
     while True:
         if _is_any_proc_running(normalized):
             if verbose:
-                names = ", ".join(normalized)
-                print(f"[recorder] Startup gate satisfied by process: {names}")
+                emit_log(f"[recorder] Startup gate satisfied by process: {', '.join(normalized)}", log_path=log_path)
             return True
 
         if timeout_sec > 0 and (time.monotonic() - started) >= timeout_sec:
             if verbose:
-                names = ", ".join(normalized)
-                print(f"[recorder] Startup gate timed out waiting for: {names}")
+                emit_log(f"[recorder] Startup gate timed out waiting for: {', '.join(normalized)}", log_path=log_path)
             return False
 
         now = time.monotonic()
         if verbose and (now - last_status) >= max(1.0, poll_sec):
-            names = ", ".join(normalized)
-            print(f"[recorder] Waiting for process start: {names}")
+            emit_log(f"[recorder] Waiting for process start: {', '.join(normalized)}", log_path=log_path)
             last_status = now
         time.sleep(max(0.25, poll_sec))
 
 
-def _parse_segment_ts(name: str) -> dt.datetime | None:
-    """Parse YYYYMMDD_HHMMSS from segment filename prefix."""
-    try:
-        base = Path(name).name
-        ts = base.split("_")[0] + "_" + base.split("_")[1]
-        return dt.datetime.strptime(ts, "%Y%m%d_%H%M%S")
-    except Exception:
-        return None
+def choose_trace_file(
+    log_dir: Path,
+    log_glob: str,
+    stop_time: dt.datetime,
+) -> tuple[Path | None, float | None]:
+    """Pick the trace file whose last-write time is closest to recorder stop.
 
-
-def _consume_error_marks(rec_start: dt.datetime, error_dir: Path, verbose: bool = False) -> bool:
-    """Consume mark files created after recorder start and signal if any are relevant.
-
-    - Only marks whose timestamp (from filename) is >= rec_start are treated as
-      valid error signals; older marks are considered stale and removed.
-    - Valid marks are moved into error_dir/marks for later validation/logging.
-    - Returns True if at least one valid mark was seen.
+    Hamilton only flushes the `.trc` to disk when the method completes, so the
+    most reliable pairing signal available right after HxRun exits is the trace
+    file modification time near recorder shutdown.
     """
-    marks_dir = Path("cameras") / "marks"
-    if not marks_dir.exists():
-        if verbose:
-            print(f"[recorder] No marks dir yet: {marks_dir}")
-        return False
-    mark_files = sorted(marks_dir.glob("*.mark"))
-    if not mark_files:
-        return False
-    valid = False
-    archive_dir = error_dir / "marks"
-    archive_dir.mkdir(parents=True, exist_ok=True)
-    if verbose:
-        print(f"[recorder] Inspecting {len(mark_files)} mark(s) in {marks_dir}")
-    for m in mark_files:
-        try:
-            ts_str = m.stem
-            mark_dt = dt.datetime.strptime(ts_str, "%Y%m%d_%H%M%S")
-        except Exception:
-            if verbose:
-                print(f"[recorder] Skipping malformed mark {m}; deleting.")
-            m.unlink(missing_ok=True)
-            continue
+    if not log_dir.exists():
+        return None, None
 
-        if mark_dt < rec_start:
-            # Stale mark from a previous recorder session
-            if verbose:
-                print(f"[recorder] Discarding stale mark {m} (before recorder start).")
-            m.unlink(missing_ok=True)
-            continue
+    patterns = [pattern.strip() for pattern in str(log_glob or "*.trc").split(";") if pattern.strip()]
+    candidates: list[tuple[float, Path]] = []
+    for pattern in patterns:
+        for path in log_dir.glob(pattern):
+            if not path.is_file():
+                continue
+            modified = dt.datetime.fromtimestamp(path.stat().st_mtime)
+            delta = abs((modified - stop_time).total_seconds())
+            candidates.append((delta, path))
 
-        # Valid mark for this session: move it to archive and signal
-        try:
-            dest = archive_dir / m.name
-            if verbose:
-                print(f"[recorder] Consuming mark {m} -> {dest}")
-            m.replace(dest)
-            valid = True
-        except Exception as e:
-            if verbose:
-                print(f"[recorder] Failed to archive mark {m}: {e}")
-    return valid
+    if not candidates:
+        return None, None
+
+    candidates.sort(key=lambda item: (item[0], item[1].name.lower()))
+    nearest_delta, nearest_path = candidates[0]
+    return nearest_path, nearest_delta
 
 
-def _promote_segment_to_error(ffmpeg_bin: str, segment: Path, error_dir: Path, label: str, verbose: bool = False) -> None:
-    """Copy a finished segment into error_dir as a tagged error clip."""
-    error_dir.mkdir(parents=True, exist_ok=True)
-    sdt = _parse_segment_ts(segment.name) or dt.datetime.now()
-    out_name = f"{sdt.strftime('%Y%m%d_%H%M%S')}_error_{label}.mp4"
-    out_path = error_dir / out_name
-    cmd = [
-        ffmpeg_bin,
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-i",
-        str(segment),
-        "-c",
-        "copy",
-        str(out_path),
-    ]
-    if verbose:
-        print(f"[recorder] Promoting segment to error clip: {segment} -> {out_path}")
-        print("[recorder] ffmpeg cmd:", " ".join(cmd))
+def write_run_manifest(
+    manifest_path: Path,
+    *,
+    label: str,
+    source: str,
+    video_path: Path,
+    started_at: dt.datetime,
+    stopped_at: dt.datetime,
+    stop_reason: str,
+    process_gate: str,
+    log_dir: Path,
+    log_glob: str,
+    trace_path: Path | None,
+    trace_delta_sec: float | None,
+) -> None:
+    """Persist the pairing artifact the replay UI will load later."""
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "label": label,
+        "source": source,
+        "video_path": str(video_path.resolve()),
+        "video_filename": video_path.name,
+        "started_at_local": started_at.isoformat(),
+        "stopped_at_local": stopped_at.isoformat(),
+        "duration_sec": round((stopped_at - started_at).total_seconds(), 3),
+        "stop_reason": stop_reason,
+        "process_gate": process_gate,
+        "hamilton_log_dir": str(log_dir.resolve()),
+        "hamilton_log_glob": log_glob,
+        "trace_path": str(trace_path.resolve()) if trace_path else "",
+        "trace_filename": trace_path.name if trace_path else "",
+        "trace_mtime_delta_sec": round(trace_delta_sec, 3) if trace_delta_sec is not None else None,
+    }
+    with manifest_path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+        handle.write("\n")
+
+
+def request_ffmpeg_stop(proc: subprocess.Popen, verbose: bool = False, log_path: Path | None = None) -> None:
+    """Ask ffmpeg to exit cleanly so MP4 metadata is finalized."""
+    if proc.poll() is not None:
+        return
+
     try:
-        subprocess.run(cmd, check=True)
-        if verbose:
-            print(f"[recorder] Wrote error clip: {out_path}")
-    except Exception as e:
-        if verbose:
-            print(f"[recorder] Failed to promote segment {segment} to error clip: {e}")
+        if proc.stdin:
+            if verbose:
+                emit_log("[recorder] Requesting graceful ffmpeg shutdown.", log_path=log_path)
+            proc.stdin.write("q\n")
+            proc.stdin.flush()
+    except Exception:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
 
 
-def run_ffmpeg(ffmpeg_bin: str, source: str, out_dir: Path, segment_sec: int, label: str, stop_file: Path, stop_when_exe: str = "", verbose: bool = False, error_dir: Path | None = None, error_window_sec: int = 30, poll_sec: float = 1.0):
-    out_dir.mkdir(parents=True, exist_ok=True)
-    # Build output pattern with timestamp at segment boundaries
-    # ffmpeg time pattern uses strftime-like expansion when using -strftime 1
-    # For Windows path escaping, avoid % in folder name
-    pattern = str(out_dir / ("%Y%m%d_%H%M%S_" + label + ".mp4"))
+def build_output_path(out_dir: Path, start_time: dt.datetime, label: str) -> Path:
+    """Create a stable filename for one continuous run recording."""
+    safe_label = label.strip() or "cam"
+    return out_dir / f"{ts_label(start_time)}_{safe_label}.mp4"
+
+
+def _normalize_dshow_name(source: str) -> str:
+    """Convert user-friendly DirectShow source syntax into ffmpeg input form."""
+    value = source
+    if value.lower().startswith("dshow:"):
+        value = value.split(":", 1)[1]
+    if value.lower().startswith("video="):
+        key, raw_name = value.split("=", 1)
+        raw_name = raw_name.strip().strip('"')
+        return f"{key}={raw_name}"
+    return value
+
+
+def build_ffmpeg_command(
+    ffmpeg_bin: str,
+    source: str,
+    out_path: Path,
+    *,
+    framerate: int | None,
+    video_size: str | None,
+) -> list[str]:
+    """Construct the ffmpeg command for one long-running recording."""
     src = source.strip()
     is_rtsp = src.lower().startswith("rtsp")
     is_dshow = src.lower().startswith("dshow:") or src.lower().startswith("video=") or src.lower().startswith("audio=")
-    def _normalize_dshow_name(x: str) -> str:
-        # Build a dshow device spec for argument-vector invocation (no shell quoting needed)
-        # Accept forms like 'dshow:video="Name"' or 'video="Name"' or 'video=Name'
-        s = x
-        if s.lower().startswith("dshow:"):
-            s = s.split(":", 1)[1]
-        if s.lower().startswith("video="):
-            key, val = s.split("=", 1)
-            # Strip any surrounding quotes; spaces are fine in an argv element
-            val = val.strip().strip('"')
-            return f"{key}={val}"
-        return s
-    input_args = ["-i", src]
-    codec_args: list[str] = ["-c", "copy", "-an"]
+
     if is_rtsp:
         input_args = ["-rtsp_transport", "tcp", "-i", src]
         codec_args = ["-c", "copy", "-an"]
     elif is_dshow:
-        # Windows webcam via DirectShow: transcode to H.264 for mp4 compatibility
-        # Accept forms: 'dshow:video="Integrated Camera"' or 'video="Integrated Camera"'
-        name = _normalize_dshow_name(src)
-        # Insert optional framerate and video_size before -i
         input_args = ["-f", "dshow"]
-        # Pull desired mode from environment (for quick testing) or CLI via global args if present
-        dshow_fps = os.environ.get("QC_CAM_FPS")
-        dshow_vs = os.environ.get("QC_CAM_VSIZE")
-        # We pass through framerate/video_size later if provided by CLI
-        if dshow_fps:
-            input_args += ["-framerate", str(dshow_fps)]
-        if dshow_vs:
-            input_args += ["-video_size", str(dshow_vs)]
-        input_args += ["-i", name]
+        if framerate:
+            input_args += ["-framerate", str(framerate)]
+        if video_size:
+            input_args += ["-video_size", str(video_size)]
+        input_args += ["-i", _normalize_dshow_name(src)]
         codec_args = [
-            "-vcodec", "libx264",
-            "-preset", "veryfast",
-            "-crf", "28",
-            "-pix_fmt", "yuv420p",
+            "-vcodec",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "28",
+            "-pix_fmt",
+            "yuv420p",
             "-an",
         ]
+    else:
+        input_args = ["-i", src]
+        codec_args = ["-c", "copy", "-an"]
 
-    cmd = [ffmpeg_bin, "-hide_banner", "-loglevel", "error", *input_args, *codec_args,
-           "-f", "segment", "-segment_time", str(segment_sec), "-reset_timestamps", "1", "-strftime", "1", pattern]
+    return [
+        ffmpeg_bin,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        *input_args,
+        *codec_args,
+        "-movflags",
+        "+faststart",
+        str(out_path),
+    ]
+
+
+def run_ffmpeg(
+    ffmpeg_bin: str,
+    source: str,
+    out_dir: Path,
+    label: str,
+    stop_file: Path,
+    *,
+    stop_when_exe: str = "",
+    verbose: bool = False,
+    poll_sec: float = 1.0,
+    framerate: int | None = None,
+    video_size: str | None = None,
+    max_record_sec: int = 0,
+    log_path: Path | None = None,
+) -> tuple[Path, dt.datetime, dt.datetime, str]:
+    """Record a single MP4 until the process gate exits, timeout, or stop file appears."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    started_at = ts_now()
+    out_path = build_output_path(out_dir, started_at, label)
+    cmd = build_ffmpeg_command(
+        ffmpeg_bin,
+        source,
+        out_path,
+        framerate=framerate,
+        video_size=video_size,
+    )
+
     if verbose:
-        print("ffmpeg cmd:")
-        print(" ", " ".join(cmd))
-    # Run ffmpeg in a child process while polling for stop file; if stop requested, terminate ffmpeg.
-    proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True)
-    # Error handling state: mark when an error is signaled, and on the next
-    # segment rollover promote the finished segment exactly once.
-    error_pending = False
-    last_segment: Path | None = None
-    rec_start = ts_now()
-    no_mark_since: dt.datetime | None = None
-    strobe_on = False
+        emit_log("[recorder] ffmpeg cmd:", log_path=log_path)
+        emit_log(f"  {' '.join(cmd)}", log_path=log_path)
+
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        text=True,
+    )
+    stop_reason = "backend_exit"
+    monotonic_started = time.monotonic()
+    last_heartbeat = monotonic_started
+
     try:
         while True:
-            # Stop if sentinel file exists or watched process has exited
-            if stop_file.exists() or (stop_when_exe and not _is_any_proc_running(stop_when_exe)):
-                proc.terminate()
-                try:
-                    proc.wait(timeout=5)
-                except Exception:
-                    proc.kill()
+            if stop_file.exists():
+                stop_reason = "stop_file"
+                request_ffmpeg_stop(proc, verbose, log_path)
                 break
 
-            if error_dir is not None:
-                # Consume any mark files created since recorder start and
-                # remember that an error occurred.
-                try:
-                    if _consume_error_marks(rec_start, error_dir, verbose):
-                        if verbose:
-                            # Finish any in-place "no marks" line before logging
-                            if no_mark_since is not None:
-                                print()
-                            print("[recorder] Error mark consumed; will promote next finished segment.")
-                        error_pending = True
-                        no_mark_since = None
-                    else:
-                        # No marks this cycle; update an in-place status line occasionally.
-                        if verbose and not error_pending:
-                            now = ts_now()
-                            if no_mark_since is None:
-                                no_mark_since = now
-                            strobe_on = not strobe_on
-                            indicator = "*" if strobe_on else " "
-                            msg = f"[recorder] {indicator} No mark files (since {no_mark_since.strftime('%H:%M:%S')} -> {now.strftime('%H:%M:%S')})"
-                            # In-place update without spamming new lines; tint green for visibility
-                            print("\x1b[32m" + msg + "\x1b[0m", end="\r", flush=True)
-                except Exception:
-                    pass
+            if stop_when_exe and not _is_any_proc_running(stop_when_exe):
+                stop_reason = "process_exit"
+                request_ffmpeg_stop(proc, verbose, log_path)
+                break
 
-                # Detect segment rollover: when a new segment appears, the
-                # previous one is finished and safe to promote.
-                try:
-                    segments = sorted(out_dir.glob("*.mp4"))
-                    if segments:
-                        newest = segments[-1]
-                        if last_segment is None:
-                            last_segment = newest
-                        elif newest != last_segment:
-                            prev = last_segment
-                            last_segment = newest
-                            # Segment rollover: any pending error gets promoted once.
-                            if error_pending:
-                                # Finish any in-place "no marks" line.
-                                if verbose and no_mark_since is not None:
-                                    print()
-                                _promote_segment_to_error(ffmpeg_bin, prev, error_dir, label, verbose)
-                                error_pending = False
-                                no_mark_since = None
-                    elif verbose and no_mark_since is None:
-                        # Only log this once per run when we haven't yet seen any segments.
-                        print(f"[recorder] No segments yet in {out_dir}")
-                except Exception as e:
-                    if verbose:
-                        print(f"[recorder] Failed to inspect segments in {out_dir}: {e}")
+            if max_record_sec > 0 and (time.monotonic() - monotonic_started) >= max_record_sec:
+                stop_reason = "max_record_sec"
+                request_ffmpeg_stop(proc, verbose, log_path)
+                break
 
             ret = proc.poll()
             if ret is not None:
-                # If ffmpeg exited quickly with error, surface diagnostics
                 if ret != 0:
-                    err = None
+                    err = ""
                     try:
                         err = proc.stderr.read() if proc.stderr else ""
                     except Exception:
                         err = ""
-                    print("ffmpeg exited early with code", ret)
+                    emit_log(f"ffmpeg exited early with code {ret}", log_path=log_path, is_error=True)
                     if err:
-                        print(err.strip())
-                    print("Troubleshooting: ensure the dshow device name is quoted, e.g., --source 'dshow:video=\"Arducam USB Camera\"'", file=sys.stderr)
+                        emit_log(err.strip(), log_path=log_path, is_error=True)
                 break
 
+            now = time.monotonic()
+            if verbose and (now - last_heartbeat) >= 5.0:
+                elapsed_sec = now - monotonic_started
+                emit_log(
+                    f"[recorder] Capture heartbeat: {elapsed_sec:.1f}s elapsed, writing to {out_path.name}",
+                    log_path=log_path,
+                )
+                last_heartbeat = now
+
             time.sleep(max(0.25, poll_sec))
+
+        try:
+            proc.wait(timeout=10)
+        except Exception:
+            proc.kill()
+            proc.wait(timeout=5)
     finally:
         try:
             stop_file.unlink(missing_ok=True)
         except Exception:
             pass
 
+    stopped_at = ts_now()
+    return out_path, started_at, stopped_at, stop_reason
 
-def run_opencv(source: str, out_dir: Path, segment_sec: int, label: str, stop_file: Path, stop_when_exe: str = "", fps: int = 20, fourcc: str = "mp4v", poll_sec: float = 1.0):
-    # Lazy import to avoid hard dependency if ffmpeg is present
+
+def run_opencv(
+    source: str,
+    out_dir: Path,
+    label: str,
+    stop_file: Path,
+    *,
+    stop_when_exe: str = "",
+    fps: int = 20,
+    fourcc: str = "mp4v",
+    poll_sec: float = 1.0,
+    max_record_sec: int = 0,
+    verbose: bool = False,
+    log_path: Path | None = None,
+) -> tuple[Path, dt.datetime, dt.datetime, str]:
+    """Fallback continuous recorder when ffmpeg is unavailable."""
     import cv2  # type: ignore
 
     out_dir.mkdir(parents=True, exist_ok=True)
     cap = cv2.VideoCapture(0 if source.isdigit() else source)
     if not cap.isOpened():
-        print("ERROR: Failed to open camera source", file=sys.stderr)
-        return 2
+        raise RuntimeError("Failed to open camera source")
+
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1280)
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 720)
     code = cv2.VideoWriter_fourcc(*fourcc)
+    started_at = ts_now()
+    out_path = build_output_path(out_dir, started_at, label)
+    writer = cv2.VideoWriter(str(out_path), code, fps, (width, height))
+    monotonic_started = time.monotonic()
+    last_heartbeat = monotonic_started
+    stop_reason = "stop_file"
 
-    def new_writer(start: dt.datetime):
-        path = out_dir / f"{ts_label(start)}_{label}.mp4"
-        return path, cv2.VideoWriter(str(path), code, fps, (width, height))
-
-    start = ts_now()
-    seg_end = start + dt.timedelta(seconds=segment_sec)
-    path, writer = new_writer(start)
     try:
         while True:
             ok, frame = cap.read()
             if not ok:
                 time.sleep(0.05)
                 continue
+
             writer.write(frame)
-            now = ts_now()
-            if now >= seg_end:
-                writer.release()
-                start = now
-                seg_end = start + dt.timedelta(seconds=segment_sec)
-                path, writer = new_writer(start)
-            if stop_file.exists() or (stop_when_exe and not _is_any_proc_running(stop_when_exe)):
+
+            if stop_file.exists():
+                stop_reason = "stop_file"
                 break
+            if stop_when_exe and not _is_any_proc_running(stop_when_exe):
+                stop_reason = "process_exit"
+                break
+            if max_record_sec > 0 and (time.monotonic() - monotonic_started) >= max_record_sec:
+                stop_reason = "max_record_sec"
+                break
+
+            now = time.monotonic()
+            if (verbose or log_path) and (now - last_heartbeat) >= 5.0:
+                elapsed_sec = now - monotonic_started
+                emit_log(
+                    f"[recorder] Capture heartbeat: {elapsed_sec:.1f}s elapsed, writing to {out_path.name}",
+                    log_path=log_path,
+                )
+                last_heartbeat = now
+
             time.sleep(max(0.01, min(0.25, poll_sec)))
     finally:
-        try:
-            writer.release()
-        except Exception:
-            pass
+        writer.release()
         cap.release()
         try:
             stop_file.unlink(missing_ok=True)
         except Exception:
             pass
 
+    stopped_at = ts_now()
+    return out_path, started_at, stopped_at, stop_reason
+
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Segmented camera recorder")
-    ap.add_argument("--source", default="0", help="Camera source (index or URL). Default: 0")
-    ap.add_argument("--out-dir", default="video_clips", help="Output directory for clips")
-    ap.add_argument("--segment-sec", type=int, default=60, help="Segment length in seconds (default: 60)")
-    ap.add_argument("--label", default="cam", help="Label to include in filenames (default: cam)")
+    config = load_camera_config(DEFAULT_CONFIG)
+
+    ap = argparse.ArgumentParser(description="Continuous camera recorder for Hamilton runs")
+    ap.add_argument("--source", default=str(config.get("default_source", "0")), help="Camera source (index or URL). Default: 0")
+    ap.add_argument("--out-dir", default=str(REPO_ROOT / "cameras" / "video_clips"), help="Directory for run recordings")
+    ap.add_argument("--label", default="cam", help="Label to include in filenames and manifests")
     ap.add_argument("--stop-file", default="cameras.recorder.stop", help="Path to stop file to end recording")
     ap.add_argument("--start-when-exe", default="", help="Wait to begin recording until one of these process names is running (comma/semicolon-separated)")
     ap.add_argument("--stop-when-exe", default="", help="Stop when the given process name is no longer running (for Hamilton, usually 'HxRun.exe')")
     ap.add_argument("--startup-timeout-sec", type=int, default=0, help="How long to wait for --start-when-exe before exiting. 0 waits indefinitely.")
-    ap.add_argument("--poll-sec", type=float, default=1.0, help="Polling interval for process-gate checks (default: 1.0)")
+    ap.add_argument("--poll-sec", type=float, default=float(config.get("default_poll_sec", 1.0)), help="Polling interval for process-gate checks")
+    ap.add_argument("--max-record-sec", type=int, default=int(config.get("default_max_record_sec", 0)), help="Safety cap for total recording time. 0 disables the cap.")
     ap.add_argument("--ffmpeg", default="", help="Optional path to ffmpeg.exe; if provided, recorder uses ffmpeg backend")
     ap.add_argument("--verbose", action="store_true", help="Print backend selection and underlying ffmpeg command")
     ap.add_argument("--list-devices", action="store_true", help="List DirectShow cameras and exit (requires ffmpeg)")
     ap.add_argument("--select-device", action="store_true", help="Interactively select a DirectShow camera (requires ffmpeg)")
-    ap.add_argument("--framerate", type=int, default=None, help="Desired framerate for dshow webcams (e.g., 30)")
-    ap.add_argument("--video-size", default=None, help="Desired resolution WxH for dshow webcams (e.g., 1280x720)")
-    ap.add_argument("--error-dir", default="error_clips", help="Directory for error clips (used with mark files)")
-    ap.add_argument("--error-window-sec", type=int, default=30, help="Seconds of video to keep before error mark")
+    ap.add_argument("--framerate", type=int, default=None, help="Desired framerate for dshow webcams")
+    ap.add_argument("--video-size", default=None, help="Desired resolution WxH for dshow webcams")
+    ap.add_argument("--log-dir", default=str(config.get("hamilton_log_dir", "")), help="Hamilton trace directory used for post-run pairing")
+    ap.add_argument("--log-glob", default=str(config.get("hamilton_log_glob", "*.trc")), help="Semicolon-separated glob(s) used to find Hamilton traces")
+    ap.add_argument("--manifest-dir", default=str(config.get("manifest_dir", "")), help="Optional directory for run manifests; defaults next to the video")
+    ap.add_argument("--recorder-log", default="", help="Optional path for a persistent recorder diagnostic log")
     args = ap.parse_args()
 
-    out = Path(args.out_dir)
+    out_dir = Path(args.out_dir)
     stop_file = Path(args.stop_file)
-    error_dir = Path(args.error_dir)
-    msg = f"Recording segments to {out} (every {args.segment_sec}s). Create '{stop_file}' to stop. Error clips in '{error_dir}'."
-    if args.start_when_exe:
-        msg += f" Startup gate: {args.start_when_exe}."
-    if args.stop_when_exe:
-        msg += f" Stop gate: {args.stop_when_exe}."
-    print(msg)
+    log_dir = Path(args.log_dir) if args.log_dir else Path.cwd()
+    recorder_log = Path(args.recorder_log) if args.recorder_log else None
 
     if args.start_when_exe and not wait_for_process_start(
         args.start_when_exe,
         poll_sec=args.poll_sec,
         timeout_sec=args.startup_timeout_sec,
         verbose=args.verbose,
+        log_path=recorder_log,
     ):
-        print("Recorder exited before capture because the startup gate was never satisfied.", file=sys.stderr)
+        emit_log("Recorder exited before capture because the startup gate was never satisfied.", log_path=recorder_log, is_error=True)
         return 3
 
-    # If the caller wants startup gating but does not explicitly provide a stop
-    # gate, reuse the same process selector so the recorder starts and stops on
-    # the same Run Manager lifecycle by default.
     effective_stop_when_exe = args.stop_when_exe or args.start_when_exe
+    ok, ffmpeg_bin = find_ffmpeg(args.ffmpeg or None)
 
-    ok, ff = find_ffmpeg(args.ffmpeg or None)
-    if ok and ff and (args.list_devices or args.select_device):
-        devs = list_dshow_devices(ff)
-        if not devs:
+    if ok and ffmpeg_bin and (args.list_devices or args.select_device):
+        devices = list_dshow_devices(ffmpeg_bin)
+        if not devices:
             print("No DirectShow devices found or probe failed.")
             return 2
         print("DirectShow video devices:")
-        for d in devs:
-            print(f"  [{d['index']}] {d['name']}" + (f"  (alt: {d['alt']})" if d.get('alt') else ""))
+        for device in devices:
+            suffix = f"  (alt: {device['alt']})" if device.get("alt") else ""
+            print(f"  [{device['index']}] {device['name']}{suffix}")
         if args.list_devices:
             return 0
-        # interactive selection
         try:
-            choice = input("Select device index: ").strip()
-            idx = int(choice)
-            sel = next((d for d in devs if d["index"] == idx), None)
-            if not sel:
-                print("Invalid selection")
-                return 2
-            # Prefer friendly name; fall back to alt
-            name = sel.get("name") or sel.get("alt")
-            if not name:
-                print("Selected device has no usable name")
-                return 2
-            args.source = f'dshow:video="{name}"'
+            choice = int(input("Select device index: ").strip())
         except Exception:
             print("Invalid selection input")
             return 2
+        selected = next((device for device in devices if device["index"] == choice), None)
+        if not selected:
+            print("Invalid selection")
+            return 2
+        name = selected.get("name") or selected.get("alt")
+        if not name:
+            print("Selected device has no usable name")
+            return 2
+        args.source = f'dshow:video="{name}"'
 
-    if ok and ff:
-        print(f"Using ffmpeg backend: {ff}") if args.verbose else None
-        # Propagate CLI framerate/video-size via env for the dshow builder above
-        if args.framerate:
-            os.environ["QC_CAM_FPS"] = str(args.framerate)
-        if args.video_size:
-            os.environ["QC_CAM_VSIZE"] = str(args.video_size)
-        run_ffmpeg(
-            ff,
-            args.source,
-            out,
-            args.segment_sec,
-            args.label,
-            stop_file,
-            effective_stop_when_exe,
-            args.verbose,
-            error_dir,
-            args.error_window_sec,
-            args.poll_sec,
-        )
-        return 0
-    # Fallback to OpenCV if ffmpeg not found
-    try:
-        print("Using OpenCV backend (ffmpeg not found)") if args.verbose else None
-        return int(
-            run_opencv(
+    emit_log(
+        f"Recording run video to {out_dir}. "
+        f"Create '{stop_file}' to stop. "
+        f"Trace pairing dir: '{log_dir}'.",
+        log_path=recorder_log,
+    )
+    if effective_stop_when_exe:
+        emit_log(f"Run lifecycle gate: {effective_stop_when_exe}", log_path=recorder_log)
+    if args.max_record_sec > 0:
+        emit_log(f"Safety timeout: {args.max_record_sec} seconds", log_path=recorder_log)
+
+    if ok and ffmpeg_bin:
+        if args.verbose:
+            emit_log(f"Using ffmpeg backend: {ffmpeg_bin}", log_path=recorder_log)
+        try:
+            video_path, started_at, stopped_at, stop_reason = run_ffmpeg(
+                ffmpeg_bin,
                 args.source,
-                out,
-                args.segment_sec,
+                out_dir,
                 args.label,
                 stop_file,
-                effective_stop_when_exe,
+                stop_when_exe=effective_stop_when_exe,
+                verbose=args.verbose,
                 poll_sec=args.poll_sec,
+                framerate=args.framerate,
+                video_size=args.video_size,
+                max_record_sec=args.max_record_sec,
+                log_path=recorder_log,
             )
-            or 0
-        )
-    except Exception as e:
-        print("ERROR: OpenCV backend failed and ffmpeg not found.", file=sys.stderr)
-        print("Install OpenCV: python -m pip install opencv-python", file=sys.stderr)
-        print("Or specify ffmpeg: --ffmpeg C:\\QC\\cameras\\ffmpeg.exe", file=sys.stderr)
-        print(f"Details: {e}", file=sys.stderr)
-        return 2
+        except Exception as exc:
+            emit_log(f"ERROR: ffmpeg backend failed: {exc}", log_path=recorder_log, is_error=True)
+            return 2
+    else:
+        if args.verbose:
+            emit_log("Using OpenCV backend (ffmpeg not found)", log_path=recorder_log)
+        try:
+            video_path, started_at, stopped_at, stop_reason = run_opencv(
+                args.source,
+                out_dir,
+                args.label,
+                stop_file,
+                stop_when_exe=effective_stop_when_exe,
+                poll_sec=args.poll_sec,
+                max_record_sec=args.max_record_sec,
+                verbose=args.verbose,
+                log_path=recorder_log,
+            )
+        except Exception as exc:
+            emit_log("ERROR: OpenCV backend failed and ffmpeg not found.", log_path=recorder_log, is_error=True)
+            emit_log("Install OpenCV: python -m pip install opencv-python", log_path=recorder_log, is_error=True)
+            emit_log("Or specify ffmpeg: --ffmpeg C:\\QC\\cameras\\ffmpeg.exe", log_path=recorder_log, is_error=True)
+            emit_log(f"Details: {exc}", log_path=recorder_log, is_error=True)
+            return 2
+
+    trace_path, trace_delta_sec = choose_trace_file(log_dir, args.log_glob, stopped_at)
+    manifest_root = Path(args.manifest_dir) if args.manifest_dir else video_path.parent
+    manifest_path = manifest_root / f"{video_path.stem}.run.json"
+    write_run_manifest(
+        manifest_path,
+        label=args.label,
+        source=args.source,
+        video_path=video_path,
+        started_at=started_at,
+        stopped_at=stopped_at,
+        stop_reason=stop_reason,
+        process_gate=effective_stop_when_exe,
+        log_dir=log_dir,
+        log_glob=args.log_glob,
+        trace_path=trace_path,
+        trace_delta_sec=trace_delta_sec,
+    )
+
+    emit_log(f"Wrote video: {video_path}", log_path=recorder_log)
+    emit_log(f"Wrote run manifest: {manifest_path}", log_path=recorder_log)
+    if trace_path:
+        emit_log(f"Paired trace: {trace_path} (mtime delta {trace_delta_sec:.2f}s)", log_path=recorder_log)
+    else:
+        emit_log("No matching trace file found.", log_path=recorder_log)
+
+    return 0
 
 
 if __name__ == "__main__":

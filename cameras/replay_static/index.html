@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hamilton Run Replay</title>
+  <link rel="stylesheet" href="/static/replay.css">
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="run-list-panel">
+      <div class="panel-head">
+        <h1>Run Replay</h1>
+        <p>Pick a captured run to inspect its video and trace.</p>
+        <div class="catalog-toolbar">
+          <button id="refresh-catalog" class="catalog-button" type="button">Refresh Catalog</button>
+          <span id="catalog-state" class="catalog-state">Catalog not loaded yet.</span>
+        </div>
+      </div>
+      <div id="run-list" class="run-list"></div>
+    </aside>
+
+    <section class="viewer-panel">
+      <div class="panel-head">
+        <div>
+          <h2 id="run-title">No run selected</h2>
+          <p id="run-meta">Load a recorder manifest to begin replay.</p>
+        </div>
+      </div>
+
+      <div class="view-tabs" role="tablist" aria-label="Camera view mode">
+        <button class="view-tab active" type="button" aria-selected="true">Single Camera</button>
+        <button class="view-tab disabled" type="button" aria-selected="false" disabled>All Cameras</button>
+        <button class="view-tab disabled" type="button" aria-selected="false" disabled>Camera Tabs</button>
+      </div>
+
+      <section class="playback-stack">
+        <div class="video-pane">
+          <video id="run-video" controls preload="metadata"></video>
+        </div>
+        <div class="terminal-pane">
+          <div class="terminal-toolbar">
+            <span id="terminal-state">Trace lines at playback time 0.0s</span>
+            <span id="terminal-count">0 lines</span>
+          </div>
+          <pre id="terminal-output" class="terminal-output"></pre>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/static/replay.js"></script>
+</body>
+</html>

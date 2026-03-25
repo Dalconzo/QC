@@ -1,26 +1,29 @@
 <#
   cameras/start-recorder.ps1
 
-  Thin PowerShell wrapper around camera-recorder.py so operators can launch the
-  recorder with readable parameters instead of a long Python command line.
+  Operator wrapper around camera-recorder.py.
 
-  This is intentionally simple: it passes through the startup/stop process
-  gates, camera source, ffmpeg path, and output settings that matter for bench
-  and Hamilton simulation tests.
+  The recorder now captures one continuous video per HxRun session. After the
+  process gate closes, the Python script pairs the video with the nearest
+  completed Hamilton trace file from the configured log directory and writes a
+  run manifest beside the recording.
 #>
 
 param(
   [string]$Source = "0",
   [string]$OutDir = (Join-Path $PSScriptRoot "video_clips"),
   [string]$Label = "cam",
-  [int]$SegmentSec = 60,
   [string]$StartWhenExe = "HxRun.exe",
   [string]$StopWhenExe = "",
   [int]$StartupTimeoutSec = 0,
   [double]$PollSec = 1.0,
+  [int]$MaxRecordSec = 0,
+  [string]$LogDir = "",
+  [string]$LogGlob = "",
+  [string]$ManifestDir = "",
+  [string]$RecorderLog = "",
   [string]$Ffmpeg = (Join-Path $PSScriptRoot "ffmpeg.exe"),
   [string]$StopFile = (Join-Path $PSScriptRoot "cameras.recorder.stop"),
-  [string]$ErrorDir = (Join-Path $PSScriptRoot "error_clips"),
   [switch]$VerboseRecorder
 )
 
@@ -36,18 +39,15 @@ if (-not (Test-Path -LiteralPath $scriptPath)) {
   throw "Recorder script not found: $scriptPath"
 }
 
-# Default to Hamilton Run Manager gating for the common operator path. Bench
-# tests can still override this with -StartWhenExe notepad.exe or a blank value.
 $argsList = @(
   $scriptPath,
   "--source", $Source,
   "--out-dir", ([System.IO.Path]::GetFullPath($OutDir)),
   "--label", $Label,
-  "--segment-sec", $SegmentSec,
   "--stop-file", ([System.IO.Path]::GetFullPath($StopFile)),
-  "--error-dir", ([System.IO.Path]::GetFullPath($ErrorDir)),
   "--startup-timeout-sec", $StartupTimeoutSec,
-  "--poll-sec", $PollSec
+  "--poll-sec", $PollSec,
+  "--max-record-sec", $MaxRecordSec
 )
 
 if ($StartWhenExe) {
@@ -60,6 +60,31 @@ if ($StopWhenExe) {
   $argsList += $StopWhenExe
 }
 
+if ($LogDir) {
+  $argsList += "--log-dir"
+  $argsList += ([System.IO.Path]::GetFullPath($LogDir))
+}
+
+if ($LogGlob) {
+  $argsList += "--log-glob"
+  $argsList += $LogGlob
+}
+
+if ($ManifestDir) {
+  $argsList += "--manifest-dir"
+  $argsList += ([System.IO.Path]::GetFullPath($ManifestDir))
+}
+
+if ($RecorderLog) {
+  $logPath = [System.IO.Path]::GetFullPath($RecorderLog)
+  $logParent = Split-Path -Parent $logPath
+  if ($logParent) {
+    New-Item -ItemType Directory -Force -Path $logParent | Out-Null
+  }
+  $argsList += "--recorder-log"
+  $argsList += $logPath
+}
+
 if ($Ffmpeg) {
   $argsList += "--ffmpeg"
   $argsList += ([System.IO.Path]::GetFullPath($Ffmpeg))
@@ -69,6 +94,6 @@ if ($VerboseRecorder) {
   $argsList += "--verbose"
 }
 
-Write-Host "Starting camera recorder ..." -ForegroundColor Cyan
+Write-Host "Starting continuous run recorder ..." -ForegroundColor Cyan
 & python @argsList
 exit $LASTEXITCODE
