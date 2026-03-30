@@ -61,6 +61,7 @@ class CameraConfigTests(unittest.TestCase):
             config = MODULE.load_effective_config(config_path=base_path, local_override_path=local_path)
             self.assertEqual(config["recorder"]["default_profile"], "top")
             self.assertEqual(config["replay"]["port"], 5055)
+            self.assertTrue(config["replay"]["log_path"])
             self.assertEqual(MODULE.get_profile(config)["id"], "top")
             self.assertTrue(config["daemon"]["task_name"])
 

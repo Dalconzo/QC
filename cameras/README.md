@@ -40,6 +40,13 @@ settings from the repo default.
     playback moves forward or backward.
 - `start-replay-app.ps1`
   - Operator-friendly PowerShell wrapper for the replay UI.
+  - Can start the local replay server in the background and open the browser.
+- `open-latest-run.ps1`
+  - One-click launcher that opens the freshest replayable local run.
+- `install-local-camera-tools.ps1`
+  - Installs desktop/start-menu shortcuts for the local replay workflow.
+- `uninstall-local-camera-tools.ps1`
+  - Removes those workstation shortcuts.
 - `show-camera-config.ps1`
   - Prints the effective camera workstation config, lists profiles, or validates
     the current machine before rollout.
@@ -178,6 +185,10 @@ The daemon has its own persistent diagnostics and status files too:
 - `C:\QC\logs\camera-daemon-status.json`
 - `C:\QC\logs\camera-daemon.pid`
 
+The replay launcher also writes a local server log by default:
+
+- `C:\QC\logs\camera-replay.log`
+
 ## Always-On Workstation Mode
 
 For the prototype rollout, the intended local workflow is:
@@ -254,7 +265,22 @@ app with:
 powershell -NoProfile -File C:\QC\cameras\start-replay-app.ps1
 ```
 
-Or point it at a different run-manifest root:
+That keeps the replay server attached to the current terminal. For normal
+workstation use, start it in the background and open the browser immediately:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\start-replay-app.ps1 `
+  -Background `
+  -OpenBrowser
+```
+
+Or jump straight into the newest replayable local run:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\open-latest-run.ps1
+```
+
+Or point the replay app at a different run-manifest root:
 
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\start-replay-app.ps1 `
@@ -262,10 +288,22 @@ powershell -NoProfile -File C:\QC\cameras\start-replay-app.ps1 `
   -Port 5051
 ```
 
-Then open the printed URL in a browser.
+To install desktop/start-menu shortcuts for engineers on a workstation:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\install-local-camera-tools.ps1
+```
+
+Remove those shortcuts with:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\uninstall-local-camera-tools.ps1
+```
 
 `start-replay-app.ps1` now uses the replay host, port, and default runs root
-from the shared camera config unless you override them on the command line.
+from the shared camera config unless you override them on the command line. In
+background mode it also waits for the server to come up before opening the
+browser, so operators do not land on a dead page during startup.
 
 The replay UI currently provides:
 
@@ -277,6 +315,8 @@ The replay UI currently provides:
   playback position
 - a refresh control that re-indexes newly captured runs without restarting the
   app
+- URL-addressable run selection, so workstation shortcuts can open the latest
+  replayable run directly
 - placeholder camera-view tabs so the later multi-camera view work has a stable
   UI slot to grow into
 

@@ -25,7 +25,8 @@
   },
   "replay": {
     "host": "127.0.0.1",
-    "port": 5050
+    "port": 5050,
+    "log_path": "C:\\QC\\logs\\camera-replay.log"
   },
   "daemon": {
     "task_name": "HamiltonCameraRecorderDaemon",

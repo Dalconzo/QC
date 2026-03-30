@@ -310,6 +310,32 @@ def list_catalog_runs(runs_root: Path) -> list[dict]:
     return [summarize_catalog_row(row) for row in rows]
 
 
+def get_latest_ready_run(runs_root: Path) -> dict | None:
+    """Return the newest catalog entry that has both video and trace files.
+
+    The local workstation launcher uses this to open engineers directly into
+    the freshest replayable run instead of making them browse the picker after
+    every assay.
+    """
+    catalog_path = get_catalog_path(runs_root)
+    if not catalog_path.exists():
+        refresh_catalog(runs_root)
+    with closing(get_db_connection(catalog_path)) as conn:
+        init_catalog_db(conn)
+        row = conn.execute(
+            """
+            SELECT *
+            FROM runs
+            WHERE replay_status = 'ready'
+            ORDER BY COALESCE(started_at_local, '') DESC, manifest_mtime_ns DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    if row is None:
+        return None
+    return summarize_catalog_row(row)
+
+
 def get_catalog_run(runs_root: Path, run_id: str) -> dict:
     """Resolve one run from the local catalog."""
     catalog_path = get_catalog_path(runs_root)
@@ -465,6 +491,15 @@ def make_handler(runs_root: Path):
             if route == "/api/runs":
                 runs = list_catalog_runs(runs_root)
                 return self._send_json({"items": runs, "catalog_path": str(get_catalog_path(runs_root).resolve())})
+
+            if route == "/api/runs/latest":
+                latest = get_latest_ready_run(runs_root)
+                return self._send_json(
+                    {
+                        "item": latest,
+                        "catalog_path": str(get_catalog_path(runs_root).resolve()),
+                    }
+                )
 
             if route == "/api/catalog/refresh":
                 return self._send_json(refresh_catalog(runs_root))

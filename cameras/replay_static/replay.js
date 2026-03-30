@@ -13,6 +13,23 @@ let activeRunId = "";
 let activeEvents = [];
 let terminalAutoFollow = true;
 
+function getRequestedRunId() {
+  const params = new URLSearchParams(window.location.search);
+  const runId = params.get("run_id");
+  return runId ? runId.trim() : "";
+}
+
+function updateLocationForRun(runId) {
+  const params = new URLSearchParams(window.location.search);
+  if (runId) {
+    params.set("run_id", runId);
+  } else {
+    params.delete("run_id");
+  }
+  const nextUrl = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+  window.history.replaceState({}, "", nextUrl);
+}
+
 function formatSeconds(value) {
   return `${value.toFixed(1)}s`;
 }
@@ -84,6 +101,7 @@ function renderTerminalAt(currentTimeSec) {
 
 async function loadRun(runId) {
   activeRunId = runId;
+  updateLocationForRun(runId);
   renderRunList(runIndex);
 
   const response = await fetch(`/api/runs/${runId}`);
@@ -120,6 +138,10 @@ async function loadRunIndex() {
   const runCount = runIndex.length;
   const readyCount = runIndex.filter((item) => item.replay_status === "ready").length;
   catalogStateEl.textContent = `${readyCount} of ${runCount} cataloged runs are replay-ready`;
+  const requestedRunId = getRequestedRunId();
+  if (!activeRunId && requestedRunId && runIndex.some((item) => item.run_id === requestedRunId)) {
+    activeRunId = requestedRunId;
+  }
   if (!activeRunId && runIndex.length) {
     activeRunId = runIndex[0].run_id;
   }

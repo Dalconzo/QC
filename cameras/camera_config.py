@@ -43,6 +43,7 @@ DEFAULT_CONFIG = {
     "replay": {
         "host": "127.0.0.1",
         "port": 5050,
+        "log_path": str(REPO_ROOT / "logs" / "camera-replay.log"),
     },
     "daemon": {
         "task_name": "HamiltonCameraRecorderDaemon",
@@ -231,6 +232,10 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     replay_port = int(replay.get("port", 0))
     if replay_port <= 0 or replay_port > 65535:
         errors.append("replay.port must be between 1 and 65535.")
+
+    replay_log_path = str(replay.get("log_path") or "")
+    if not replay_log_path.strip():
+        errors.append("replay.log_path is required.")
 
     if float(daemon.get("idle_poll_sec", 0)) <= 0:
         errors.append("daemon.idle_poll_sec must be greater than 0.")

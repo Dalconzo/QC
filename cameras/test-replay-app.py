@@ -207,6 +207,55 @@ class ReplayAppTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=5)
 
+    def test_http_api_returns_latest_ready_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            sample_trace = Path(__file__).resolve().parents[1] / "data" / "samples"
+            source_trace = next(sample_trace.glob("*.trc")).read_bytes()
+
+            for label, started in (("older", "2026-03-24T14:00:00"), ("newer", "2026-03-24T15:00:00")):
+                video_path = root / f"{label}.mp4"
+                trace_path = root / f"{label}.trc"
+                manifest_path = root / f"{label}.run.json"
+                video_path.write_bytes(label.encode("utf-8"))
+                trace_path.write_bytes(source_trace)
+                manifest_path.write_text(
+                    json.dumps(
+                        {
+                            "label": label,
+                            "source": "0",
+                            "video_path": str(video_path),
+                            "trace_path": str(trace_path),
+                            "started_at_local": started,
+                            "stopped_at_local": started,
+                            "duration_sec": 300,
+                            "stop_reason": "process_exit",
+                            "process_gate": "HxRun.exe",
+                            "hamilton_log_dir": str(root),
+                            "hamilton_log_glob": "*.trc",
+                            "trace_mtime_delta_sec": 1.0,
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+
+            handler = MODULE.make_handler(root)
+            from http.server import ThreadingHTTPServer
+
+            MODULE.refresh_catalog(root)
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                url = f"http://127.0.0.1:{server.server_port}/api/runs/latest"
+                payload = json.loads(urllib.request.urlopen(url).read().decode("utf-8"))
+                self.assertEqual(payload["item"]["label"], "newer")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
     def test_http_video_endpoint_supports_byte_ranges(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
