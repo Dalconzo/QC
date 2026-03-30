@@ -27,6 +27,16 @@
     "host": "127.0.0.1",
     "port": 5050
   },
+  "daemon": {
+    "task_name": "HamiltonCameraRecorderDaemon",
+    "stop_file": "C:\\QC\\cameras\\camera-daemon.stop",
+    "pid_file": "C:\\QC\\logs\\camera-daemon.pid",
+    "status_path": "C:\\QC\\logs\\camera-daemon-status.json",
+    "log_path": "C:\\QC\\logs\\camera-daemon.log",
+    "idle_poll_sec": 1.0,
+    "heartbeat_sec": 10.0,
+    "relaunch_delay_sec": 2.0
+  },
   "profiles": [
     {
       "id": "default",

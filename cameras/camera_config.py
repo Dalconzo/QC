@@ -44,6 +44,16 @@ DEFAULT_CONFIG = {
         "host": "127.0.0.1",
         "port": 5050,
     },
+    "daemon": {
+        "task_name": "HamiltonCameraRecorderDaemon",
+        "stop_file": str(REPO_ROOT / "cameras" / "camera-daemon.stop"),
+        "pid_file": str(REPO_ROOT / "logs" / "camera-daemon.pid"),
+        "status_path": str(REPO_ROOT / "logs" / "camera-daemon-status.json"),
+        "log_path": str(REPO_ROOT / "logs" / "camera-daemon.log"),
+        "idle_poll_sec": 1.0,
+        "heartbeat_sec": 10.0,
+        "relaunch_delay_sec": 2.0,
+    },
     "profiles": [
         {
             "id": "default",
@@ -116,7 +126,7 @@ def _legacy_to_nested(raw: dict) -> dict:
 def _extract_nested(raw: dict) -> dict:
     """Keep only the top-level keys used by the modern camera config schema."""
     partial: dict = {}
-    for key in ("hamilton", "storage", "recorder", "replay", "profiles"):
+    for key in ("hamilton", "storage", "recorder", "replay", "daemon", "profiles"):
         value = raw.get(key)
         if value is not None:
             partial[key] = copy.deepcopy(value)
@@ -195,6 +205,7 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     storage = config.get("storage", {})
     recorder = config.get("recorder", {})
     replay = config.get("replay", {})
+    daemon = config.get("daemon", {})
     profiles = config.get("profiles", [])
 
     if require_hamilton_log_dir:
@@ -220,6 +231,22 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     replay_port = int(replay.get("port", 0))
     if replay_port <= 0 or replay_port > 65535:
         errors.append("replay.port must be between 1 and 65535.")
+
+    if float(daemon.get("idle_poll_sec", 0)) <= 0:
+        errors.append("daemon.idle_poll_sec must be greater than 0.")
+
+    if float(daemon.get("heartbeat_sec", 0)) <= 0:
+        errors.append("daemon.heartbeat_sec must be greater than 0.")
+
+    if float(daemon.get("relaunch_delay_sec", 0)) < 0:
+        errors.append("daemon.relaunch_delay_sec cannot be negative.")
+
+    if not str(daemon.get("task_name") or "").strip():
+        errors.append("daemon.task_name is required.")
+
+    for field_name in ("stop_file", "pid_file", "status_path", "log_path"):
+        if not str(daemon.get(field_name) or "").strip():
+            errors.append(f"daemon.{field_name} is required.")
 
     if not profiles:
         errors.append("At least one camera profile is required.")

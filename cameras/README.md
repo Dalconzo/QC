@@ -43,6 +43,20 @@ settings from the repo default.
 - `show-camera-config.ps1`
   - Prints the effective camera workstation config, lists profiles, or validates
     the current machine before rollout.
+- `camera-daemon.py`
+  - Always-on workstation supervisor that waits for `HxRun.exe`, launches one
+    recorder child per run, and returns to idle for the next run.
+- `start-camera-daemon.ps1`
+  - Starts the camera daemon in the background for normal workstation use or in
+    the foreground for debugging.
+- `stop-camera-daemon.ps1`
+  - Stops the daemon and asks any active recorder child to finalize cleanly.
+- `show-camera-daemon-status.ps1`
+  - Shows whether the workstation is idle, recording, or stopped.
+- `install-camera-daemon-task.ps1`
+  - Installs a Scheduled Task so the daemon starts automatically at user logon.
+- `uninstall-camera-daemon-task.ps1`
+  - Removes that auto-start task when a workstation is being reconfigured.
 - `stop-recorder.py`
   - Creates the stop-file sentinel for graceful shutdown.
 
@@ -158,6 +172,62 @@ The recorder log captures:
 - stop reason
 - final paired trace path and pairing delta
 
+The daemon has its own persistent diagnostics and status files too:
+
+- `C:\QC\logs\camera-daemon.log`
+- `C:\QC\logs\camera-daemon-status.json`
+- `C:\QC\logs\camera-daemon.pid`
+
+## Always-On Workstation Mode
+
+For the prototype rollout, the intended local workflow is:
+
+- install one camera profile per workstation
+- start the daemon once or install its Scheduled Task
+- let the daemon sit idle until `HxRun.exe` appears
+- let the daemon launch one recorder child for that run
+- open the local replay app after the run if engineers need immediate review
+
+Start it manually in the background:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\start-camera-daemon.ps1
+```
+
+Start it in the foreground while debugging rollout:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\start-camera-daemon.ps1 -Foreground
+```
+
+Inspect its current state:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\show-camera-daemon-status.ps1
+```
+
+Stop it cleanly:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\stop-camera-daemon.ps1
+```
+
+Install auto-start at user logon:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\install-camera-daemon-task.ps1 -RunNow
+```
+
+Remove the auto-start task:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\uninstall-camera-daemon-task.ps1 -StopFirst
+```
+
+The current auto-start story uses Windows Task Scheduler instead of a Windows
+service because interactive camera devices are usually more reliable in the
+logged-in workstation session than under `SYSTEM`.
+
 ## Run Manifest
 
 Each completed recording writes a sidecar manifest like:
@@ -228,6 +298,8 @@ trace timestamp parsing:
 ```powershell
 python C:\QC\cameras\test-replay-app.py
 python C:\QC\cameras\test-camera-config.py
+python C:\QC\cameras\test-camera-daemon.py
+powershell -NoProfile -File C:\QC\cameras\test-camera-daemon.ps1
 ```
 
 When the replay app starts, it also creates or updates a local SQLite catalog

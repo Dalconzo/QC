@@ -62,6 +62,7 @@ class CameraConfigTests(unittest.TestCase):
             self.assertEqual(config["recorder"]["default_profile"], "top")
             self.assertEqual(config["replay"]["port"], 5055)
             self.assertEqual(MODULE.get_profile(config)["id"], "top")
+            self.assertTrue(config["daemon"]["task_name"])
 
     def test_legacy_flat_keys_still_feed_nested_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
