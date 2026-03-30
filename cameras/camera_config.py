@@ -45,6 +45,12 @@ DEFAULT_CONFIG = {
         "port": 5050,
         "log_path": str(REPO_ROOT / "logs" / "camera-replay.log"),
     },
+    "live": {
+        "default_profile": "default",
+        "frame_timeout_sec": 8,
+        "refresh_ms": 1000,
+        "jpeg_quality": 4,
+    },
     "daemon": {
         "task_name": "HamiltonCameraRecorderDaemon",
         "stop_file": str(REPO_ROOT / "cameras" / "camera-daemon.stop"),
@@ -127,7 +133,7 @@ def _legacy_to_nested(raw: dict) -> dict:
 def _extract_nested(raw: dict) -> dict:
     """Keep only the top-level keys used by the modern camera config schema."""
     partial: dict = {}
-    for key in ("hamilton", "storage", "recorder", "replay", "daemon", "profiles"):
+    for key in ("hamilton", "storage", "recorder", "replay", "live", "daemon", "profiles"):
         value = raw.get(key)
         if value is not None:
             partial[key] = copy.deepcopy(value)
@@ -206,6 +212,7 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     storage = config.get("storage", {})
     recorder = config.get("recorder", {})
     replay = config.get("replay", {})
+    live = config.get("live", {})
     daemon = config.get("daemon", {})
     profiles = config.get("profiles", [])
 
@@ -236,6 +243,20 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     replay_log_path = str(replay.get("log_path") or "")
     if not replay_log_path.strip():
         errors.append("replay.log_path is required.")
+
+    if int(live.get("frame_timeout_sec", 0)) <= 0:
+        errors.append("live.frame_timeout_sec must be greater than 0.")
+
+    if int(live.get("refresh_ms", 0)) <= 0:
+        errors.append("live.refresh_ms must be greater than 0.")
+
+    jpeg_quality = int(live.get("jpeg_quality", -1))
+    if jpeg_quality < 2 or jpeg_quality > 31:
+        errors.append("live.jpeg_quality must be between 2 and 31.")
+
+    default_live_profile = str(live.get("default_profile") or "").strip()
+    if default_live_profile and default_live_profile not in {str(profile.get("id")) for profile in profiles}:
+        errors.append(f"live.default_profile does not match a configured profile: {default_live_profile}")
 
     if float(daemon.get("idle_poll_sec", 0)) <= 0:
         errors.append("daemon.idle_poll_sec must be greater than 0.")

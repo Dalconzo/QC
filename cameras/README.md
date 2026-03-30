@@ -40,7 +40,8 @@ settings from the repo default.
     playback moves forward or backward.
 - `start-replay-app.ps1`
   - Operator-friendly PowerShell wrapper for the replay UI.
-  - Can start the local replay server in the background and open the browser.
+  - Can start the local replay server in the background and open the browser in
+    replay or live-preview mode.
 - `open-latest-run.ps1`
   - One-click launcher that opens the freshest replayable local run.
 - `install-local-camera-tools.ps1`
@@ -189,6 +190,35 @@ The replay launcher also writes a local server log by default:
 
 - `C:\QC\logs\camera-replay.log`
 
+## Live Local View
+
+The local camera console now has two modes:
+
+- `Replay`
+  - inspect completed run videos and their paired Hamilton traces
+- `Live View`
+  - grab still preview frames from a configured workstation camera profile
+    during or outside a run without waiting for replay artifacts
+
+Open the live preview directly in the browser with:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\start-replay-app.ps1 `
+  -Background `
+  -OpenBrowser `
+  -LiveView
+```
+
+The live preview path is intentionally lightweight in v1:
+
+- it uses the same configured camera profiles as the recorder
+- each browser refresh asks ffmpeg for one JPEG frame
+- it does not create a second long-lived capture daemon
+
+That keeps the preview logic easy to deploy, but camera sharing is still up to
+the device driver. Some cameras will allow preview while recording; others may
+refuse a second reader.
+
 ## Always-On Workstation Mode
 
 For the prototype rollout, the intended local workflow is:
@@ -280,6 +310,15 @@ Or jump straight into the newest replayable local run:
 powershell -NoProfile -File C:\QC\cameras\open-latest-run.ps1
 ```
 
+Or open the local live camera view:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\start-replay-app.ps1 `
+  -Background `
+  -OpenBrowser `
+  -LiveView
+```
+
 Or point the replay app at a different run-manifest root:
 
 ```powershell
@@ -308,6 +347,7 @@ browser, so operators do not land on a dead page during startup.
 The replay UI currently provides:
 
 - a catalog-backed run picker for locally captured replay artifacts
+- a live-view mode that uses configured camera profiles
 - the paired video on top
 - a trace terminal below
 - deterministic forward/rewind behavior because terminal contents are rebuilt
@@ -317,6 +357,8 @@ The replay UI currently provides:
   app
 - URL-addressable run selection, so workstation shortcuts can open the latest
   replayable run directly
+- URL-addressable mode selection, so workstation shortcuts can open live view
+  directly
 - placeholder camera-view tabs so the later multi-camera view work has a stable
   UI slot to grow into
 
@@ -332,8 +374,8 @@ reconstructs the terminal for the newly selected playback time.
 
 ## Replay Smoke Test
 
-The replay backend has a small Python smoke test around manifest loading and
-trace timestamp parsing:
+The replay backend has a small Python smoke test around manifest loading, trace
+timestamp parsing, and live-preview API endpoints:
 
 ```powershell
 python C:\QC\cameras\test-replay-app.py

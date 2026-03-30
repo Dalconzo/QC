@@ -16,12 +16,14 @@ $startMenuDir = Join-Path $startMenuPrograms "Hamilton Camera"
 $desktopShortcuts = @(
     "Hamilton Replay.lnk",
     "Hamilton Latest Run.lnk",
+    "Hamilton Live View.lnk",
     "Hamilton Camera Status.lnk"
 )
 
 $startMenuShortcuts = @(
     "Hamilton Replay.lnk",
     "Hamilton Latest Run.lnk",
+    "Hamilton Live View.lnk",
     "Hamilton Camera Status.lnk",
     "Start Hamilton Camera Daemon.lnk",
     "Stop Hamilton Camera Daemon.lnk"

@@ -28,6 +28,12 @@
     "port": 5050,
     "log_path": "C:\\QC\\logs\\camera-replay.log"
   },
+  "live": {
+    "default_profile": "default",
+    "frame_timeout_sec": 8,
+    "refresh_ms": 1000,
+    "jpeg_quality": 4
+  },
   "daemon": {
     "task_name": "HamiltonCameraRecorderDaemon",
     "stop_file": "C:\\QC\\cameras\\camera-daemon.stop",

@@ -3,17 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hamilton Run Replay</title>
+  <title>Hamilton Camera Console</title>
   <link rel="stylesheet" href="/static/replay.css">
 </head>
 <body>
   <main class="app-shell">
     <aside class="run-list-panel">
       <div class="panel-head">
-        <h1>Run Replay</h1>
-        <p>Pick a captured run to inspect its video and trace.</p>
+        <h1>Camera Console</h1>
+        <p id="sidebar-copy">Pick a captured run to inspect its video and trace.</p>
         <div class="catalog-toolbar">
           <button id="refresh-catalog" class="catalog-button" type="button">Refresh Catalog</button>
+          <button id="refresh-live" class="catalog-button" type="button" hidden>Refresh Preview</button>
           <span id="catalog-state" class="catalog-state">Catalog not loaded yet.</span>
         </div>
       </div>
@@ -28,13 +29,18 @@
         </div>
       </div>
 
+      <div class="mode-tabs" role="tablist" aria-label="Console mode">
+        <button id="mode-replay" class="mode-tab active" type="button" aria-selected="true">Replay</button>
+        <button id="mode-live" class="mode-tab" type="button" aria-selected="false">Live View</button>
+      </div>
+
       <div class="view-tabs" role="tablist" aria-label="Camera view mode">
         <button class="view-tab active" type="button" aria-selected="true">Single Camera</button>
         <button class="view-tab disabled" type="button" aria-selected="false" disabled>All Cameras</button>
         <button class="view-tab disabled" type="button" aria-selected="false" disabled>Camera Tabs</button>
       </div>
 
-      <section class="playback-stack">
+      <section id="replay-panel" class="playback-stack">
         <div class="video-pane">
           <video id="run-video" controls preload="metadata"></video>
         </div>
@@ -44,6 +50,22 @@
             <span id="terminal-count">0 lines</span>
           </div>
           <pre id="terminal-output" class="terminal-output"></pre>
+        </div>
+      </section>
+
+      <section id="live-panel" class="live-stack" hidden>
+        <div class="video-pane">
+          <img id="live-image" class="live-image" alt="Live camera preview">
+        </div>
+        <div class="live-info-pane">
+          <div class="terminal-toolbar">
+            <span id="live-state">Waiting for a live camera selection</span>
+            <span id="live-count">0 profiles</span>
+          </div>
+          <div class="live-info-body">
+            <p id="live-meta">Pick a configured camera profile to grab live preview frames from this workstation.</p>
+            <p class="live-note">This is a local best-effort preview path. Whether it can run alongside recording depends on how the camera driver shares the device.</p>
+          </div>
         </div>
       </section>
     </section>

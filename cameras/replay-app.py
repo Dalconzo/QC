@@ -20,15 +20,17 @@ import hashlib
 import json
 import mimetypes
 import re
+import shutil
 import sqlite3
+import subprocess
 from contextlib import closing
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
-from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config, validate_config
+from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +47,146 @@ class TraceEvent:
     elapsed_sec: float
     stamp_local: str
     line: str
+
+
+def find_ffmpeg(explicit: str | None = None) -> str | None:
+    """Locate ffmpeg for live preview frame capture.
+
+    The replay workstation should reuse the same ffmpeg discovery rules as the
+    recorder so the live-preview path works on machines that rely on the repo's
+    bundled ffmpeg.exe instead of a system-wide install.
+    """
+    if explicit:
+        explicit_path = Path(explicit)
+        if explicit_path.exists():
+            return str(explicit_path)
+
+    here = Path(__file__).parent
+    for candidate in (
+        here / "ffmpeg.exe",
+        here / "dist" / "ffmpeg.exe",
+        Path.cwd() / "cameras" / "ffmpeg.exe",
+        Path.cwd() / "cameras" / "dist" / "ffmpeg.exe",
+    ):
+        if candidate.exists():
+            return str(candidate)
+
+    return shutil.which("ffmpeg")
+
+
+def _normalize_dshow_name(source: str) -> str:
+    """Convert user-friendly DirectShow syntax into ffmpeg input form."""
+    value = source
+    if value.lower().startswith("dshow:"):
+        value = value.split(":", 1)[1]
+    if value.lower().startswith("video="):
+        key, raw_name = value.split("=", 1)
+        raw_name = raw_name.strip().strip('"')
+        return f"{key}={raw_name}"
+    return value
+
+
+def build_live_frame_command(
+    ffmpeg_bin: str,
+    source: str,
+    *,
+    framerate: int | None,
+    video_size: str | None,
+    jpeg_quality: int,
+) -> list[str]:
+    """Build a one-frame ffmpeg capture command for live preview."""
+    src = (source or "").strip()
+    if not src:
+        raise ValueError("Camera profile source is empty.")
+
+    is_rtsp = src.lower().startswith("rtsp")
+    is_dshow = src.lower().startswith("dshow:") or src.lower().startswith("video=") or src.lower().startswith("audio=")
+
+    if is_rtsp:
+        input_args = ["-rtsp_transport", "tcp", "-i", src]
+    elif is_dshow:
+        input_args = ["-f", "dshow"]
+        if framerate:
+            input_args += ["-framerate", str(framerate)]
+        if video_size:
+            input_args += ["-video_size", str(video_size)]
+        input_args += ["-i", _normalize_dshow_name(src)]
+    else:
+        input_args = ["-i", src]
+
+    return [
+        ffmpeg_bin,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        *input_args,
+        "-frames:v",
+        "1",
+        "-q:v",
+        str(jpeg_quality),
+        "-f",
+        "image2pipe",
+        "-vcodec",
+        "mjpeg",
+        "-",
+    ]
+
+
+def summarize_profile(profile: dict) -> dict:
+    """Return lightweight metadata the live-view picker needs."""
+    return {
+        "id": profile.get("id") or "",
+        "label": profile.get("label") or profile.get("id") or "Camera",
+        "source": profile.get("source") or "",
+        "framerate": profile.get("framerate"),
+        "video_size": profile.get("video_size"),
+    }
+
+
+def list_live_profiles(config: dict) -> dict:
+    """Expose configured camera profiles for the live-preview UI."""
+    profiles = [summarize_profile(profile) for profile in config.get("profiles", [])]
+    live_config = config.get("live", {})
+    return {
+        "items": profiles,
+        "default_profile": str(live_config.get("default_profile") or ""),
+        "refresh_ms": int(live_config.get("refresh_ms") or 1000),
+    }
+
+
+def capture_live_frame(config: dict, profile_id: str | None = None) -> tuple[bytes, dict]:
+    """Capture one JPEG preview frame from a configured camera profile.
+
+    The live view is intentionally stateless in v1: each browser refresh asks
+    ffmpeg for one frame. That keeps the preview path easy to reason about and
+    avoids introducing a long-lived stream manager before we know how these
+    workstation cameras behave under real rollout conditions.
+    """
+    live_config = config.get("live", {})
+    profile = get_profile(config, profile_id or live_config.get("default_profile") or None)
+    ffmpeg_bin = find_ffmpeg(profile.get("ffmpeg_path") or config.get("recorder", {}).get("ffmpeg_path") or "")
+    if not ffmpeg_bin:
+        raise FileNotFoundError("ffmpeg was not found for live preview capture.")
+
+    cmd = build_live_frame_command(
+        ffmpeg_bin,
+        str(profile.get("source") or ""),
+        framerate=profile.get("framerate"),
+        video_size=profile.get("video_size"),
+        jpeg_quality=int(live_config.get("jpeg_quality") or 4),
+    )
+
+    timeout_sec = int(live_config.get("frame_timeout_sec") or 8)
+    completed = subprocess.run(cmd, capture_output=True, check=False, timeout=timeout_sec)
+    if completed.returncode != 0:
+        error_text = (completed.stderr or b"").decode("utf-8", errors="replace").strip()
+        if not error_text:
+            error_text = f"ffmpeg exited with code {completed.returncode}"
+        raise RuntimeError(error_text)
+    if not completed.stdout:
+        raise RuntimeError("ffmpeg returned no image data for live preview.")
+
+    return completed.stdout, summarize_profile(profile)
 
 
 def parse_trace_events(trace_path: Path) -> list[TraceEvent]:
@@ -395,7 +537,7 @@ def get_run_detail(runs_root: Path, run_id: str) -> dict:
     }
 
 
-def make_handler(runs_root: Path):
+def make_handler(runs_root: Path, config: dict):
     """Create a request handler bound to one manifest root."""
 
     class ReplayHandler(BaseHTTPRequestHandler):
@@ -406,6 +548,15 @@ def make_handler(runs_root: Path):
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_bytes(self, body: bytes, *, content_type: str, status: HTTPStatus = HTTPStatus.OK) -> None:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
 
@@ -476,6 +627,7 @@ def make_handler(runs_root: Path):
         def do_GET(self) -> None:  # noqa: N802 - stdlib handler name
             parsed = urlparse(self.path)
             route = unquote(parsed.path)
+            params = parse_qs(parsed.query)
 
             if route == "/":
                 return self._send_file(STATIC_DIR / "index.html", content_type="text/html; charset=utf-8")
@@ -503,6 +655,31 @@ def make_handler(runs_root: Path):
 
             if route == "/api/catalog/refresh":
                 return self._send_json(refresh_catalog(runs_root))
+
+            if route == "/api/live/profiles":
+                return self._send_json(list_live_profiles(config))
+
+            if route == "/api/live/frame.jpg":
+                profile_id = (params.get("profile") or [""])[0].strip() or None
+                try:
+                    image_bytes, profile = capture_live_frame(config, profile_id)
+                except KeyError:
+                    return self._send_text("Camera profile not found", HTTPStatus.NOT_FOUND)
+                except FileNotFoundError as exc:
+                    return self._send_text(str(exc), HTTPStatus.SERVICE_UNAVAILABLE)
+                except subprocess.TimeoutExpired:
+                    return self._send_text("Timed out while capturing a live preview frame.", HTTPStatus.GATEWAY_TIMEOUT)
+                except RuntimeError as exc:
+                    return self._send_text(f"Failed to capture live preview: {exc}", HTTPStatus.BAD_GATEWAY)
+                response_profile = profile.get("id") or ""
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(len(image_bytes)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Camera-Profile", response_profile)
+                self.end_headers()
+                self.wfile.write(image_bytes)
+                return
 
             if route.startswith("/api/runs/"):
                 parts = [part for part in route.split("/") if part]
@@ -561,7 +738,7 @@ def main() -> int:
     host = args.host or config["replay"]["host"]
     port = args.port if args.port is not None else int(config["replay"]["port"])
     refresh_result = refresh_catalog(runs_root)
-    handler = make_handler(runs_root)
+    handler = make_handler(runs_root, config)
     with ThreadingHTTPServer((host, port), handler) as server:
         print(f"Serving Hamilton replay UI on http://{host}:{port}")
         print(f"Scanning manifests under: {runs_root}")

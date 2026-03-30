@@ -45,6 +45,13 @@ $targets = @(
         Description = "Open the most recent replayable Hamilton run."
     },
     @{
+        Name = "Hamilton Live View.lnk"
+        Directory = $desktopDir
+        Script = "start-replay-app.ps1"
+        Arguments = @("-Background", "-OpenBrowser", "-LiveView")
+        Description = "Open the local Hamilton live camera preview."
+    },
+    @{
         Name = "Hamilton Camera Status.lnk"
         Directory = $desktopDir
         Script = "show-camera-daemon-status.ps1"
@@ -68,6 +75,13 @@ if (-not $DesktopOnly) {
             Script = "open-latest-run.ps1"
             Arguments = @()
             Description = "Open the most recent replayable Hamilton run."
+        },
+        @{
+            Name = "Hamilton Live View.lnk"
+            Directory = $startMenuDir
+            Script = "start-replay-app.ps1"
+            Arguments = @("-Background", "-OpenBrowser", "-LiveView")
+            Description = "Open the local Hamilton live camera preview."
         },
         @{
             Name = "Hamilton Camera Status.lnk"

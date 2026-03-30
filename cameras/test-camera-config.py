@@ -62,6 +62,9 @@ class CameraConfigTests(unittest.TestCase):
             self.assertEqual(config["recorder"]["default_profile"], "top")
             self.assertEqual(config["replay"]["port"], 5055)
             self.assertTrue(config["replay"]["log_path"])
+            self.assertEqual(config["live"]["default_profile"], "default")
+            self.assertEqual(config["live"]["refresh_ms"], 1000)
+            self.assertEqual(config["live"]["jpeg_quality"], 4)
             self.assertEqual(MODULE.get_profile(config)["id"], "top")
             self.assertTrue(config["daemon"]["task_name"])
 
@@ -100,6 +103,27 @@ class CameraConfigTests(unittest.TestCase):
             recorder_validation = MODULE.validate_config(config, require_hamilton_log_dir=True)
             self.assertFalse(replay_validation["errors"])
             self.assertTrue(recorder_validation["errors"])
+
+    def test_validation_rejects_missing_live_default_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "live": {"default_profile": "missing", "frame_timeout_sec": 8, "refresh_ms": 1000, "jpeg_quality": 4},
+                        "profiles": [{"id": "default", "label": "USB", "source": 'dshow:video="USB Cam"'}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("live.default_profile" in item for item in validation["errors"]))
 
 
 if __name__ == "__main__":

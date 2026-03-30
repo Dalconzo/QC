@@ -22,6 +22,11 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ReplayAppTests(unittest.TestCase):
+    def make_test_config(self) -> dict:
+        config = json.loads(json.dumps(MODULE.load_effective_config()))
+        config["hamilton"]["log_dir"] = str(Path(tempfile.gettempdir()))
+        return config
+
     def test_refresh_catalog_builds_replayable_run_index(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -142,7 +147,7 @@ class ReplayAppTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            handler = MODULE.make_handler(root)
+            handler = MODULE.make_handler(root, self.make_test_config())
             from http.server import ThreadingHTTPServer
 
             MODULE.refresh_catalog(root)
@@ -191,7 +196,7 @@ class ReplayAppTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            handler = MODULE.make_handler(root)
+            handler = MODULE.make_handler(root, self.make_test_config())
             from http.server import ThreadingHTTPServer
 
             server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -240,7 +245,7 @@ class ReplayAppTests(unittest.TestCase):
                     encoding="utf-8",
                 )
 
-            handler = MODULE.make_handler(root)
+            handler = MODULE.make_handler(root, self.make_test_config())
             from http.server import ThreadingHTTPServer
 
             MODULE.refresh_catalog(root)
@@ -289,7 +294,7 @@ class ReplayAppTests(unittest.TestCase):
 
             MODULE.refresh_catalog(root)
             run_id = MODULE.list_catalog_runs(root)[0]["run_id"]
-            handler = MODULE.make_handler(root)
+            handler = MODULE.make_handler(root, self.make_test_config())
             from http.server import ThreadingHTTPServer
 
             server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -303,6 +308,64 @@ class ReplayAppTests(unittest.TestCase):
                     self.assertEqual(response.headers.get("Content-Range"), "bytes 4-7/16")
                     self.assertEqual(response.read(), b"4567")
             finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_http_live_profiles_returns_configured_cameras(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config = self.make_test_config()
+            config["profiles"] = [
+                {"id": "default", "label": "Top Cam", "source": 'dshow:video="Top Cam"', "framerate": 15, "video_size": "1280x720", "ffmpeg_path": ""},
+                {"id": "side", "label": "Side Cam", "source": 'dshow:video="Side Cam"', "framerate": None, "video_size": None, "ffmpeg_path": ""},
+            ]
+            config["live"]["default_profile"] = "side"
+            config["live"]["refresh_ms"] = 750
+            handler = MODULE.make_handler(root, config)
+            from http.server import ThreadingHTTPServer
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                url = f"http://127.0.0.1:{server.server_port}/api/live/profiles"
+                payload = json.loads(urllib.request.urlopen(url).read().decode("utf-8"))
+                self.assertEqual(payload["default_profile"], "side")
+                self.assertEqual(payload["refresh_ms"], 750)
+                self.assertEqual(len(payload["items"]), 2)
+                self.assertEqual(payload["items"][0]["label"], "Top Cam")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_http_live_frame_uses_capture_hook(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config = self.make_test_config()
+            handler = MODULE.make_handler(root, config)
+            from http.server import ThreadingHTTPServer
+
+            original_capture = MODULE.capture_live_frame
+
+            def fake_capture(_config: dict, profile_id: str | None = None) -> tuple[bytes, dict]:
+                selected = profile_id or "default"
+                return (b"\xff\xd8\xff\xd9", {"id": selected, "label": "Fake Cam", "source": "fake"})
+
+            MODULE.capture_live_frame = fake_capture
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                url = f"http://127.0.0.1:{server.server_port}/api/live/frame.jpg?profile=default"
+                with urllib.request.urlopen(url) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.headers.get("Content-Type"), "image/jpeg")
+                    self.assertEqual(response.headers.get("X-Camera-Profile"), "default")
+                    self.assertEqual(response.read(), b"\xff\xd8\xff\xd9")
+            finally:
+                MODULE.capture_live_frame = original_capture
                 server.shutdown()
                 server.server_close()
                 thread.join(timeout=5)

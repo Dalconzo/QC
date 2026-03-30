@@ -20,6 +20,7 @@ param(
     [switch]$Background,
     [switch]$OpenBrowser,
     [switch]$LatestRun,
+    [switch]$LiveView,
     [int]$WaitSec = 15
 )
 
@@ -144,6 +145,12 @@ function Get-LatestRunUrl {
     return $BaseUrl + "/"
 }
 
+function Get-LiveViewUrl {
+    param([string]$BaseUrl)
+
+    return $BaseUrl + "/?mode=live"
+}
+
 $baseUrl = Get-ReplayBaseUrl -HostName $resolvedHost -PortNumber $resolvedPort
 
 Write-Host "Starting Hamilton replay app..."
@@ -170,7 +177,13 @@ if ($Background) {
     }
 
     if ($OpenBrowser) {
-        $targetUrl = if ($LatestRun) { Get-LatestRunUrl -BaseUrl $baseUrl } else { $baseUrl + "/" }
+        $targetUrl = if ($LiveView) {
+            Get-LiveViewUrl -BaseUrl $baseUrl
+        } elseif ($LatestRun) {
+            Get-LatestRunUrl -BaseUrl $baseUrl
+        } else {
+            $baseUrl + "/"
+        }
         Start-Process $targetUrl | Out-Null
         Write-Host "Opened browser at $targetUrl" -ForegroundColor Green
     }
