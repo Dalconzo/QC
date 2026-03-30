@@ -12,10 +12,11 @@ The recorder now follows the Hamilton run lifecycle more directly:
   last-write time is closest to recorder shutdown
 - write a run manifest that pairs the video and trace file for later replay
 
-Machine-local Hamilton trace settings live in
-[`camera-recorder.json`](/C:/QC/config/camera-recorder.json). Update that file
-if a workstation writes `.trc` files somewhere other than
-`C:\Program Files (x86)\HAMILTON\LogFiles`.
+Machine-local Hamilton trace settings, storage roots, replay defaults, and
+camera profiles live in [`camera-recorder.json`](/C:/QC/config/camera-recorder.json).
+Use an optional workstation-local override at
+`C:\QC\config\camera-recorder.local.json` when one Hamilton PC needs different
+settings from the repo default.
 
 ## Current Recorder Flow
 
@@ -29,7 +30,8 @@ if a workstation writes `.trc` files somewhere other than
     stable video/trace pairing artifact to load.
 - `start-recorder.ps1`
   - Operator-friendly PowerShell wrapper around `camera-recorder.py`.
-  - Defaults the Hamilton process gate to `HxRun.exe`.
+  - Forwards the shared config plus any explicit CLI overrides into the Python
+    recorder.
   - Can write a persistent recorder diagnostics log with `-RecorderLog`.
 - `replay-app.py`
   - Lightweight local replay server for completed runs.
@@ -38,10 +40,20 @@ if a workstation writes `.trc` files somewhere other than
     playback moves forward or backward.
 - `start-replay-app.ps1`
   - Operator-friendly PowerShell wrapper for the replay UI.
+- `show-camera-config.ps1`
+  - Prints the effective camera workstation config, lists profiles, or validates
+    the current machine before rollout.
 - `stop-recorder.py`
   - Creates the stop-file sentinel for graceful shutdown.
 
 ## Device Discovery
+
+List the effective camera profiles first if you want to see what this
+workstation currently has configured:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\show-camera-config.ps1 -ListProfiles
+```
 
 List available cameras before choosing a source:
 
@@ -62,6 +74,12 @@ Manager gate and times out cleanly when `HxRun.exe` is absent:
 
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\test-start-recorder-gate.ps1
+```
+
+To validate the merged base config plus any local workstation override:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\show-camera-config.ps1 -Validate
 ```
 
 ## Bench Test With The Real Camera
@@ -176,6 +194,9 @@ powershell -NoProfile -File C:\QC\cameras\start-replay-app.ps1 `
 
 Then open the printed URL in a browser.
 
+`start-replay-app.ps1` now uses the replay host, port, and default runs root
+from the shared camera config unless you override them on the command line.
+
 The replay UI currently provides:
 
 - a catalog-backed run picker for locally captured replay artifacts
@@ -206,6 +227,7 @@ trace timestamp parsing:
 
 ```powershell
 python C:\QC\cameras\test-replay-app.py
+python C:\QC\cameras\test-camera-config.py
 ```
 
 When the replay app starts, it also creates or updates a local SQLite catalog

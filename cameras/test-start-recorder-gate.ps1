@@ -1,27 +1,31 @@
 <#
   cameras/test-start-recorder-gate.ps1
 
-  Lightweight smoke test for the Hamilton recorder startup gate. This verifies
-  that the PowerShell wrapper defaults to the real Run Manager process name
-  (`HxRun.exe`) and that the Python recorder exits cleanly before touching the
-  camera backend when an explicit startup gate is not satisfied.
+  Lightweight smoke test for the Hamilton recorder startup gate.
 
-  This test is intentionally hardware-free. It checks the wrapper source for
-  the `HxRun.exe` default, then uses a fake process name and a short startup
-  timeout, treating recorder exit code 3 as the expected success condition for
-  the timeout path.
+  The gate default now lives in shared config rather than hardcoded wrapper
+  parameters, so this test verifies the effective config first and then checks
+  that the recorder exits cleanly before touching camera hardware when an
+  explicit startup gate never appears.
 #>
 
 $ErrorActionPreference = "Stop"
 
+$repoRoot = Split-Path -Parent $PSScriptRoot
 $scriptPath = Join-Path $PSScriptRoot "start-recorder.ps1"
-if (-not (Test-Path -LiteralPath $scriptPath)) {
-  throw "Recorder wrapper not found: $scriptPath"
+$inspectPath = Join-Path $PSScriptRoot "inspect-camera-config.py"
+if (-not (Test-Path -LiteralPath $scriptPath) -or -not (Test-Path -LiteralPath $inspectPath)) {
+  throw "Required camera scripts are missing."
 }
 
-$scriptText = Get-Content -LiteralPath $scriptPath -Raw
-if ($scriptText -notmatch '\[string\]\$StartWhenExe\s*=\s*"HxRun\.exe"') {
-  throw "Recorder wrapper does not default StartWhenExe to HxRun.exe"
+$configJson = & python $inspectPath --config (Join-Path $repoRoot "config\camera-recorder.json") --json
+if ($LASTEXITCODE -ne 0) {
+  throw "Failed to inspect camera config."
+}
+
+$config = $configJson | ConvertFrom-Json
+if ($config.config.hamilton.process_name -ne "HxRun.exe") {
+  throw "Effective config does not default the Hamilton process gate to HxRun.exe"
 }
 
 $outDir = "C:\QC\tmp\camera-gate-default-test"
@@ -29,9 +33,9 @@ if (Test-Path -LiteralPath $outDir) {
   Remove-Item -LiteralPath $outDir -Recurse -Force
 }
 
-# Use an explicit fake process for the runtime check. The wrapper default is
-# asserted above from source, and the fake process keeps this smoke test stable
-# even on a workstation where HxRun.exe happens to be running.
+# Use an explicit fake process for the runtime check. The shared config default
+# is asserted above, and the fake process keeps this smoke test stable even on
+# a workstation where HxRun.exe happens to be running.
 & powershell -NoProfile -File $scriptPath `
   -Source 0 `
   -OutDir $outDir `

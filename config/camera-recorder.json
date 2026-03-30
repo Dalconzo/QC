@@ -4,5 +4,37 @@
   "default_source": "0",
   "default_poll_sec": 1.0,
   "default_max_record_sec": 0,
-  "manifest_dir": ""
+  "manifest_dir": "",
+  "hamilton": {
+    "log_dir": "C:\\Program Files (x86)\\HAMILTON\\LogFiles",
+    "log_glob": "*.trc",
+    "process_name": "HxRun.exe"
+  },
+  "storage": {
+    "runs_root": "C:\\QC\\cameras\\video_clips",
+    "manifest_dir": "",
+    "recorder_log_dir": "C:\\QC\\logs"
+  },
+  "recorder": {
+    "default_profile": "default",
+    "poll_sec": 1.0,
+    "max_record_sec": 0,
+    "startup_timeout_sec": 0,
+    "ffmpeg_path": "",
+    "stop_file": "C:\\QC\\cameras\\cameras.recorder.stop"
+  },
+  "replay": {
+    "host": "127.0.0.1",
+    "port": 5050
+  },
+  "profiles": [
+    {
+      "id": "default",
+      "label": "Default Camera",
+      "source": "0",
+      "framerate": null,
+      "video_size": null,
+      "ffmpeg_path": ""
+    }
+  ]
 }

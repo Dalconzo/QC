@@ -24,9 +24,9 @@ import sys
 import time
 from pathlib import Path
 
+from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG = REPO_ROOT / "config" / "camera-recorder.json"
 
 
 def find_ffmpeg(explicit: str | None = None) -> tuple[bool, str | None]:
@@ -114,14 +114,6 @@ def emit_log(message: str, *, log_path: Path | None = None, is_error: bool = Fal
     line = f"{dt.datetime.now().isoformat()} {message}\n"
     with log_path.open("a", encoding="utf-8") as handle:
         handle.write(line)
-
-
-def load_camera_config(config_path: Path) -> dict:
-    """Read machine-local recorder settings from JSON if present."""
-    if not config_path.exists():
-        return {}
-    with config_path.open("r", encoding="utf-8-sig") as handle:
-        return json.load(handle)
 
 
 def _normalize_proc_names(proc_names: str | list[str] | tuple[str, ...]) -> list[str]:
@@ -521,47 +513,99 @@ def run_opencv(
 
 
 def main() -> int:
-    config = load_camera_config(DEFAULT_CONFIG)
-
     ap = argparse.ArgumentParser(description="Continuous camera recorder for Hamilton runs")
-    ap.add_argument("--source", default=str(config.get("default_source", "0")), help="Camera source (index or URL). Default: 0")
-    ap.add_argument("--out-dir", default=str(REPO_ROOT / "cameras" / "video_clips"), help="Directory for run recordings")
-    ap.add_argument("--label", default="cam", help="Label to include in filenames and manifests")
-    ap.add_argument("--stop-file", default="cameras.recorder.stop", help="Path to stop file to end recording")
+    ap.add_argument("--config", default=str(DEFAULT_CONFIG_PATH), help="Path to the base camera config JSON")
+    ap.add_argument("--local-config", default=str(DEFAULT_LOCAL_OVERRIDE_PATH), help="Path to the optional workstation-local override JSON")
+    ap.add_argument("--profile", default="", help="Camera profile id from the shared config")
+    ap.add_argument("--source", default="", help="Camera source (index or URL). Overrides the selected profile source.")
+    ap.add_argument("--out-dir", default="", help="Directory for run recordings")
+    ap.add_argument("--label", default="", help="Label to include in filenames and manifests")
+    ap.add_argument("--stop-file", default="", help="Path to stop file to end recording")
     ap.add_argument("--start-when-exe", default="", help="Wait to begin recording until one of these process names is running (comma/semicolon-separated)")
-    ap.add_argument("--stop-when-exe", default="", help="Stop when the given process name is no longer running (for Hamilton, usually 'HxRun.exe')")
-    ap.add_argument("--startup-timeout-sec", type=int, default=0, help="How long to wait for --start-when-exe before exiting. 0 waits indefinitely.")
-    ap.add_argument("--poll-sec", type=float, default=float(config.get("default_poll_sec", 1.0)), help="Polling interval for process-gate checks")
-    ap.add_argument("--max-record-sec", type=int, default=int(config.get("default_max_record_sec", 0)), help="Safety cap for total recording time. 0 disables the cap.")
+    ap.add_argument("--stop-when-exe", default="", help="Stop when the given process name is no longer running")
+    ap.add_argument("--startup-timeout-sec", type=int, default=None, help="How long to wait for --start-when-exe before exiting. 0 waits indefinitely.")
+    ap.add_argument("--poll-sec", type=float, default=None, help="Polling interval for process-gate checks")
+    ap.add_argument("--max-record-sec", type=int, default=None, help="Safety cap for total recording time. 0 disables the cap.")
     ap.add_argument("--ffmpeg", default="", help="Optional path to ffmpeg.exe; if provided, recorder uses ffmpeg backend")
     ap.add_argument("--verbose", action="store_true", help="Print backend selection and underlying ffmpeg command")
     ap.add_argument("--list-devices", action="store_true", help="List DirectShow cameras and exit (requires ffmpeg)")
     ap.add_argument("--select-device", action="store_true", help="Interactively select a DirectShow camera (requires ffmpeg)")
     ap.add_argument("--framerate", type=int, default=None, help="Desired framerate for dshow webcams")
-    ap.add_argument("--video-size", default=None, help="Desired resolution WxH for dshow webcams")
-    ap.add_argument("--log-dir", default=str(config.get("hamilton_log_dir", "")), help="Hamilton trace directory used for post-run pairing")
-    ap.add_argument("--log-glob", default=str(config.get("hamilton_log_glob", "*.trc")), help="Semicolon-separated glob(s) used to find Hamilton traces")
-    ap.add_argument("--manifest-dir", default=str(config.get("manifest_dir", "")), help="Optional directory for run manifests; defaults next to the video")
+    ap.add_argument("--video-size", default="", help="Desired resolution WxH for dshow webcams")
+    ap.add_argument("--log-dir", default="", help="Hamilton trace directory used for post-run pairing")
+    ap.add_argument("--log-glob", default="", help="Semicolon-separated glob(s) used to find Hamilton traces")
+    ap.add_argument("--manifest-dir", default="", help="Optional directory for run manifests; defaults next to the video")
     ap.add_argument("--recorder-log", default="", help="Optional path for a persistent recorder diagnostic log")
+    ap.add_argument("--dump-config", action="store_true", help="Print the effective camera config and exit")
+    ap.add_argument("--validate-config", action="store_true", help="Validate the effective camera config and exit")
+    ap.add_argument("--list-profiles", action="store_true", help="List configured camera profiles and exit")
     args = ap.parse_args()
 
-    out_dir = Path(args.out_dir)
-    stop_file = Path(args.stop_file)
-    log_dir = Path(args.log_dir) if args.log_dir else Path.cwd()
-    recorder_log = Path(args.recorder_log) if args.recorder_log else None
+    config = load_effective_config(
+        config_path=Path(args.config),
+        local_override_path=Path(args.local_config),
+    )
+    validation = validate_config(config, require_hamilton_log_dir=not (args.list_devices or args.select_device))
+    if args.dump_config:
+        print(json.dumps(config, indent=2))
+        return 0
+    if args.list_profiles:
+        print(json.dumps(config["profiles"], indent=2))
+        return 0
+    if args.validate_config:
+        if validation["errors"]:
+            for item in validation["errors"]:
+                print(item, file=sys.stderr)
+            return 1
+        for item in validation["warnings"]:
+            print(item)
+        print("Camera config validation passed.")
+        return 0
+    if validation["errors"]:
+        for item in validation["errors"]:
+            print(item, file=sys.stderr)
+        return 1
 
-    if args.start_when_exe and not wait_for_process_start(
-        args.start_when_exe,
-        poll_sec=args.poll_sec,
-        timeout_sec=args.startup_timeout_sec,
+    try:
+        profile = get_profile(config, args.profile or None)
+    except KeyError:
+        print(f"Unknown camera profile: {args.profile}", file=sys.stderr)
+        return 1
+
+    hamilton = config["hamilton"]
+    storage = config["storage"]
+    recorder = config["recorder"]
+
+    source = args.source or profile.get("source") or "0"
+    out_dir = Path(args.out_dir or storage.get("runs_root") or (REPO_ROOT / "cameras" / "video_clips"))
+    stop_file = Path(args.stop_file or recorder.get("stop_file") or "cameras.recorder.stop")
+    log_dir = Path(args.log_dir or hamilton.get("log_dir") or Path.cwd())
+    log_glob = args.log_glob or hamilton.get("log_glob") or "*.trc"
+    start_when_exe = args.start_when_exe or hamilton.get("process_name") or ""
+    effective_stop_when_exe = args.stop_when_exe or start_when_exe
+    label = args.label or profile.get("label") or "cam"
+    manifest_dir = args.manifest_dir or storage.get("manifest_dir") or ""
+    recorder_log = Path(args.recorder_log) if args.recorder_log else None
+    poll_sec = args.poll_sec if args.poll_sec is not None else float(recorder.get("poll_sec", 1.0))
+    startup_timeout_sec = (
+        args.startup_timeout_sec if args.startup_timeout_sec is not None else int(recorder.get("startup_timeout_sec", 0))
+    )
+    max_record_sec = args.max_record_sec if args.max_record_sec is not None else int(recorder.get("max_record_sec", 0))
+    framerate = args.framerate if args.framerate is not None else profile.get("framerate")
+    video_size = args.video_size or profile.get("video_size") or None
+    ffmpeg_override = args.ffmpeg or profile.get("ffmpeg_path") or recorder.get("ffmpeg_path") or ""
+
+    if start_when_exe and not wait_for_process_start(
+        start_when_exe,
+        poll_sec=poll_sec,
+        timeout_sec=startup_timeout_sec,
         verbose=args.verbose,
         log_path=recorder_log,
     ):
         emit_log("Recorder exited before capture because the startup gate was never satisfied.", log_path=recorder_log, is_error=True)
         return 3
 
-    effective_stop_when_exe = args.stop_when_exe or args.start_when_exe
-    ok, ffmpeg_bin = find_ffmpeg(args.ffmpeg or None)
+    ok, ffmpeg_bin = find_ffmpeg(ffmpeg_override or None)
 
     if ok and ffmpeg_bin and (args.list_devices or args.select_device):
         devices = list_dshow_devices(ffmpeg_bin)
@@ -587,7 +631,7 @@ def main() -> int:
         if not name:
             print("Selected device has no usable name")
             return 2
-        args.source = f'dshow:video="{name}"'
+        source = f'dshow:video="{name}"'
 
     emit_log(
         f"Recording run video to {out_dir}. "
@@ -597,8 +641,8 @@ def main() -> int:
     )
     if effective_stop_when_exe:
         emit_log(f"Run lifecycle gate: {effective_stop_when_exe}", log_path=recorder_log)
-    if args.max_record_sec > 0:
-        emit_log(f"Safety timeout: {args.max_record_sec} seconds", log_path=recorder_log)
+    if max_record_sec > 0:
+        emit_log(f"Safety timeout: {max_record_sec} seconds", log_path=recorder_log)
 
     if ok and ffmpeg_bin:
         if args.verbose:
@@ -606,16 +650,16 @@ def main() -> int:
         try:
             video_path, started_at, stopped_at, stop_reason = run_ffmpeg(
                 ffmpeg_bin,
-                args.source,
+                source,
                 out_dir,
-                args.label,
+                label,
                 stop_file,
                 stop_when_exe=effective_stop_when_exe,
                 verbose=args.verbose,
-                poll_sec=args.poll_sec,
-                framerate=args.framerate,
-                video_size=args.video_size,
-                max_record_sec=args.max_record_sec,
+                poll_sec=poll_sec,
+                framerate=framerate,
+                video_size=video_size,
+                max_record_sec=max_record_sec,
                 log_path=recorder_log,
             )
         except Exception as exc:
@@ -626,13 +670,13 @@ def main() -> int:
             emit_log("Using OpenCV backend (ffmpeg not found)", log_path=recorder_log)
         try:
             video_path, started_at, stopped_at, stop_reason = run_opencv(
-                args.source,
+                source,
                 out_dir,
-                args.label,
+                label,
                 stop_file,
                 stop_when_exe=effective_stop_when_exe,
-                poll_sec=args.poll_sec,
-                max_record_sec=args.max_record_sec,
+                poll_sec=poll_sec,
+                max_record_sec=max_record_sec,
                 verbose=args.verbose,
                 log_path=recorder_log,
             )
@@ -643,20 +687,20 @@ def main() -> int:
             emit_log(f"Details: {exc}", log_path=recorder_log, is_error=True)
             return 2
 
-    trace_path, trace_delta_sec = choose_trace_file(log_dir, args.log_glob, stopped_at)
-    manifest_root = Path(args.manifest_dir) if args.manifest_dir else video_path.parent
+    trace_path, trace_delta_sec = choose_trace_file(log_dir, log_glob, stopped_at)
+    manifest_root = Path(manifest_dir) if manifest_dir else video_path.parent
     manifest_path = manifest_root / f"{video_path.stem}.run.json"
     write_run_manifest(
         manifest_path,
-        label=args.label,
-        source=args.source,
+        label=label,
+        source=source,
         video_path=video_path,
         started_at=started_at,
         stopped_at=stopped_at,
         stop_reason=stop_reason,
         process_gate=effective_stop_when_exe,
         log_dir=log_dir,
-        log_glob=args.log_glob,
+        log_glob=log_glob,
         trace_path=trace_path,
         trace_delta_sec=trace_delta_sec,
     )

@@ -28,6 +28,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config, validate_config
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "replay_static"
@@ -499,20 +501,34 @@ def make_handler(runs_root: Path):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Local replay UI for Hamilton run videos and traces")
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH), help="Path to the base camera config JSON")
+    parser.add_argument("--local-config", default=str(DEFAULT_LOCAL_OVERRIDE_PATH), help="Path to the optional workstation-local override JSON")
     parser.add_argument(
         "--runs-root",
-        default=str(REPO_ROOT / "cameras" / "video_clips"),
+        default="",
         help="Directory to scan for *.run.json manifests",
     )
-    parser.add_argument("--host", default="127.0.0.1", help="Bind host for the local replay server")
-    parser.add_argument("--port", type=int, default=5050, help="Bind port for the local replay server")
+    parser.add_argument("--host", default="", help="Bind host for the local replay server")
+    parser.add_argument("--port", type=int, default=None, help="Bind port for the local replay server")
     args = parser.parse_args()
 
-    runs_root = Path(args.runs_root)
+    config = load_effective_config(
+        config_path=Path(args.config),
+        local_override_path=Path(args.local_config),
+    )
+    validation = validate_config(config, require_hamilton_log_dir=False)
+    if validation["errors"]:
+        for item in validation["errors"]:
+            print(item)
+        return 1
+
+    runs_root = Path(args.runs_root or config["storage"]["runs_root"])
+    host = args.host or config["replay"]["host"]
+    port = args.port if args.port is not None else int(config["replay"]["port"])
     refresh_result = refresh_catalog(runs_root)
     handler = make_handler(runs_root)
-    with ThreadingHTTPServer((args.host, args.port), handler) as server:
-        print(f"Serving Hamilton replay UI on http://{args.host}:{args.port}")
+    with ThreadingHTTPServer((host, port), handler) as server:
+        print(f"Serving Hamilton replay UI on http://{host}:{port}")
         print(f"Scanning manifests under: {runs_root}")
         print(f"Catalog path: {refresh_result['catalog_path']}")
         print(f"Cataloged runs: {refresh_result['run_count']}")

@@ -3,52 +3,85 @@
 
   Operator wrapper around camera-recorder.py.
 
-  The recorder now captures one continuous video per HxRun session. After the
-  process gate closes, the Python script pairs the video with the nearest
-  completed Hamilton trace file from the configured log directory and writes a
-  run manifest beside the recording.
+  The wrapper now forwards the shared workstation config into Python instead of
+  hardcoding recorder defaults in PowerShell. That keeps camera source changes,
+  Hamilton log path changes, and future daemon behavior aligned around one
+  config model.
 #>
 
 param(
-  [string]$Source = "0",
-  [string]$OutDir = (Join-Path $PSScriptRoot "video_clips"),
-  [string]$Label = "cam",
-  [string]$StartWhenExe = "HxRun.exe",
+  [string]$Config = "",
+  [string]$LocalConfig = "",
+  [string]$Profile = "",
+  [string]$Source = "",
+  [string]$OutDir = "",
+  [string]$Label = "",
+  [string]$StartWhenExe = "",
   [string]$StopWhenExe = "",
-  [int]$StartupTimeoutSec = 0,
-  [double]$PollSec = 1.0,
-  [int]$MaxRecordSec = 0,
+  [Nullable[int]]$StartupTimeoutSec = $null,
+  [Nullable[double]]$PollSec = $null,
+  [Nullable[int]]$MaxRecordSec = $null,
   [string]$LogDir = "",
   [string]$LogGlob = "",
   [string]$ManifestDir = "",
   [string]$RecorderLog = "",
-  [string]$Ffmpeg = (Join-Path $PSScriptRoot "ffmpeg.exe"),
-  [string]$StopFile = (Join-Path $PSScriptRoot "cameras.recorder.stop"),
+  [string]$Ffmpeg = "",
+  [string]$StopFile = "",
   [switch]$VerboseRecorder
 )
 
 $ErrorActionPreference = "Stop"
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path -Parent $scriptDir
+
+if (-not $Config) {
+  $Config = Join-Path $repoRoot "config\camera-recorder.json"
+}
+
+if (-not $LocalConfig) {
+  $LocalConfig = Join-Path $repoRoot "config\camera-recorder.local.json"
+}
 
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
   throw "Python is not available in PATH."
 }
 
-$scriptPath = Join-Path $PSScriptRoot "camera-recorder.py"
+$scriptPath = Join-Path $scriptDir "camera-recorder.py"
 if (-not (Test-Path -LiteralPath $scriptPath)) {
   throw "Recorder script not found: $scriptPath"
 }
 
 $argsList = @(
   $scriptPath,
-  "--source", $Source,
-  "--out-dir", ([System.IO.Path]::GetFullPath($OutDir)),
-  "--label", $Label,
-  "--stop-file", ([System.IO.Path]::GetFullPath($StopFile)),
-  "--startup-timeout-sec", $StartupTimeoutSec,
-  "--poll-sec", $PollSec,
-  "--max-record-sec", $MaxRecordSec
+  "--config", ([System.IO.Path]::GetFullPath($Config)),
+  "--local-config", ([System.IO.Path]::GetFullPath($LocalConfig))
 )
+
+if ($Profile) {
+  $argsList += "--profile"
+  $argsList += $Profile
+}
+
+if ($Source) {
+  $argsList += "--source"
+  $argsList += $Source
+}
+
+if ($OutDir) {
+  $argsList += "--out-dir"
+  $argsList += ([System.IO.Path]::GetFullPath($OutDir))
+}
+
+if ($Label) {
+  $argsList += "--label"
+  $argsList += $Label
+}
+
+if ($StopFile) {
+  $argsList += "--stop-file"
+  $argsList += ([System.IO.Path]::GetFullPath($StopFile))
+}
 
 if ($StartWhenExe) {
   $argsList += "--start-when-exe"
@@ -58,6 +91,21 @@ if ($StartWhenExe) {
 if ($StopWhenExe) {
   $argsList += "--stop-when-exe"
   $argsList += $StopWhenExe
+}
+
+if ($StartupTimeoutSec -ne $null) {
+  $argsList += "--startup-timeout-sec"
+  $argsList += $StartupTimeoutSec
+}
+
+if ($PollSec -ne $null) {
+  $argsList += "--poll-sec"
+  $argsList += $PollSec
+}
+
+if ($MaxRecordSec -ne $null) {
+  $argsList += "--max-record-sec"
+  $argsList += $MaxRecordSec
 }
 
 if ($LogDir) {
