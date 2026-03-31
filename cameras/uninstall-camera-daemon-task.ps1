@@ -40,7 +40,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $effective = $configJson | ConvertFrom-Json
-$taskName = [string]$effective.daemon.task_name
+$configRoot = if ($effective.config) { $effective.config } else { $effective }
+$taskName = [string]$configRoot.daemon.task_name
+if (-not $taskName.Trim()) {
+  $taskName = "HamiltonCameraRecorderDaemon"
+}
 
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if (-not $task) {

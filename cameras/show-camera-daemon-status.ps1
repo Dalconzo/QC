@@ -35,8 +35,9 @@ if ($LASTEXITCODE -ne 0) {
   throw "Failed to read effective camera config."
 }
 
-$config = $configJson | ConvertFrom-Json
-$statusPath = [string]$config.daemon.status_path
+$effective = $configJson | ConvertFrom-Json
+$configRoot = if ($effective.config) { $effective.config } else { $effective }
+$statusPath = [string]$configRoot.daemon.status_path
 if (-not (Test-Path -LiteralPath $statusPath)) {
   throw "Camera daemon status file does not exist yet: $statusPath"
 }
