@@ -48,6 +48,10 @@ settings from the repo default.
   - Installs desktop/start-menu shortcuts for the local replay workflow.
 - `uninstall-local-camera-tools.ps1`
   - Removes those workstation shortcuts.
+- `install-camera-workstation.ps1`
+  - One-command bootstrap for a new workstation: writes the local override,
+    creates folders, validates config, installs shortcuts, and can install the
+    daemon Scheduled Task.
 - `show-camera-config.ps1`
   - Prints the effective camera workstation config, lists profiles, or validates
     the current machine before rollout.
@@ -87,6 +91,45 @@ Or interactively pick one:
 
 ```powershell
 python C:\QC\cameras\camera-recorder.py --ffmpeg C:\QC\cameras\ffmpeg.exe --select-device
+```
+
+Or let the workstation bootstrap script show the same list:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 -ListDevices
+```
+
+## One-Command Workstation Bootstrap
+
+For a new Hamilton PC, the fastest rollout path is now the bootstrap script:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 `
+  -CameraSource 'dshow:video="YOUR CAMERA NAME"' `
+  -CameraLabel 'Top Camera' `
+  -RunDaemonNow
+```
+
+That command:
+
+- writes `C:\QC\config\camera-recorder.local.json`
+- creates the local video/log folders
+- validates the merged workstation config
+- installs the desktop/start-menu replay shortcuts
+- installs the daemon Scheduled Task
+- starts the daemon immediately when `-RunDaemonNow` is supplied
+
+Override the Hamilton trace path, output root, log root, or replay port if a
+specific workstation differs from the repo defaults:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 `
+  -CameraSource 'dshow:video="YOUR CAMERA NAME"' `
+  -HamiltonLogDir 'D:\Hamilton\LogFiles' `
+  -RunsRoot 'D:\QC\camera_runs' `
+  -RecorderLogDir 'D:\QC\logs' `
+  -ReplayPort 5055 `
+  -RunDaemonNow
 ```
 
 ## Gate Smoke Test
@@ -382,6 +425,7 @@ python C:\QC\cameras\test-replay-app.py
 python C:\QC\cameras\test-camera-config.py
 python C:\QC\cameras\test-camera-daemon.py
 powershell -NoProfile -File C:\QC\cameras\test-camera-daemon.ps1
+powershell -NoProfile -File C:\QC\cameras\test-install-camera-workstation.ps1
 ```
 
 When the replay app starts, it also creates or updates a local SQLite catalog

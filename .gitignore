@@ -13,6 +13,7 @@ agents.md
  /tmp/
 /archive/
 /video_clips/
+/cameras/video_clips/
 /error_clips/
  /cameras/marks/
 /*.stop
