@@ -25,6 +25,7 @@ param(
     [string]$RecorderLogDir = "",
     [string]$FfmpegPath = "",
     [Nullable[int]]$ReplayPort = $null,
+    [switch]$InstallFfmpeg,
     [switch]$ListDevices,
     [switch]$SkipShortcuts,
     [switch]$DesktopOnly,
@@ -57,6 +58,10 @@ function Get-PythonCommand {
     return $python
 }
 
+function Get-WingetCommand {
+    return Get-Command winget -ErrorAction SilentlyContinue
+}
+
 function Find-FfmpegPath {
     param(
         [string]$ExplicitPath
@@ -84,6 +89,40 @@ function Find-FfmpegPath {
     }
 
     return ""
+}
+
+function Ensure-FfmpegPath {
+    param(
+        [string]$ExplicitPath,
+        [switch]$AllowInstall
+    )
+
+    $resolved = Find-FfmpegPath -ExplicitPath $ExplicitPath
+    if ($resolved) {
+        return $resolved
+    }
+
+    if (-not $AllowInstall) {
+        return ""
+    }
+
+    $winget = Get-WingetCommand
+    if (-not $winget) {
+        throw "ffmpeg was not found and winget is not available. Install ffmpeg manually or rerun with -FfmpegPath."
+    }
+
+    Write-Host "ffmpeg was not found. Installing it with winget ..." -ForegroundColor Cyan
+    & $winget.Source install --id Gyan.FFmpeg -e --source winget --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) {
+        throw "winget failed to install ffmpeg."
+    }
+
+    $resolved = Find-FfmpegPath -ExplicitPath $ExplicitPath
+    if (-not $resolved) {
+        throw "ffmpeg installation completed, but ffmpeg is still not visible in PATH. Open a new shell or rerun with -FfmpegPath."
+    }
+
+    return $resolved
 }
 
 function Get-EffectiveConfig {
@@ -142,7 +181,7 @@ if (-not $LocalConfig) {
 }
 
 $python = Get-PythonCommand
-$ffmpegResolved = Find-FfmpegPath -ExplicitPath $FfmpegPath
+$ffmpegResolved = Ensure-FfmpegPath -ExplicitPath $FfmpegPath -AllowInstall:$InstallFfmpeg
 
 if ($ListDevices) {
     $recorderScript = Join-Path $scriptDir "camera-recorder.py"
@@ -298,5 +337,5 @@ Write-Host "Recorder logs: $effectiveRecorderLogDir"
 if ($ffmpegResolved) {
     Write-Host "ffmpeg: $ffmpegResolved"
 } else {
-    Write-Host "ffmpeg: not pinned in override; recorder will use repo-local copy or PATH at runtime."
+    Write-Host "ffmpeg: not found. Install with -InstallFfmpeg, provide -FfmpegPath, or let the recorder fall back to OpenCV."
 }

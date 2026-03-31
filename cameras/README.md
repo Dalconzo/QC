@@ -105,6 +105,7 @@ For a new Hamilton PC, the fastest rollout path is now the bootstrap script:
 
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 `
+  -InstallFfmpeg `
   -CameraSource 'dshow:video="YOUR CAMERA NAME"' `
   -CameraLabel 'Top Camera' `
   -RunDaemonNow
@@ -118,17 +119,31 @@ That command:
 - installs the desktop/start-menu replay shortcuts
 - installs the daemon Scheduled Task
 - starts the daemon immediately when `-RunDaemonNow` is supplied
+- installs `ffmpeg` with `winget` first when `-InstallFfmpeg` is supplied and
+  no repo-local or PATH copy is already available
 
 Override the Hamilton trace path, output root, log root, or replay port if a
 specific workstation differs from the repo defaults:
 
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 `
+  -InstallFfmpeg `
   -CameraSource 'dshow:video="YOUR CAMERA NAME"' `
   -HamiltonLogDir 'D:\Hamilton\LogFiles' `
   -RunsRoot 'D:\QC\camera_runs' `
   -RecorderLogDir 'D:\QC\logs' `
   -ReplayPort 5055 `
+  -RunDaemonNow
+```
+
+If camera discovery is flaky on a workstation, skip `-ListDevices` and install
+against the default camera source first:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 `
+  -InstallFfmpeg `
+  -CameraSource '0' `
+  -CameraLabel 'Default Camera' `
   -RunDaemonNow
 ```
 
