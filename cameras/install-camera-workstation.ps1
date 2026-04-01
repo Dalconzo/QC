@@ -244,6 +244,13 @@ $effectiveRecorderLogDir = if ($RecorderLogDir) {
     [System.IO.Path]::GetFullPath((Join-Path $repoRoot "logs"))
 }
 
+$effectiveDaemonLogPath = [System.IO.Path]::GetFullPath((Join-Path $effectiveRecorderLogDir "camera-daemon.log"))
+$effectiveDaemonStatusPath = [System.IO.Path]::GetFullPath((Join-Path $effectiveRecorderLogDir "camera-daemon-status.json"))
+$effectiveDaemonPidPath = [System.IO.Path]::GetFullPath((Join-Path $effectiveRecorderLogDir "camera-daemon.pid"))
+$effectiveDaemonStopPath = [System.IO.Path]::GetFullPath((Join-Path $scriptDir "camera-daemon.stop"))
+$effectiveRecorderStopPath = [System.IO.Path]::GetFullPath((Join-Path $scriptDir "cameras.recorder.stop"))
+$effectiveReplayLogPath = [System.IO.Path]::GetFullPath((Join-Path $effectiveRecorderLogDir "camera-replay.log"))
+
 $override = @{
     hamilton = @{
         log_dir = $effectiveHamiltonLogDir
@@ -254,9 +261,20 @@ $override = @{
     }
     recorder = @{
         default_profile = $ProfileId
+        stop_file = $effectiveRecorderStopPath
+    }
+    replay = @{
+        log_path = $effectiveReplayLogPath
     }
     live = @{
         default_profile = $ProfileId
+    }
+    daemon = @{
+        task_name = "HamiltonCameraRecorderDaemon"
+        stop_file = $effectiveDaemonStopPath
+        pid_file = $effectiveDaemonPidPath
+        status_path = $effectiveDaemonStatusPath
+        log_path = $effectiveDaemonLogPath
     }
     profiles = @(
         @{
