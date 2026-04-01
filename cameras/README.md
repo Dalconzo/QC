@@ -44,6 +44,8 @@ settings from the repo default.
     replay or live-preview mode.
 - `open-latest-run.ps1`
   - One-click launcher that opens the freshest replayable local run.
+- `open-camera-site.ps1`
+  - One-click launcher that opens the main local camera site in the default browser.
 - `install-local-camera-tools.ps1`
   - Installs desktop/start-menu shortcuts for the local replay workflow.
 - `uninstall-local-camera-tools.ps1`
@@ -368,6 +370,12 @@ Or jump straight into the newest replayable local run:
 powershell -NoProfile -File C:\QC\cameras\open-latest-run.ps1
 ```
 
+Or just open the main local camera site in the default browser:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\open-camera-site.ps1
+```
+
 Or open the local live camera view:
 
 ```powershell
@@ -390,6 +398,9 @@ To install desktop/start-menu shortcuts for engineers on a workstation:
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\install-local-camera-tools.ps1
 ```
+
+That installer now adds a `Hamilton Camera Site` shortcut to the desktop and
+Start Menu for the simplest operator entry point.
 
 Remove those shortcuts with:
 

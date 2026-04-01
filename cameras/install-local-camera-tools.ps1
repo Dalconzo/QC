@@ -31,6 +31,13 @@ $startMenuDir = Join-Path $startMenuPrograms "Hamilton Camera"
 
 $targets = @(
     @{
+        Name = "Hamilton Camera Site.lnk"
+        Directory = $desktopDir
+        Script = "open-camera-site.ps1"
+        Arguments = @()
+        Description = "Open the local Hamilton camera site."
+    },
+    @{
         Name = "Hamilton Replay.lnk"
         Directory = $desktopDir
         Script = "start-replay-app.ps1"
@@ -62,6 +69,13 @@ $targets = @(
 
 if (-not $DesktopOnly) {
     $targets += @(
+        @{
+            Name = "Hamilton Camera Site.lnk"
+            Directory = $startMenuDir
+            Script = "open-camera-site.ps1"
+            Arguments = @()
+            Description = "Open the local Hamilton camera site."
+        },
         @{
             Name = "Hamilton Replay.lnk"
             Directory = $startMenuDir

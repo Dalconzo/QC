@@ -53,7 +53,9 @@ if ($LASTEXITCODE -ne 0) {
     throw "Failed to read effective camera config."
 }
 
-$effectiveConfig = $configJson | ConvertFrom-Json
+$effectivePayload = $configJson | ConvertFrom-Json
+$effectiveConfig = if ($effectivePayload.config) { $effectivePayload.config } else { $effectivePayload }
+
 $resolvedRunsRoot = if ($RunsRoot) { [System.IO.Path]::GetFullPath($RunsRoot) } else { [string]$effectiveConfig.storage.runs_root }
 $resolvedHost = if ($BindHost) { $BindHost } else { [string]$effectiveConfig.replay.host }
 $resolvedHost = if ([string]::IsNullOrWhiteSpace($resolvedHost)) { "127.0.0.1" } else { $resolvedHost }
