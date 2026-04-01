@@ -50,6 +50,25 @@ function Resolve-DefaultPath {
     return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $RelativePath))
 }
 
+function Resolve-RepoLocalInstallPath {
+    param(
+        [string]$ExplicitPath,
+        [string]$RelativePath
+    )
+
+    <#
+      Workstation installs should keep their local artifacts under the repo
+      root they were cloned into. We intentionally do not inherit storage/log
+      roots from the shared base config here, because that base file still
+      carries the developer-machine defaults under C:\QC.
+    #>
+    if ($ExplicitPath) {
+        return [System.IO.Path]::GetFullPath($ExplicitPath)
+    }
+
+    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $RelativePath))
+}
+
 function Get-PythonCommand {
     $python = Get-Command python -ErrorAction SilentlyContinue
     if (-not $python) {
@@ -228,21 +247,8 @@ $effectiveHamiltonLogDir = if ($HamiltonLogDir) {
     "C:\Program Files (x86)\HAMILTON\LogFiles"
 }
 
-$effectiveRunsRoot = if ($RunsRoot) {
-    [System.IO.Path]::GetFullPath($RunsRoot)
-} elseif ($effective.config.storage.runs_root) {
-    [string]$effective.config.storage.runs_root
-} else {
-    [System.IO.Path]::GetFullPath((Join-Path $repoRoot "cameras\video_clips"))
-}
-
-$effectiveRecorderLogDir = if ($RecorderLogDir) {
-    [System.IO.Path]::GetFullPath($RecorderLogDir)
-} elseif ($effective.config.storage.recorder_log_dir) {
-    [string]$effective.config.storage.recorder_log_dir
-} else {
-    [System.IO.Path]::GetFullPath((Join-Path $repoRoot "logs"))
-}
+$effectiveRunsRoot = Resolve-RepoLocalInstallPath -ExplicitPath $RunsRoot -RelativePath "cameras\video_clips"
+$effectiveRecorderLogDir = Resolve-RepoLocalInstallPath -ExplicitPath $RecorderLogDir -RelativePath "logs"
 
 $effectiveDaemonLogPath = [System.IO.Path]::GetFullPath((Join-Path $effectiveRecorderLogDir "camera-daemon.log"))
 $effectiveDaemonStatusPath = [System.IO.Path]::GetFullPath((Join-Path $effectiveRecorderLogDir "camera-daemon-status.json"))
