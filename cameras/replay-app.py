@@ -20,7 +20,6 @@ import hashlib
 import json
 import mimetypes
 import re
-import shutil
 import sqlite3
 import subprocess
 from contextlib import closing
@@ -30,7 +29,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
+from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config, validate_config
+from camera_live import capture_live_frame as capture_live_frame_once, summarize_profile
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -49,100 +49,6 @@ class TraceEvent:
     line: str
 
 
-def find_ffmpeg(explicit: str | None = None) -> str | None:
-    """Locate ffmpeg for live preview frame capture.
-
-    The replay workstation should reuse the same ffmpeg discovery rules as the
-    recorder so the live-preview path works on machines that rely on the repo's
-    bundled ffmpeg.exe instead of a system-wide install.
-    """
-    if explicit:
-        explicit_path = Path(explicit)
-        if explicit_path.exists():
-            return str(explicit_path)
-
-    here = Path(__file__).parent
-    for candidate in (
-        here / "ffmpeg.exe",
-        here / "dist" / "ffmpeg.exe",
-        Path.cwd() / "cameras" / "ffmpeg.exe",
-        Path.cwd() / "cameras" / "dist" / "ffmpeg.exe",
-    ):
-        if candidate.exists():
-            return str(candidate)
-
-    return shutil.which("ffmpeg")
-
-
-def _normalize_dshow_name(source: str) -> str:
-    """Convert user-friendly DirectShow syntax into ffmpeg input form."""
-    value = source
-    if value.lower().startswith("dshow:"):
-        value = value.split(":", 1)[1]
-    if value.lower().startswith("video="):
-        key, raw_name = value.split("=", 1)
-        raw_name = raw_name.strip().strip('"')
-        return f"{key}={raw_name}"
-    return value
-
-
-def build_live_frame_command(
-    ffmpeg_bin: str,
-    source: str,
-    *,
-    framerate: int | None,
-    video_size: str | None,
-    jpeg_quality: int,
-) -> list[str]:
-    """Build a one-frame ffmpeg capture command for live preview."""
-    src = (source or "").strip()
-    if not src:
-        raise ValueError("Camera profile source is empty.")
-
-    is_rtsp = src.lower().startswith("rtsp")
-    is_dshow = src.lower().startswith("dshow:") or src.lower().startswith("video=") or src.lower().startswith("audio=")
-
-    if is_rtsp:
-        input_args = ["-rtsp_transport", "tcp", "-i", src]
-    elif is_dshow:
-        input_args = ["-f", "dshow"]
-        if framerate:
-            input_args += ["-framerate", str(framerate)]
-        if video_size:
-            input_args += ["-video_size", str(video_size)]
-        input_args += ["-i", _normalize_dshow_name(src)]
-    else:
-        input_args = ["-i", src]
-
-    return [
-        ffmpeg_bin,
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        *input_args,
-        "-frames:v",
-        "1",
-        "-q:v",
-        str(jpeg_quality),
-        "-f",
-        "image2pipe",
-        "-vcodec",
-        "mjpeg",
-        "-",
-    ]
-
-
-def summarize_profile(profile: dict) -> dict:
-    """Return lightweight metadata the live-view picker needs."""
-    return {
-        "id": profile.get("id") or "",
-        "label": profile.get("label") or profile.get("id") or "Camera",
-        "source": profile.get("source") or "",
-        "framerate": profile.get("framerate"),
-        "video_size": profile.get("video_size"),
-    }
-
-
 def list_live_profiles(config: dict) -> dict:
     """Expose configured camera profiles for the live-preview UI."""
     profiles = [summarize_profile(profile) for profile in config.get("profiles", [])]
@@ -155,38 +61,9 @@ def list_live_profiles(config: dict) -> dict:
 
 
 def capture_live_frame(config: dict, profile_id: str | None = None) -> tuple[bytes, dict]:
-    """Capture one JPEG preview frame from a configured camera profile.
-
-    The live view is intentionally stateless in v1: each browser refresh asks
-    ffmpeg for one frame. That keeps the preview path easy to reason about and
-    avoids introducing a long-lived stream manager before we know how these
-    workstation cameras behave under real rollout conditions.
-    """
-    live_config = config.get("live", {})
-    profile = get_profile(config, profile_id or live_config.get("default_profile") or None)
-    ffmpeg_bin = find_ffmpeg(profile.get("ffmpeg_path") or config.get("recorder", {}).get("ffmpeg_path") or "")
-    if not ffmpeg_bin:
-        raise FileNotFoundError("ffmpeg was not found for live preview capture.")
-
-    cmd = build_live_frame_command(
-        ffmpeg_bin,
-        str(profile.get("source") or ""),
-        framerate=profile.get("framerate"),
-        video_size=profile.get("video_size"),
-        jpeg_quality=int(live_config.get("jpeg_quality") or 4),
-    )
-
-    timeout_sec = int(live_config.get("frame_timeout_sec") or 8)
-    completed = subprocess.run(cmd, capture_output=True, check=False, timeout=timeout_sec)
-    if completed.returncode != 0:
-        error_text = (completed.stderr or b"").decode("utf-8", errors="replace").strip()
-        if not error_text:
-            error_text = f"ffmpeg exited with code {completed.returncode}"
-        raise RuntimeError(error_text)
-    if not completed.stdout:
-        raise RuntimeError("ffmpeg returned no image data for live preview.")
-
-    return completed.stdout, summarize_profile(profile)
+    """Compatibility shim for existing callers inside this module."""
+    image_bytes, profile, _ffmpeg_path = capture_live_frame_once(config, profile_id)
+    return image_bytes, profile
 
 
 def parse_trace_events(trace_path: Path) -> list[TraceEvent]:

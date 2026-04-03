@@ -18,6 +18,9 @@ Use an optional workstation-local override at
 `C:\QC\config\camera-recorder.local.json` when one Hamilton PC needs different
 settings from the repo default.
 
+For a full remote-install checklist and rollback procedure, see
+[`WORKSTATION-ROLLOUT.md`](/C:/QC/cameras/WORKSTATION-ROLLOUT.md).
+
 ## Current Recorder Flow
 
 - `camera-recorder.py`
@@ -67,6 +70,16 @@ settings from the repo default.
   - Stops the daemon and asks any active recorder child to finalize cleanly.
 - `show-camera-daemon-status.ps1`
   - Shows whether the workstation is idle, recording, or stopped.
+- `test-camera-workstation.ps1`
+  - Runs a workstation preflight: config validation, runs-root write checks,
+    manifest health summary, optional camera probe, and optional replay-site
+    startup verification.
+- `show-run-health.ps1`
+  - Diagnoses stale `.run.json` entries and can quarantine or delete manifests
+    whose paired video or trace paths are gone.
+- `test-camera-source.py`
+  - Grabs one JPEG frame from a configured camera profile without depending on
+    full DirectShow device enumeration.
 - `install-camera-daemon-task.ps1`
   - Installs a Scheduled Task so the daemon starts automatically at user logon.
 - `uninstall-camera-daemon-task.ps1`
@@ -162,6 +175,28 @@ To validate the merged base config plus any local workstation override:
 
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\show-camera-config.ps1 -Validate
+```
+
+For a broader workstation preflight before rollout or troubleshooting:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\test-camera-workstation.ps1 `
+  -ProbeCamera `
+  -StartReplay
+```
+
+To diagnose manifests that show up as missing in the local camera site:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\show-run-health.ps1
+```
+
+To quarantine stale manifests instead of deleting them:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\show-run-health.ps1 `
+  -Cleanup all-stale `
+  -QuarantineDir C:\QC\cameras\video_clips\_quarantine
 ```
 
 ## Bench Test With The Real Camera
@@ -449,9 +484,11 @@ timestamp parsing, and live-preview API endpoints:
 ```powershell
 python C:\QC\cameras\test-replay-app.py
 python C:\QC\cameras\test-camera-config.py
+python C:\QC\cameras\test-camera-tooling.py
 python C:\QC\cameras\test-camera-daemon.py
 powershell -NoProfile -File C:\QC\cameras\test-camera-daemon.ps1
 powershell -NoProfile -File C:\QC\cameras\test-install-camera-workstation.ps1
+powershell -NoProfile -File C:\QC\cameras\test-camera-workstation.ps1
 ```
 
 When the replay app starts, it also creates or updates a local SQLite catalog
