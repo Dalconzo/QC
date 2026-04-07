@@ -78,6 +78,16 @@ class CameraRecorderTests(unittest.TestCase):
         )
         self.assertNotIn("dshow", command)
 
+    def test_quoted_numeric_source_recovers_to_numeric(self) -> None:
+        command = RECORDER.build_ffmpeg_command(
+            "ffmpeg",
+            "'0'",
+            Path("out.mp4"),
+            framerate=None,
+            video_size=None,
+        )
+        self.assertNotIn("dshow", command)
+
 
 if __name__ == "__main__":
     unittest.main()

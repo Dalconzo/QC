@@ -100,6 +100,9 @@ function Normalize-CameraSource {
     if ($trimmed.Length -ge 2 -and $trimmed.StartsWith('"') -and $trimmed.EndsWith('"')) {
         $trimmed = $trimmed.Substring(1, $trimmed.Length - 2)
     }
+    if ($trimmed.Length -ge 2 -and $trimmed.StartsWith("'") -and $trimmed.EndsWith("'")) {
+        $trimmed = $trimmed.Substring(1, $trimmed.Length - 2)
+    }
 
     return $trimmed
 }

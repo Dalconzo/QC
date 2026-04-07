@@ -64,6 +64,14 @@ def normalize_camera_name(source: str) -> str:
         _key, raw_name = value.split("=", 1)
         value = raw_name.strip()
 
+    value = value.strip()
+    # Shell handoffs on operator workstations occasionally preserve a whole
+    # source token inside single quotes, for example `'0'` or
+    # `'Arducam USB Camera'`. Strip one outer quote layer so the downstream
+    # ffmpeg/OpenCV selection logic can still recover.
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        value = value[1:-1].strip()
+
     return value.strip().strip('"')
 
 
@@ -78,10 +86,13 @@ def to_ffmpeg_input(source: str) -> tuple[str, str]:
         return "empty", ""
     if is_numeric_source(value):
         return "numeric", value
+    normalized_name = normalize_camera_name(value)
+    if is_numeric_source(normalized_name):
+        return "numeric", normalized_name
     if looks_like_url_or_path(value):
         if value.lower().startswith("rtsp"):
             return "rtsp", value
         return "generic", value
     if is_explicit_dshow_source(value):
-        return "dshow", f'video="{normalize_camera_name(value)}"'
-    return "dshow", f'video="{normalize_camera_name(value)}"'
+        return "dshow", f'video="{normalized_name}"'
+    return "dshow", f'video="{normalized_name}"'
