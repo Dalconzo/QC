@@ -25,6 +25,7 @@ import time
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
+from camera_source import is_numeric_source, to_ffmpeg_input
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -278,19 +279,6 @@ def build_output_path(out_dir: Path, start_time: dt.datetime, label: str) -> Pat
     return out_dir / f"{ts_label(start_time)}_{safe_label}.mp4"
 
 
-def _normalize_dshow_name(source: str) -> str:
-    """Convert user-friendly DirectShow source syntax into ffmpeg input form."""
-    value = source
-    if value.lower().startswith("dshow:"):
-        value = value.split(":", 1)[1]
-    if value.lower().startswith("video="):
-        key, raw_name = value.split("=", 1)
-        raw_name = raw_name.strip().strip('"')
-        # ffmpeg's DirectShow input expects the device name to stay quoted.
-        return f'{key}="{raw_name}"'
-    return value
-
-
 def _is_valid_recording(video_path: Path, *, stop_reason: str) -> bool:
     """Reject recorder outputs that never produced a usable video artifact.
 
@@ -325,19 +313,18 @@ def build_ffmpeg_command(
 ) -> list[str]:
     """Construct the ffmpeg command for one long-running recording."""
     src = source.strip()
-    is_rtsp = src.lower().startswith("rtsp")
-    is_dshow = src.lower().startswith("dshow:") or src.lower().startswith("video=") or src.lower().startswith("audio=")
+    source_kind, normalized_source = to_ffmpeg_input(src)
 
-    if is_rtsp:
-        input_args = ["-rtsp_transport", "tcp", "-i", src]
+    if source_kind == "rtsp":
+        input_args = ["-rtsp_transport", "tcp", "-i", normalized_source]
         codec_args = ["-c", "copy", "-an"]
-    elif is_dshow:
+    elif source_kind == "dshow":
         input_args = ["-f", "dshow"]
         if framerate:
             input_args += ["-framerate", str(framerate)]
         if video_size:
             input_args += ["-video_size", str(video_size)]
-        input_args += ["-i", _normalize_dshow_name(src)]
+        input_args += ["-i", normalized_source]
         codec_args = [
             "-vcodec",
             "libx264",
@@ -350,7 +337,7 @@ def build_ffmpeg_command(
             "-an",
         ]
     else:
-        input_args = ["-i", src]
+        input_args = ["-i", normalized_source]
         codec_args = ["-c", "copy", "-an"]
 
     return [
@@ -656,7 +643,7 @@ def main() -> int:
         if not name:
             print("Selected device has no usable name")
             return 2
-        source = f'dshow:video="{name}"'
+        source = name
 
     emit_log(
         f"Recording run video to {out_dir}. "
@@ -669,7 +656,7 @@ def main() -> int:
     if max_record_sec > 0:
         emit_log(f"Safety timeout: {max_record_sec} seconds", log_path=recorder_log)
 
-    if ok and ffmpeg_bin:
+    if ok and ffmpeg_bin and not is_numeric_source(source):
         if args.verbose:
             emit_log(f"Using ffmpeg backend: {ffmpeg_bin}", log_path=recorder_log)
         try:
@@ -692,7 +679,10 @@ def main() -> int:
             return 2
     else:
         if args.verbose:
-            emit_log("Using OpenCV backend (ffmpeg not found)", log_path=recorder_log)
+            if is_numeric_source(source):
+                emit_log("Using OpenCV backend for numeric camera source", log_path=recorder_log)
+            else:
+                emit_log("Using OpenCV backend (ffmpeg not found)", log_path=recorder_log)
         try:
             video_path, started_at, stopped_at, stop_reason = run_opencv(
                 source,

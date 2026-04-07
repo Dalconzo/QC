@@ -60,7 +60,7 @@ $bootstrap = Join-Path $scriptDir "install-camera-workstation.ps1"
     -Config $configPath `
     -LocalConfig $localPath `
     -ProfileId workstation `
-    -CameraSource 'dshow:video="Smoke Camera"' `
+    -CameraSource 'Smoke Camera' `
     -CameraLabel 'Smoke Camera' `
     -HamiltonLogDir $hamiltonDir `
     -RunsRoot $runsRoot `
@@ -90,7 +90,7 @@ if ($localConfig.recorder.default_profile -ne "workstation") {
     throw "Unexpected default profile in local override."
 }
 
-if ($localConfig.profiles[0].source -ne 'dshow:video=Smoke Camera') {
+if ($localConfig.profiles[0].source -ne 'Smoke Camera') {
     throw "Unexpected camera source in local override."
 }
 

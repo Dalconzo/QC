@@ -69,6 +69,41 @@ function Resolve-RepoLocalInstallPath {
     return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $RelativePath))
 }
 
+function Normalize-CameraSource {
+    param(
+        [string]$Source
+    )
+
+    <#
+      Store friendly camera names in config instead of ffmpeg-specific dshow
+      syntax. The Python capture layer will add `-f dshow` plus
+      `video="Camera Name"` when it builds the actual ffmpeg command.
+    #>
+    $value = [string]$Source
+    if (-not $value) {
+        return ""
+    }
+
+    $trimmed = $value.Trim()
+    if (-not $trimmed) {
+        return ""
+    }
+
+    if ($trimmed -match '^(?i)dshow:(.+)$') {
+        $trimmed = $Matches[1].Trim()
+    }
+
+    if ($trimmed -match '^(?i)(video|audio)=(.+)$') {
+        $trimmed = $Matches[2].Trim()
+    }
+
+    if ($trimmed.Length -ge 2 -and $trimmed.StartsWith('"') -and $trimmed.EndsWith('"')) {
+        $trimmed = $trimmed.Substring(1, $trimmed.Length - 2)
+    }
+
+    return $trimmed
+}
+
 function Get-PythonCommand {
     $python = Get-Command python -ErrorAction SilentlyContinue
     if (-not $python) {
@@ -229,6 +264,7 @@ if (-not $effectiveCameraSource) {
         $effectiveCameraSource = "0"
     }
 }
+$effectiveCameraSource = Normalize-CameraSource -Source $effectiveCameraSource
 
 $effectiveCameraLabel = $CameraLabel
 if (-not $effectiveCameraLabel) {

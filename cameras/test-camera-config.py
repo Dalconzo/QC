@@ -41,8 +41,8 @@ class CameraConfigTests(unittest.TestCase):
                             "runs_root": str(runs_root),
                         },
                         "profiles": [
-                            {"id": "default", "label": "USB", "source": 'dshow:video="USB Cam"'},
-                            {"id": "top", "label": "Top", "source": 'dshow:video="Top Cam"'},
+                            {"id": "default", "label": "USB", "source": "USB Cam"},
+                            {"id": "top", "label": "Top", "source": "Top Cam"},
                         ],
                     }
                 ),
@@ -115,7 +115,7 @@ class CameraConfigTests(unittest.TestCase):
                     {
                         "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
                         "live": {"default_profile": "missing", "frame_timeout_sec": 8, "refresh_ms": 1000, "jpeg_quality": 4},
-                        "profiles": [{"id": "default", "label": "USB", "source": 'dshow:video="USB Cam"'}],
+                        "profiles": [{"id": "default", "label": "USB", "source": "USB Cam"}],
                     }
                 ),
                 encoding="utf-8",

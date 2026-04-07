@@ -15,6 +15,7 @@ import subprocess
 from pathlib import Path
 
 from camera_config import get_profile
+from camera_source import to_ffmpeg_input
 
 
 def find_ffmpeg(explicit: str | None = None) -> str | None:
@@ -37,18 +38,6 @@ def find_ffmpeg(explicit: str | None = None) -> str | None:
     return shutil.which("ffmpeg")
 
 
-def _normalize_dshow_name(source: str) -> str:
-    """Convert user-friendly DirectShow syntax into ffmpeg input form."""
-    value = source
-    if value.lower().startswith("dshow:"):
-        value = value.split(":", 1)[1]
-    if value.lower().startswith("video="):
-        key, raw_name = value.split("=", 1)
-        raw_name = raw_name.strip().strip('"')
-        return f"{key}={raw_name}"
-    return value
-
-
 def build_live_frame_command(
     ffmpeg_bin: str,
     source: str,
@@ -62,20 +51,19 @@ def build_live_frame_command(
     if not src:
         raise ValueError("Camera profile source is empty.")
 
-    is_rtsp = src.lower().startswith("rtsp")
-    is_dshow = src.lower().startswith("dshow:") or src.lower().startswith("video=") or src.lower().startswith("audio=")
+    source_kind, normalized_source = to_ffmpeg_input(src)
 
-    if is_rtsp:
-        input_args = ["-rtsp_transport", "tcp", "-i", src]
-    elif is_dshow:
+    if source_kind == "rtsp":
+        input_args = ["-rtsp_transport", "tcp", "-i", normalized_source]
+    elif source_kind == "dshow":
         input_args = ["-f", "dshow"]
         if framerate:
             input_args += ["-framerate", str(framerate)]
         if video_size:
             input_args += ["-video_size", str(video_size)]
-        input_args += ["-i", _normalize_dshow_name(src)]
+        input_args += ["-i", normalized_source]
     else:
-        input_args = ["-i", src]
+        input_args = ["-i", normalized_source]
 
     return [
         ffmpeg_bin,

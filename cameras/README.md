@@ -121,7 +121,7 @@ For a new Hamilton PC, the fastest rollout path is now the bootstrap script:
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 `
   -InstallFfmpeg `
-  -CameraSource 'dshow:video="YOUR CAMERA NAME"' `
+  -CameraSource 'YOUR CAMERA NAME' `
   -CameraLabel 'Top Camera' `
   -RunDaemonNow
 ```
@@ -143,7 +143,7 @@ specific workstation differs from the repo defaults:
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 `
   -InstallFfmpeg `
-  -CameraSource 'dshow:video="YOUR CAMERA NAME"' `
+  -CameraSource 'YOUR CAMERA NAME' `
   -HamiltonLogDir 'D:\Hamilton\LogFiles' `
   -RunsRoot 'D:\QC\camera_runs' `
   -RecorderLogDir 'D:\QC\logs' `
@@ -209,7 +209,7 @@ without involving Hamilton.
 
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\start-recorder.ps1 `
-  -Source 'dshow:video="YOUR CAMERA NAME"' `
+  -Source 'YOUR CAMERA NAME' `
   -OutDir C:\QC\cameras\video_clips\bench `
   -Label bench `
   -StartWhenExe notepad.exe `
@@ -231,7 +231,7 @@ production.
 
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\start-recorder.ps1 `
-  -Source 'dshow:video="YOUR CAMERA NAME"' `
+  -Source 'YOUR CAMERA NAME' `
   -OutDir C:\QC\cameras\video_clips\sim `
   -Label h7-sim `
   -RecorderLog C:\QC\logs\h7-sim-recorder.log `
@@ -259,7 +259,7 @@ Then run the recorder with a persistent log file:
 
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\start-recorder.ps1 `
-  -Source 'dshow:video="YOUR CAMERA NAME"' `
+  -Source 'YOUR CAMERA NAME' `
   -OutDir C:\QC\cameras\video_clips\sim `
   -Label h7-sim `
   -MaxRecordSec 1800 `

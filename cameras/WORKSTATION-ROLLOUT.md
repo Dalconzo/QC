@@ -26,7 +26,7 @@ python -m pip install psutil
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\install-camera-workstation.ps1 `
   -InstallFfmpeg `
-  -CameraSource 'dshow:video="Arducam USB Camera"' `
+  -CameraSource 'Arducam USB Camera' `
   -CameraLabel 'Top Camera' `
   -RunDaemonNow
 ```
@@ -94,7 +94,7 @@ When the repo changes on a deployed workstation:
 cd C:\camera-tools
 git pull
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\install-camera-workstation.ps1 `
-  -CameraSource 'dshow:video="Arducam USB Camera"' `
+  -CameraSource 'Arducam USB Camera' `
   -CameraLabel 'Top Camera'
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\uninstall-camera-daemon-task.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\install-camera-daemon-task.ps1 -RunNow
@@ -136,7 +136,7 @@ Remove-Item C:\camera-tools\logs -Recurse -Force
   Run the install from an elevated PowerShell window.
 - Camera source `0` records the wrong device:
   Replace it with a named DirectShow source in the local override by rerunning
-  `install-camera-workstation.ps1 -CameraSource 'dshow:video="..."'`.
+  `install-camera-workstation.ps1 -CameraSource 'Arducam USB Camera'`.
 - Replay site does not start:
   Check `C:\camera-tools\logs\camera-replay.log` and rerun
   `test-camera-workstation.ps1 -StartReplay`.

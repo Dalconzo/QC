@@ -24,12 +24,33 @@ def load_module(name: str, path: Path):
 
 
 RECORDER = load_module("camera_recorder_module", CAMERAS_DIR / "camera-recorder.py")
+LIVE = load_module("camera_live_module", CAMERAS_DIR / "camera_live.py")
 
 
 class CameraRecorderTests(unittest.TestCase):
-    def test_normalize_dshow_source_preserves_device_quotes(self) -> None:
-        source = 'dshow:video="Arducam USB Camera"'
-        self.assertEqual(RECORDER._normalize_dshow_name(source), 'video="Arducam USB Camera"')
+    def test_plain_camera_name_becomes_dshow_input(self) -> None:
+        command = RECORDER.build_ffmpeg_command(
+            "ffmpeg",
+            "Arducam USB Camera",
+            Path("out.mp4"),
+            framerate=None,
+            video_size=None,
+        )
+        self.assertIn("-f", command)
+        self.assertIn("dshow", command)
+        self.assertIn('video="Arducam USB Camera"', command)
+
+    def test_live_preview_uses_same_plain_camera_name_rule(self) -> None:
+        command = LIVE.build_live_frame_command(
+            "ffmpeg",
+            "Arducam USB Camera",
+            framerate=None,
+            video_size=None,
+            jpeg_quality=4,
+        )
+        self.assertIn("-f", command)
+        self.assertIn("dshow", command)
+        self.assertIn('video="Arducam USB Camera"', command)
 
     def test_invalid_recording_rejects_missing_or_empty_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -46,6 +67,16 @@ class CameraRecorderTests(unittest.TestCase):
             self.assertFalse(RECORDER._is_valid_recording(empty, stop_reason="backend_exit"))
             self.assertFalse(RECORDER._is_valid_recording(tiny, stop_reason="backend_exit"))
             self.assertTrue(RECORDER._is_valid_recording(good, stop_reason="process_exit"))
+
+    def test_numeric_source_does_not_become_dshow(self) -> None:
+        command = RECORDER.build_ffmpeg_command(
+            "ffmpeg",
+            "0",
+            Path("out.mp4"),
+            framerate=None,
+            video_size=None,
+        )
+        self.assertNotIn("dshow", command)
 
 
 if __name__ == "__main__":
