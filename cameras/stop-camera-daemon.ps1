@@ -44,12 +44,31 @@ $daemonStopFile = [string]$config.daemon.stop_file
 $pidFile = [string]$config.daemon.pid_file
 $recorderStopFile = [string]$config.recorder.stop_file
 
-New-Item -ItemType Directory -Force -Path (Split-Path -Parent $daemonStopFile) | Out-Null
+# Broken local overrides should not prevent the operator from stopping the
+# daemon. Fall back to the repo-local defaults that the daemon uses when the
+# configured paths are blank.
+if (-not $daemonStopFile) {
+  $daemonStopFile = [System.IO.Path]::GetFullPath((Join-Path $scriptDir "camera-daemon.stop"))
+}
+if (-not $pidFile) {
+  $pidFile = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "logs\camera-daemon.pid"))
+}
+if (-not $recorderStopFile) {
+  $recorderStopFile = [System.IO.Path]::GetFullPath((Join-Path $scriptDir "cameras.recorder.stop"))
+}
+
+$daemonStopParent = Split-Path -Parent $daemonStopFile
+if ($daemonStopParent) {
+  New-Item -ItemType Directory -Force -Path $daemonStopParent | Out-Null
+}
 Set-Content -LiteralPath $daemonStopFile -Value "stop" -Encoding UTF8
 Write-Host "Created daemon stop file: $daemonStopFile" -ForegroundColor Yellow
 
 if ($recorderStopFile) {
-  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $recorderStopFile) | Out-Null
+  $recorderStopParent = Split-Path -Parent $recorderStopFile
+  if ($recorderStopParent) {
+    New-Item -ItemType Directory -Force -Path $recorderStopParent | Out-Null
+  }
   Set-Content -LiteralPath $recorderStopFile -Value "stop" -Encoding UTF8
   Write-Host "Created recorder stop file: $recorderStopFile" -ForegroundColor Yellow
 }
