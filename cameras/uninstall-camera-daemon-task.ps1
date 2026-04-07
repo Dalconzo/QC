@@ -7,8 +7,7 @@
 
 param(
   [string]$Config = "",
-  [string]$LocalConfig = "",
-  [switch]$StopFirst
+  [string]$LocalConfig = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,9 +22,11 @@ if (-not $LocalConfig) {
   $LocalConfig = Join-Path $repoRoot "config\camera-recorder.local.json"
 }
 
-if ($StopFirst) {
-  $stopScript = Join-Path $scriptDir "stop-camera-daemon.ps1"
+$stopScript = Join-Path $scriptDir "stop-camera-daemon.ps1"
+try {
   & powershell -NoProfile -ExecutionPolicy Bypass -File $stopScript -Config $Config -LocalConfig $LocalConfig -WaitSec 20
+} catch {
+  Write-Warning "Unable to stop the existing camera daemon cleanly before uninstall. Continuing with task removal."
 }
 
 $python = Get-Command python -ErrorAction SilentlyContinue
@@ -50,6 +51,11 @@ $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if (-not $task) {
   Write-Host "Scheduled task does not exist: $taskName" -ForegroundColor Yellow
   exit 0
+}
+
+try {
+  Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+} catch {
 }
 
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false

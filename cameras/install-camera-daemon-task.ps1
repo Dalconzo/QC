@@ -43,6 +43,16 @@ if (-not $taskName.Trim()) {
 }
 $startScript = Join-Path $scriptDir "start-camera-daemon.ps1"
 
+# Stop any already-running daemon before replacing the scheduled task. Without
+# this, an older background process can keep using stale config even after the
+# task definition is updated.
+$stopScript = Join-Path $scriptDir "stop-camera-daemon.ps1"
+try {
+  & powershell -NoProfile -ExecutionPolicy Bypass -File $stopScript -Config $Config -LocalConfig $LocalConfig -WaitSec 20
+} catch {
+  Write-Warning "Unable to stop the existing camera daemon cleanly before reinstall. Continuing with task registration."
+}
+
 $argString = @(
   "-NoProfile",
   "-ExecutionPolicy", "Bypass",
@@ -57,6 +67,11 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -StartWhenAvailable
 $userId = if ($env:USERDOMAIN) { "$($env:USERDOMAIN)\$($env:USERNAME)" } else { $env:USERNAME }
 $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Limited
+
+try {
+  Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+} catch {
+}
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
 Write-Host "Installed scheduled task: $taskName" -ForegroundColor Green
