@@ -230,6 +230,7 @@ def run_supervisor(
     child_started_at = 0.0
     loop_started_at = time.monotonic()
     last_heartbeat = 0.0
+    run_session_active = False
 
     def update_status(state: str, **extra: object) -> None:
         payload = {
@@ -296,6 +297,7 @@ def run_supervisor(
                 child_proc = None
                 child_started_at = 0.0
                 last_heartbeat = 0.0
+                run_session_active = True
 
                 if run_once or (max_cycles > 0 and cycle_count >= max_cycles):
                     emit_log("[daemon] Run limit reached. Exiting.", log_path=daemon_log_path)
@@ -312,10 +314,23 @@ def run_supervisor(
                 break
 
             if not is_process_running_fn(process_name):
+                run_session_active = False
                 now = time.monotonic()
                 if (now - last_heartbeat) >= heartbeat_sec:
                     emit_log(f"[daemon] Waiting for process start: {process_name}", log_path=daemon_log_path)
                     update_status("idle")
+                    last_heartbeat = now
+                time.sleep(max(0.25, idle_poll_sec))
+                continue
+
+            if run_session_active:
+                now = time.monotonic()
+                if (now - last_heartbeat) >= heartbeat_sec:
+                    emit_log(
+                        f"[daemon] Waiting for {process_name} to exit before arming the next recording session",
+                        log_path=daemon_log_path,
+                    )
+                    update_status("idle", waiting_for_process_exit=True)
                     last_heartbeat = now
                 time.sleep(max(0.25, idle_poll_sec))
                 continue

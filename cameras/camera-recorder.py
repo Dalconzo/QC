@@ -286,8 +286,33 @@ def _normalize_dshow_name(source: str) -> str:
     if value.lower().startswith("video="):
         key, raw_name = value.split("=", 1)
         raw_name = raw_name.strip().strip('"')
-        return f"{key}={raw_name}"
+        # ffmpeg's DirectShow input expects the device name to stay quoted.
+        return f'{key}="{raw_name}"'
     return value
+
+
+def _is_valid_recording(video_path: Path, *, stop_reason: str) -> bool:
+    """Reject recorder outputs that never produced a usable video artifact.
+
+    When ffmpeg fails during startup it can still leave behind an empty file
+    path, and earlier code treated that as a completed run. The replay catalog
+    then filled with junk manifests. We only keep runs that produced a real
+    file with content.
+    """
+    try:
+        if not video_path.exists():
+            return False
+        size = video_path.stat().st_size
+    except Exception:
+        return False
+
+    if size <= 0:
+        return False
+
+    # A backend exit with a trivially small file is still a failed launch.
+    if stop_reason == "backend_exit" and size < 1024:
+        return False
+    return True
 
 
 def build_ffmpeg_command(
@@ -686,6 +711,18 @@ def main() -> int:
             emit_log("Or specify ffmpeg: --ffmpeg C:\\QC\\cameras\\ffmpeg.exe", log_path=recorder_log, is_error=True)
             emit_log(f"Details: {exc}", log_path=recorder_log, is_error=True)
             return 2
+
+    if not _is_valid_recording(video_path, stop_reason=stop_reason):
+        emit_log(
+            f"Discarding failed recording attempt: {video_path}",
+            log_path=recorder_log,
+            is_error=True,
+        )
+        try:
+            video_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return 4
 
     trace_path, trace_delta_sec = choose_trace_file(log_dir, log_glob, stopped_at)
     manifest_root = Path(manifest_dir) if manifest_dir else video_path.parent

@@ -136,6 +136,108 @@ class CameraDaemonTests(unittest.TestCase):
             self.assertIn("--start-when-exe HxRun.exe", argv)
             self.assertIn("--stop-when-exe HxRun.exe", argv)
 
+    def test_supervisor_does_not_hot_loop_while_process_stays_open(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            runs_root = root / "runs"
+            logs_root = root / "logs"
+            logs_root.mkdir()
+
+            config_path = root / "camera-recorder.json"
+            local_path = root / "camera-recorder.local.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {
+                            "log_dir": str(log_dir),
+                            "process_name": "HxRun.exe",
+                        },
+                        "storage": {
+                            "runs_root": str(runs_root),
+                            "recorder_log_dir": str(logs_root),
+                        },
+                        "recorder": {
+                            "stop_file": str(root / "recorder.stop"),
+                        },
+                        "daemon": {
+                            "stop_file": str(root / "daemon.stop"),
+                            "pid_file": str(root / "daemon.pid"),
+                            "status_path": str(root / "daemon-status.json"),
+                            "log_path": str(root / "daemon.log"),
+                            "idle_poll_sec": 0.02,
+                            "heartbeat_sec": 0.02,
+                            "relaunch_delay_sec": 0.0,
+                        },
+                        "profiles": [
+                            {
+                                "id": "default",
+                                "label": "BenchCam",
+                                "source": 'dshow:video="Bench Cam"',
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            counter_path = root / "launch-count.txt"
+            stop_file = root / "daemon.stop"
+            recorder_script = root / "mock-recorder.py"
+            recorder_script.write_text(
+                textwrap.dedent(
+                    f"""
+                    import pathlib
+                    import time
+
+                    counter_path = pathlib.Path(r"{counter_path}")
+                    count = int(counter_path.read_text(encoding="utf-8") or "0") if counter_path.exists() else 0
+                    count += 1
+                    counter_path.write_text(str(count), encoding="utf-8")
+                    time.sleep(0.05)
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            calls = {"count": 0}
+
+            def fake_is_running(_name: str) -> bool:
+                calls["count"] += 1
+                if calls["count"] == 1:
+                    return False
+                if calls["count"] <= 15:
+                    return True
+                stop_file.write_text("stop", encoding="utf-8")
+                return False
+
+            rc = DAEMON.run_supervisor(
+                config_path=config_path,
+                local_config_path=local_path,
+                profile_id="default",
+                source_override="",
+                out_dir_override="",
+                label_override="",
+                stop_file=stop_file,
+                pid_file=root / "daemon.pid",
+                status_path=root / "daemon-status.json",
+                daemon_log_path=root / "daemon.log",
+                recorder_log_path=root / "recorder.log",
+                idle_poll_sec=0.02,
+                heartbeat_sec=0.02,
+                relaunch_delay_sec=0.0,
+                idle_timeout_sec=2,
+                run_once=False,
+                max_cycles=0,
+                recorder_script=recorder_script,
+                is_process_running_fn=fake_is_running,
+            )
+
+            self.assertEqual(rc, 0)
+            self.assertEqual(counter_path.read_text(encoding="utf-8").strip(), "1")
+
 
 if __name__ == "__main__":
     unittest.main()
