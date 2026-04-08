@@ -80,6 +80,8 @@ if ($WaitSec -le 0) {
 $deadline = (Get-Date).AddSeconds($WaitSec)
 while ((Get-Date) -lt $deadline) {
   if (-not (Test-Path -LiteralPath $pidFile)) {
+    Remove-Item -LiteralPath $daemonStopFile -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $recorderStopFile -Force -ErrorAction SilentlyContinue
     Write-Host "Camera daemon pid file removed; daemon has stopped." -ForegroundColor Green
     exit 0
   }
@@ -90,6 +92,8 @@ while ((Get-Date) -lt $deadline) {
   if ($pidValue -gt 0) {
     $proc = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
     if (-not $proc) {
+      Remove-Item -LiteralPath $daemonStopFile -Force -ErrorAction SilentlyContinue
+      Remove-Item -LiteralPath $recorderStopFile -Force -ErrorAction SilentlyContinue
       Write-Host "Camera daemon process is no longer running." -ForegroundColor Green
       exit 0
     }

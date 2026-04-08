@@ -43,6 +43,33 @@ if (-not $python) {
   throw "Python is not available in PATH."
 }
 
+$inspectScript = Join-Path $scriptDir "inspect-camera-config.py"
+if (-not (Test-Path -LiteralPath $inspectScript)) {
+  throw "Config inspection script not found: $inspectScript"
+}
+
+$configJson = & python $inspectScript --config ([System.IO.Path]::GetFullPath($Config)) --local-config ([System.IO.Path]::GetFullPath($LocalConfig)) --json
+if ($LASTEXITCODE -ne 0) {
+  throw "Failed to read effective camera config."
+}
+
+$effective = $configJson | ConvertFrom-Json
+$configRoot = if ($effective.config) { $effective.config } else { $effective }
+$effectiveDaemonStopFile = [string]$configRoot.daemon.stop_file
+$effectiveRecorderStopFile = [string]$configRoot.recorder.stop_file
+
+# A prior stop request leaves sentinel files behind on disk. Clear them before
+# relaunching so a fresh daemon instance does not exit immediately on startup.
+if (-not $effectiveDaemonStopFile) {
+  $effectiveDaemonStopFile = [System.IO.Path]::GetFullPath((Join-Path $scriptDir "camera-daemon.stop"))
+}
+if (-not $effectiveRecorderStopFile) {
+  $effectiveRecorderStopFile = [System.IO.Path]::GetFullPath((Join-Path $scriptDir "cameras.recorder.stop"))
+}
+
+Remove-Item -LiteralPath $effectiveDaemonStopFile -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $effectiveRecorderStopFile -Force -ErrorAction SilentlyContinue
+
 $daemonScript = Join-Path $scriptDir "camera-daemon.py"
 if (-not (Test-Path -LiteralPath $daemonScript)) {
   throw "Camera daemon script not found: $daemonScript"
