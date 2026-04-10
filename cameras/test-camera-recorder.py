@@ -35,9 +35,12 @@ class CameraRecorderTests(unittest.TestCase):
             Path("out.mp4"),
             framerate=None,
             video_size=None,
+            dshow_rtbufsize="256M",
         )
         self.assertIn("-f", command)
         self.assertIn("dshow", command)
+        self.assertIn("-rtbufsize", command)
+        self.assertIn("256M", command)
         self.assertIn('video="Arducam USB Camera"', command)
 
     def test_live_preview_uses_same_plain_camera_name_rule(self) -> None:
@@ -46,10 +49,13 @@ class CameraRecorderTests(unittest.TestCase):
             "Arducam USB Camera",
             framerate=None,
             video_size=None,
+            dshow_rtbufsize="256M",
             jpeg_quality=4,
         )
         self.assertIn("-f", command)
         self.assertIn("dshow", command)
+        self.assertIn("-rtbufsize", command)
+        self.assertIn("256M", command)
         self.assertIn('video="Arducam USB Camera"', command)
 
     def test_invalid_recording_rejects_missing_or_empty_files(self) -> None:
@@ -75,6 +81,7 @@ class CameraRecorderTests(unittest.TestCase):
             Path("out.mp4"),
             framerate=None,
             video_size=None,
+            dshow_rtbufsize="256M",
         )
         self.assertNotIn("dshow", command)
 
@@ -85,6 +92,7 @@ class CameraRecorderTests(unittest.TestCase):
             Path("out.mp4"),
             framerate=None,
             video_size=None,
+            dshow_rtbufsize="256M",
         )
         self.assertNotIn("dshow", command)
 

@@ -310,6 +310,7 @@ def build_ffmpeg_command(
     *,
     framerate: int | None,
     video_size: str | None,
+    dshow_rtbufsize: str | None,
 ) -> list[str]:
     """Construct the ffmpeg command for one long-running recording."""
     src = source.strip()
@@ -320,6 +321,10 @@ def build_ffmpeg_command(
         codec_args = ["-c", "copy", "-an"]
     elif source_kind == "dshow":
         input_args = ["-f", "dshow"]
+        if dshow_rtbufsize:
+            # DirectShow's default real-time buffer is small enough to drop
+            # frames on slower workstations or higher-resolution webcams.
+            input_args += ["-rtbufsize", str(dshow_rtbufsize)]
         if framerate:
             input_args += ["-framerate", str(framerate)]
         if video_size:
@@ -365,6 +370,7 @@ def run_ffmpeg(
     poll_sec: float = 1.0,
     framerate: int | None = None,
     video_size: str | None = None,
+    dshow_rtbufsize: str | None = None,
     max_record_sec: int = 0,
     log_path: Path | None = None,
 ) -> tuple[Path, dt.datetime, dt.datetime, str]:
@@ -378,6 +384,7 @@ def run_ffmpeg(
         out_path,
         framerate=framerate,
         video_size=video_size,
+        dshow_rtbufsize=dshow_rtbufsize,
     )
 
     if verbose:
@@ -544,6 +551,7 @@ def main() -> int:
     ap.add_argument("--select-device", action="store_true", help="Interactively select a DirectShow camera (requires ffmpeg)")
     ap.add_argument("--framerate", type=int, default=None, help="Desired framerate for dshow webcams")
     ap.add_argument("--video-size", default="", help="Desired resolution WxH for dshow webcams")
+    ap.add_argument("--dshow-rtbufsize", default="", help="DirectShow real-time input buffer size such as 256M")
     ap.add_argument("--log-dir", default="", help="Hamilton trace directory used for post-run pairing")
     ap.add_argument("--log-glob", default="", help="Semicolon-separated glob(s) used to find Hamilton traces")
     ap.add_argument("--manifest-dir", default="", help="Optional directory for run manifests; defaults next to the video")
@@ -605,6 +613,7 @@ def main() -> int:
     max_record_sec = args.max_record_sec if args.max_record_sec is not None else int(recorder.get("max_record_sec", 0))
     framerate = args.framerate if args.framerate is not None else profile.get("framerate")
     video_size = args.video_size or profile.get("video_size") or None
+    dshow_rtbufsize = args.dshow_rtbufsize or recorder.get("dshow_rtbufsize") or None
     ffmpeg_override = args.ffmpeg or profile.get("ffmpeg_path") or recorder.get("ffmpeg_path") or ""
 
     if start_when_exe and not wait_for_process_start(
@@ -671,6 +680,7 @@ def main() -> int:
                 poll_sec=poll_sec,
                 framerate=framerate,
                 video_size=video_size,
+                dshow_rtbufsize=dshow_rtbufsize,
                 max_record_sec=max_record_sec,
                 log_path=recorder_log,
             )

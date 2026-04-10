@@ -37,6 +37,7 @@ DEFAULT_CONFIG = {
         "poll_sec": 1.0,
         "max_record_sec": 0,
         "startup_timeout_sec": 0,
+        "dshow_rtbufsize": "256M",
         "ffmpeg_path": "",
         "stop_file": str(REPO_ROOT / "cameras" / "cameras.recorder.stop"),
     },
@@ -107,12 +108,18 @@ def _legacy_to_nested(raw: dict) -> dict:
         if raw.get("hamilton_log_glob"):
             partial["hamilton"]["log_glob"] = raw["hamilton_log_glob"]
 
-    if raw.get("default_poll_sec") is not None or raw.get("default_max_record_sec") is not None:
+    if (
+        raw.get("default_poll_sec") is not None
+        or raw.get("default_max_record_sec") is not None
+        or raw.get("dshow_rtbufsize") is not None
+    ):
         partial.setdefault("recorder", {})
         if raw.get("default_poll_sec") is not None:
             partial["recorder"]["poll_sec"] = raw["default_poll_sec"]
         if raw.get("default_max_record_sec") is not None:
             partial["recorder"]["max_record_sec"] = raw["default_max_record_sec"]
+        if raw.get("dshow_rtbufsize") is not None:
+            partial["recorder"]["dshow_rtbufsize"] = raw["dshow_rtbufsize"]
 
     if raw.get("manifest_dir"):
         partial.setdefault("storage", {})
@@ -235,6 +242,10 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
 
     if int(recorder.get("startup_timeout_sec", 0)) < 0:
         errors.append("recorder.startup_timeout_sec cannot be negative.")
+
+    dshow_rtbufsize = str(recorder.get("dshow_rtbufsize") or "").strip()
+    if not dshow_rtbufsize:
+        errors.append("recorder.dshow_rtbufsize is required.")
 
     replay_port = int(replay.get("port", 0))
     if replay_port <= 0 or replay_port > 65535:

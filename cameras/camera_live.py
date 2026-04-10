@@ -44,6 +44,7 @@ def build_live_frame_command(
     *,
     framerate: int | None,
     video_size: str | None,
+    dshow_rtbufsize: str | None,
     jpeg_quality: int,
 ) -> list[str]:
     """Build a one-frame ffmpeg capture command for live preview/probing."""
@@ -57,6 +58,8 @@ def build_live_frame_command(
         input_args = ["-rtsp_transport", "tcp", "-i", normalized_source]
     elif source_kind == "dshow":
         input_args = ["-f", "dshow"]
+        if dshow_rtbufsize:
+            input_args += ["-rtbufsize", str(dshow_rtbufsize)]
         if framerate:
             input_args += ["-framerate", str(framerate)]
         if video_size:
@@ -111,6 +114,7 @@ def capture_live_frame(config: dict, profile_id: str | None = None) -> tuple[byt
         str(profile.get("source") or ""),
         framerate=profile.get("framerate"),
         video_size=profile.get("video_size"),
+        dshow_rtbufsize=config.get("recorder", {}).get("dshow_rtbufsize") or None,
         jpeg_quality=int(live_config.get("jpeg_quality") or 4),
     )
 

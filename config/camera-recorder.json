@@ -20,6 +20,7 @@
     "poll_sec": 1.0,
     "max_record_sec": 0,
     "startup_timeout_sec": 0,
+    "dshow_rtbufsize": "256M",
     "ffmpeg_path": "",
     "stop_file": "C:\\QC\\cameras\\cameras.recorder.stop"
   },
