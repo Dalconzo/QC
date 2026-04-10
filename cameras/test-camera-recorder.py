@@ -41,7 +41,7 @@ class CameraRecorderTests(unittest.TestCase):
         self.assertIn("dshow", command)
         self.assertIn("-rtbufsize", command)
         self.assertIn("256M", command)
-        self.assertIn('video="Arducam USB Camera"', command)
+        self.assertIn("video=Arducam USB Camera", command)
 
     def test_live_preview_uses_same_plain_camera_name_rule(self) -> None:
         command = LIVE.build_live_frame_command(
@@ -56,7 +56,7 @@ class CameraRecorderTests(unittest.TestCase):
         self.assertIn("dshow", command)
         self.assertIn("-rtbufsize", command)
         self.assertIn("256M", command)
-        self.assertIn('video="Arducam USB Camera"', command)
+        self.assertIn("video=Arducam USB Camera", command)
 
     def test_invalid_recording_rejects_missing_or_empty_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

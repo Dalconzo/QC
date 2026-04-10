@@ -93,6 +93,9 @@ def to_ffmpeg_input(source: str) -> tuple[str, str]:
         if value.lower().startswith("rtsp"):
             return "rtsp", value
         return "generic", value
+    # These helpers feed subprocess argv lists, not a shell command line.
+    # DirectShow therefore wants the friendly device name as one logical
+    # argument without extra shell-style inner quotes.
     if is_explicit_dshow_source(value):
-        return "dshow", f'video="{normalized_name}"'
-    return "dshow", f'video="{normalized_name}"'
+        return "dshow", f"video={normalized_name}"
+    return "dshow", f"video={normalized_name}"
