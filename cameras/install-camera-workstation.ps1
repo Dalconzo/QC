@@ -27,6 +27,10 @@ param(
     [Nullable[int]]$ReplayPort = $null,
     [switch]$InstallFfmpeg,
     [switch]$ListDevices,
+    [switch]$ProbeCamera,
+    [switch]$StartReplayCheck,
+    [switch]$RequireDaemonTask,
+    [switch]$AllowNumericCameraSource,
     [switch]$SkipShortcuts,
     [switch]$DesktopOnly,
     [switch]$SkipDaemonTask,
@@ -36,6 +40,7 @@ param(
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
+$installWarnings = New-Object System.Collections.Generic.List[string]
 
 function Resolve-DefaultPath {
     param(
@@ -102,6 +107,13 @@ function Normalize-CameraSource {
     }
     if ($trimmed.Length -ge 2 -and $trimmed.StartsWith("'") -and $trimmed.EndsWith("'")) {
         $trimmed = $trimmed.Substring(1, $trimmed.Length - 2)
+    }
+
+    while ($trimmed.Length -ge 2 -and (
+        ($trimmed.StartsWith('"') -and $trimmed.EndsWith('"')) -or
+        ($trimmed.StartsWith("'") -and $trimmed.EndsWith("'"))
+    )) {
+        $trimmed = $trimmed.Substring(1, $trimmed.Length - 2).Trim()
     }
 
     return $trimmed
@@ -263,11 +275,17 @@ $effectiveCameraSource = $CameraSource
 if (-not $effectiveCameraSource) {
     if ($selectedProfile -and $selectedProfile.source) {
         $effectiveCameraSource = [string]$selectedProfile.source
-    } else {
-        $effectiveCameraSource = "0"
     }
 }
 $effectiveCameraSource = Normalize-CameraSource -Source $effectiveCameraSource
+
+if (-not $effectiveCameraSource) {
+    throw "Camera source is required. Pass -CameraSource with the friendly device name reported by ffmpeg, for example 'Arducam USB Camera'."
+}
+
+if (-not $AllowNumericCameraSource -and $effectiveCameraSource -match '^\d+$') {
+    throw "Numeric camera sources like '$effectiveCameraSource' are no longer accepted by default. Use the real device name with -CameraSource, or rerun with -AllowNumericCameraSource if you intentionally want the default device index."
+}
 
 $effectiveCameraLabel = $CameraLabel
 if (-not $effectiveCameraLabel) {
@@ -386,9 +404,44 @@ if (-not $SkipDaemonTask) {
     if ($RunDaemonNow) {
         $taskArgs += "-RunNow"
     }
-    & powershell @taskArgs
+    try {
+        & powershell @taskArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Scheduled Task installer returned exit code $LASTEXITCODE."
+        }
+    } catch {
+        $message = $_.Exception.Message
+        if ($RequireDaemonTask) {
+            throw "Failed to install camera daemon Scheduled Task. $message"
+        }
+        $installWarnings.Add("Camera daemon Scheduled Task was not installed automatically. $message")
+        $installWarnings.Add("Rerun install-camera-daemon-task.ps1 from an elevated PowerShell window after verifying the lower layers.")
+    }
+}
+
+if ($ProbeCamera -or $StartReplayCheck) {
+    $preflightScript = Join-Path $scriptDir "test-camera-workstation.ps1"
+    Write-Host "Running workstation preflight ..." -ForegroundColor Cyan
+    $preflightArgs = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $preflightScript,
+        "-Config", $Config,
+        "-LocalConfig", $LocalConfig
+    )
+    if ($ProfileId) {
+        $preflightArgs += "-ProfileId"
+        $preflightArgs += $ProfileId
+    }
+    if ($ProbeCamera) {
+        $preflightArgs += "-ProbeCamera"
+    }
+    if ($StartReplayCheck) {
+        $preflightArgs += "-StartReplay"
+    }
+    & powershell @preflightArgs
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to install camera daemon Scheduled Task."
+        throw "Workstation preflight failed. Fix the reported lower-layer problem before relying on daemon auto-start."
     }
 }
 
@@ -401,4 +454,10 @@ if ($ffmpegResolved) {
     Write-Host "ffmpeg: $ffmpegResolved"
 } else {
     Write-Host "ffmpeg: not found. Install with -InstallFfmpeg, provide -FfmpegPath, or let the recorder fall back to OpenCV."
+}
+if ($installWarnings.Count -gt 0) {
+    Write-Host "Warnings:" -ForegroundColor Yellow
+    foreach ($warning in $installWarnings) {
+        Write-Host "  - $warning" -ForegroundColor Yellow
+    }
 }

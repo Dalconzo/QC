@@ -21,18 +21,19 @@ winget install --id Python.Python.3.12 -e --source winget
 python -m pip install psutil
 ```
 
-3. Bootstrap the workstation with the desired camera source.
+3. Bootstrap the workstation with the desired camera source and run the
+   lower-layer camera probe immediately.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\install-camera-workstation.ps1 `
   -InstallFfmpeg `
   -CameraSource 'Arducam USB Camera' `
   -CameraLabel 'Top Camera' `
-  -RunDaemonNow
+  -ProbeCamera
 ```
 
-4. If Task Scheduler install requires elevation, rerun that step from an
-   elevated shell.
+4. After the camera probe passes, install the daemon task. If Task Scheduler
+   install requires elevation, run this step from an elevated shell.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\install-camera-daemon-task.ps1 -RunNow
@@ -40,7 +41,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\inst
 
 ## Validate
 
-Run the preflight after install or after changing the local override.
+Run the full workstation preflight after install or after changing the local override.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\test-camera-workstation.ps1 `
@@ -133,13 +134,16 @@ Remove-Item C:\camera-tools\logs -Recurse -Force
   The `.run.json` manifest points at an `.mp4` path that no longer exists.
   Run `show-run-health.ps1` and quarantine or delete the stale manifest.
 - Scheduled Task install says `Access is denied`:
-  Run the install from an elevated PowerShell window.
+  The bootstrap keeps the workstation config even if task registration fails
+  unless `-RequireDaemonTask` is supplied. Rerun the daemon-task install from
+  an elevated PowerShell window.
 - Camera source `0` records the wrong device:
-  Replace it with a named DirectShow source in the local override by rerunning
+  Numeric fallback sources are now blocked by default. Rerun
   `install-camera-workstation.ps1 -CameraSource 'Arducam USB Camera'`.
 - Replay site does not start:
   Check `C:\camera-tools\logs\camera-replay.log` and rerun
   `test-camera-workstation.ps1 -StartReplay`.
 - Camera probe fails but config validates:
-  The device may be busy, unavailable, or not shareable by the driver. Run
-  `test-camera-source.py` directly and inspect the ffmpeg error output.
+  The device may be busy, unavailable, or not shareable by the driver. Validate
+  bottom-up: raw ffmpeg capture, then `test-camera-source.py`, then the
+  foreground recorder, then the daemon.

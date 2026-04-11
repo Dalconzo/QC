@@ -101,3 +101,32 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "camera workstation bootstrap smoke test passed" -ForegroundColor Green
+
+$numericConfigPath = Join-Path $tmpRoot "numeric-camera-recorder.json"
+$numericLocalPath = Join-Path $tmpRoot "numeric-camera-recorder.local.json"
+$numericBaseConfig = @{
+    hamilton = @{
+        log_dir = $hamiltonDir
+        process_name = "HxRun.exe"
+    }
+    profiles = @(
+        @{
+            id = "default"
+            label = "Numeric Camera"
+            source = "0"
+        }
+    )
+} | ConvertTo-Json -Depth 6
+Set-Content -LiteralPath $numericConfigPath -Value $numericBaseConfig -Encoding UTF8
+
+& powershell -NoProfile -ExecutionPolicy Bypass -File $bootstrap `
+    -Config $numericConfigPath `
+    -LocalConfig $numericLocalPath `
+    -SkipShortcuts `
+    -SkipDaemonTask
+
+if ($LASTEXITCODE -eq 0) {
+    throw "Bootstrap should reject numeric fallback sources unless explicitly allowed."
+}
+
+Write-Host "camera workstation bootstrap numeric-source guard passed" -ForegroundColor Green
