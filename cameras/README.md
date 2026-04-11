@@ -18,8 +18,22 @@ Use an optional workstation-local override at
 `C:\QC\config\camera-recorder.local.json` when one Hamilton PC needs different
 settings from the repo default.
 
+Completed local runs can also be staged for the planned LAN replay service.
+The staging lane copies replayable runs into a batch folder under
+`central_ingest.staging_root`, hashes every artifact, and records the staged
+state in a small SQLite ledger so duplicate bundles can be skipped cleanly.
+The uploader lane then ingests those staged runs into a central filesystem
+root under `central_ingest.upload_root`, assigns server-side `central_run_id`
+values, and writes acknowledgements back into the local staging ledger.
+
 For a full remote-install checklist and rollback procedure, see
 [`WORKSTATION-ROLLOUT.md`](/C:/QC/cameras/WORKSTATION-ROLLOUT.md).
+
+For the planned LAN-accessible replay server and shared SQL catalog, see
+[`CENTRAL-REPLAY-ARCHITECTURE.md`](/C:/QC/cameras/CENTRAL-REPLAY-ARCHITECTURE.md),
+[`CENTRAL-REPLAY-API.md`](/C:/QC/cameras/CENTRAL-REPLAY-API.md),
+and the bootstrap schema in
+[`sql/central-replay-schema.sql`](/C:/QC/cameras/sql/central-replay-schema.sql).
 
 ## Current Recorder Flow
 
@@ -63,6 +77,17 @@ For a full remote-install checklist and rollback procedure, see
 - `camera-daemon.py`
   - Always-on workstation supervisor that waits for `HxRun.exe`, launches one
     recorder child per run, and returns to idle for the next run.
+- `stage-central-replay.py`
+  - Prepares completed `.run.json` + MP4 + `.trc` bundles for future central
+    upload by copying them into a deterministic staging batch and writing a
+    `run-upload.json` payload for each run.
+- `stage-central-replay.ps1`
+  - Operator-friendly wrapper around the Python staging tool.
+- `upload-central-replay.py`
+  - Uploads staged replay bundles into the shared central replay root, updates
+    the central SQL catalog, and writes local acknowledgement files.
+- `upload-central-replay.ps1`
+  - Operator-friendly wrapper around the central uploader.
 - `start-camera-daemon.ps1`
   - Starts the camera daemon in the background for normal workstation use or in
     the foreground for debugging.
@@ -123,7 +148,7 @@ powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 `
   -InstallFfmpeg `
   -CameraSource 'YOUR CAMERA NAME' `
   -CameraLabel 'Top Camera' `
-  -RunDaemonNow
+  -ProbeCamera
 ```
 
 That command:
@@ -132,7 +157,8 @@ That command:
 - creates the local video/log folders
 - validates the merged workstation config
 - installs the desktop/start-menu replay shortcuts
-- installs the daemon Scheduled Task
+- can run the lower-layer camera probe immediately with `-ProbeCamera`
+- can install the daemon Scheduled Task after the lower layers are proven
 - starts the daemon immediately when `-RunDaemonNow` is supplied
 - installs `ffmpeg` with `winget` first when `-InstallFfmpeg` is supplied and
   no repo-local or PATH copy is already available
@@ -151,15 +177,11 @@ powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 `
   -RunDaemonNow
 ```
 
-If camera discovery is flaky on a workstation, skip `-ListDevices` and install
-against the default camera source first:
+If camera discovery is flaky on a workstation, ask ffmpeg what it actually sees
+and copy the exact device name into `-CameraSource`:
 
 ```powershell
-powershell -NoProfile -File C:\QC\cameras\install-camera-workstation.ps1 `
-  -InstallFfmpeg `
-  -CameraSource '0' `
-  -CameraLabel 'Default Camera' `
-  -RunDaemonNow
+ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 ```
 
 ## Gate Smoke Test
@@ -185,6 +207,18 @@ powershell -NoProfile -File C:\QC\cameras\test-camera-workstation.ps1 `
   -StartReplay
 ```
 
+The rollout that actually worked on the remote workstation validated the stack
+in this order:
+
+1. Raw ffmpeg capture against the named device
+2. `test-camera-source.py`
+3. Foreground `camera-recorder.py`
+4. Foreground `camera-daemon.py`
+5. Scheduled-task daemon
+
+Do not jump straight to the Scheduled Task when a new workstation has not yet
+proven the lower layers.
+
 To diagnose manifests that show up as missing in the local camera site:
 
 ```powershell
@@ -197,6 +231,70 @@ To quarantine stale manifests instead of deleting them:
 powershell -NoProfile -File C:\QC\cameras\show-run-health.ps1 `
   -Cleanup all-stale `
   -QuarantineDir C:\QC\cameras\video_clips\_quarantine
+```
+
+## Stage Runs For Central Ingest
+
+Before the LAN replay server exists, workstations can already package completed
+local runs into a durable staging folder that mirrors the future upload
+contract.
+
+Run the staging pass with:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\stage-central-replay.ps1 -AsJson
+```
+
+That will:
+
+- scan the configured `storage.runs_root` for replayable `.run.json` files
+- skip manifests whose video or trace is missing
+- copy the manifest, video, and trace into one batch folder under
+  `central_ingest.staging_root`
+- write one `run-upload.json` payload per staged run
+- track staged batches and duplicate signatures in
+  `.central_ingest_staging.sqlite3`
+
+Useful overrides:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\stage-central-replay.ps1 `
+  -RunsRoot C:\camera-tools\cameras\video_clips `
+  -StagingRoot C:\camera-tools\cameras\central_staging `
+  -Limit 10 `
+  -AsJson
+```
+
+Re-run the command without `-Restage` to verify duplicate skipping. Add
+`-Restage` only when you intentionally want another staged copy of the same
+artifact set.
+
+## Upload Staged Runs To The Central Replay Root
+
+After a workstation has staged one or more replayable runs, it can ingest them
+into the shared central replay root with:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\upload-central-replay.ps1 -AsJson
+```
+
+That will:
+
+- read pending staged runs from `.central_ingest_staging.sqlite3`
+- initialize the shared central replay catalog under `central_ingest.upload_root`
+- copy staged artifacts into the managed `storage/` tree
+- assign a server-side `central_run_id`
+- mark the local staged run as `acknowledged`
+- write one `run-ack.json` beside the staged run bundle
+
+Useful overrides:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\upload-central-replay.ps1 `
+  -StagingRoot C:\camera-tools\cameras\central_staging `
+  -UploadRoot \\server\camera-replay `
+  -Limit 10 `
+  -AsJson
 ```
 
 ## Bench Test With The Real Camera

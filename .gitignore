@@ -14,6 +14,8 @@ agents.md
 /archive/
 /video_clips/
 /cameras/video_clips/
+/cameras/central_staging/
+/cameras/central_replay_root/
 /error_clips/
  /cameras/marks/
 /*.stop

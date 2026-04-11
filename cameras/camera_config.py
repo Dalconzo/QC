@@ -52,6 +52,11 @@ DEFAULT_CONFIG = {
         "refresh_ms": 1000,
         "jpeg_quality": 4,
     },
+    "central_ingest": {
+        "staging_root": str(REPO_ROOT / "cameras" / "central_staging"),
+        "upload_root": str(REPO_ROOT / "cameras" / "central_replay_root"),
+        "transport": "filesystem",
+    },
     "daemon": {
         "task_name": "HamiltonCameraRecorderDaemon",
         "stop_file": str(REPO_ROOT / "cameras" / "camera-daemon.stop"),
@@ -140,7 +145,7 @@ def _legacy_to_nested(raw: dict) -> dict:
 def _extract_nested(raw: dict) -> dict:
     """Keep only the top-level keys used by the modern camera config schema."""
     partial: dict = {}
-    for key in ("hamilton", "storage", "recorder", "replay", "live", "daemon", "profiles"):
+    for key in ("hamilton", "storage", "recorder", "replay", "live", "central_ingest", "daemon", "profiles"):
         value = raw.get(key)
         if value is not None:
             partial[key] = copy.deepcopy(value)
@@ -220,6 +225,7 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     recorder = config.get("recorder", {})
     replay = config.get("replay", {})
     live = config.get("live", {})
+    central_ingest = config.get("central_ingest", {})
     daemon = config.get("daemon", {})
     profiles = config.get("profiles", [])
 
@@ -264,6 +270,22 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     jpeg_quality = int(live.get("jpeg_quality", -1))
     if jpeg_quality < 2 or jpeg_quality > 31:
         errors.append("live.jpeg_quality must be between 2 and 31.")
+
+    staging_root = str(central_ingest.get("staging_root") or "").strip()
+    if not staging_root:
+        errors.append("central_ingest.staging_root is required.")
+    elif not Path(staging_root).exists():
+        warnings.append(f"Central ingest staging root does not exist yet and will be created on first use: {staging_root}")
+
+    upload_root = str(central_ingest.get("upload_root") or "").strip()
+    if not upload_root:
+        errors.append("central_ingest.upload_root is required.")
+    elif not Path(upload_root).exists():
+        warnings.append(f"Central ingest upload root does not exist yet and will be created on first use: {upload_root}")
+
+    transport = str(central_ingest.get("transport") or "").strip().lower()
+    if transport not in {"filesystem"}:
+        errors.append("central_ingest.transport must currently be 'filesystem'.")
 
     default_live_profile = str(live.get("default_profile") or "").strip()
     if default_live_profile and default_live_profile not in {str(profile.get("id")) for profile in profiles}:

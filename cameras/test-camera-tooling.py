@@ -106,9 +106,14 @@ class CameraToolingTests(unittest.TestCase):
             return {
                 "hamilton": {"log_dir": str(config_path.parent), "log_glob": "*.trc", "process_name": "HxRun.exe"},
                 "storage": {"runs_root": str(config_path.parent), "manifest_dir": "", "recorder_log_dir": str(config_path.parent)},
-                "recorder": {"default_profile": "default", "poll_sec": 1.0, "max_record_sec": 0, "startup_timeout_sec": 0, "ffmpeg_path": "", "stop_file": str(config_path.parent / "stop")},
+                "recorder": {"default_profile": "default", "poll_sec": 1.0, "max_record_sec": 0, "startup_timeout_sec": 0, "dshow_rtbufsize": "256M", "ffmpeg_path": "", "stop_file": str(config_path.parent / "stop")},
                 "replay": {"host": "127.0.0.1", "port": 5050, "log_path": str(config_path.parent / "replay.log")},
                 "live": {"default_profile": "default", "frame_timeout_sec": 8, "refresh_ms": 1000, "jpeg_quality": 4},
+                "central_ingest": {
+                    "staging_root": str(config_path.parent / "staging"),
+                    "upload_root": str(config_path.parent / "central"),
+                    "transport": "filesystem",
+                },
                 "daemon": {"task_name": "HamiltonCameraRecorderDaemon", "stop_file": "x", "pid_file": "x", "status_path": "x", "log_path": "x", "idle_poll_sec": 1.0, "heartbeat_sec": 5.0, "relaunch_delay_sec": 2.0},
                 "profiles": [{"id": "default", "label": "Top Cam", "source": "0", "framerate": None, "video_size": None, "ffmpeg_path": ""}],
             }

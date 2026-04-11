@@ -35,6 +35,11 @@
     "refresh_ms": 1000,
     "jpeg_quality": 4
   },
+  "central_ingest": {
+    "staging_root": "C:\\QC\\cameras\\central_staging",
+    "upload_root": "C:\\QC\\cameras\\central_replay_root",
+    "transport": "filesystem"
+  },
   "daemon": {
     "task_name": "HamiltonCameraRecorderDaemon",
     "stop_file": "C:\\QC\\cameras\\camera-daemon.stop",
