@@ -42,6 +42,7 @@ class CameraRecorderTests(unittest.TestCase):
         self.assertIn("-rtbufsize", command)
         self.assertIn("256M", command)
         self.assertIn("video=Arducam USB Camera", command)
+        self.assertIn("-an", command)
 
     def test_live_preview_uses_same_plain_camera_name_rule(self) -> None:
         command = LIVE.build_live_frame_command(

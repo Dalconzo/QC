@@ -11,12 +11,31 @@ const statusFilterEl = document.getElementById("status-filter");
 const refreshRunsEl = document.getElementById("refresh-runs");
 const runDetailsEl = document.getElementById("run-details");
 const artifactListEl = document.getElementById("artifact-list");
+const videoHeightScaleEl = document.getElementById("video-height-scale");
+const videoHeightScaleValueEl = document.getElementById("video-height-scale-value");
 
 let workstations = [];
 let runIndex = [];
 let activeRunId = "";
 let activeEvents = [];
 let terminalAutoFollow = true;
+
+function forceMutedPlayback() {
+  runVideoEl.muted = true;
+  runVideoEl.defaultMuted = true;
+  runVideoEl.volume = 0;
+}
+
+function applyVideoHeightScale(value) {
+  const scale = Math.max(1, Number(value || 150) / 100);
+  document.documentElement.style.setProperty("--video-pane-scale", String(scale));
+  if (videoHeightScaleValueEl) {
+    videoHeightScaleValueEl.textContent = `${scale.toFixed(1)}x`;
+  }
+  if (videoHeightScaleEl) {
+    videoHeightScaleEl.value = String(Math.round(scale * 100));
+  }
+}
 
 function getRequestedRunId() {
   const params = new URLSearchParams(window.location.search);
@@ -223,9 +242,11 @@ async function loadRun(centralRunId) {
     `${detailPayload.run.started_at_local || "Unknown start"} | ${formatStatus(detailPayload.run.replay_status)}`;
   if (detailPayload.run.video_url) {
     runVideoEl.src = detailPayload.run.video_url;
+    forceMutedPlayback();
     runVideoEl.load();
   } else {
     runVideoEl.removeAttribute("src");
+    forceMutedPlayback();
     runVideoEl.load();
   }
   terminalAutoFollow = true;
@@ -243,7 +264,12 @@ runVideoEl.addEventListener("seeked", () => {
 });
 
 runVideoEl.addEventListener("loadedmetadata", () => {
+  forceMutedPlayback();
   renderTerminalAt(runVideoEl.currentTime || 0);
+});
+
+runVideoEl.addEventListener("volumechange", () => {
+  forceMutedPlayback();
 });
 
 terminalOutputEl.addEventListener("scroll", () => {
@@ -270,7 +296,16 @@ refreshRunsEl.addEventListener("click", () => {
   });
 });
 
+if (videoHeightScaleEl) {
+  videoHeightScaleEl.addEventListener("input", () => {
+    applyVideoHeightScale(videoHeightScaleEl.value);
+  });
+}
+
 Promise.all([loadWorkstations(), loadRuns()]).catch((error) => {
   runListEl.innerHTML = `<div class="empty-state">${error.message}</div>`;
   catalogStateEl.textContent = error.message;
 });
+
+forceMutedPlayback();
+applyVideoHeightScale(videoHeightScaleEl ? videoHeightScaleEl.value : 150);

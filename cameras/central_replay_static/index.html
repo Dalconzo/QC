@@ -42,8 +42,15 @@
       </div>
 
       <section class="playback-stack">
+        <div class="video-size-toolbar">
+          <label class="video-size-control" for="video-height-scale">
+            <span>Video height</span>
+            <input id="video-height-scale" type="range" min="100" max="220" step="10" value="150">
+            <output id="video-height-scale-value" for="video-height-scale">1.5x</output>
+          </label>
+        </div>
         <div class="video-pane">
-          <video id="run-video" controls preload="metadata"></video>
+          <video id="run-video" controls muted playsinline preload="metadata"></video>
         </div>
         <div class="terminal-pane">
           <div class="terminal-toolbar">

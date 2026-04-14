@@ -17,6 +17,8 @@ const liveImageEl = document.getElementById("live-image");
 const liveStateEl = document.getElementById("live-state");
 const liveCountEl = document.getElementById("live-count");
 const liveMetaEl = document.getElementById("live-meta");
+const videoHeightScaleEl = document.getElementById("video-height-scale");
+const videoHeightScaleValueEl = document.getElementById("video-height-scale-value");
 
 let runIndex = [];
 let liveProfiles = [];
@@ -27,6 +29,23 @@ let terminalAutoFollow = true;
 let activeMode = "replay";
 let liveRefreshMs = 1000;
 let liveRefreshTimer = null;
+
+function forceMutedPlayback() {
+  runVideoEl.muted = true;
+  runVideoEl.defaultMuted = true;
+  runVideoEl.volume = 0;
+}
+
+function applyVideoHeightScale(value) {
+  const scale = Math.max(1, Number(value || 150) / 100);
+  document.documentElement.style.setProperty("--video-pane-scale", String(scale));
+  if (videoHeightScaleValueEl) {
+    videoHeightScaleValueEl.textContent = `${scale.toFixed(1)}x`;
+  }
+  if (videoHeightScaleEl) {
+    videoHeightScaleEl.value = String(Math.round(scale * 100));
+  }
+}
 
 function getQueryParam(name) {
   const params = new URLSearchParams(window.location.search);
@@ -212,9 +231,11 @@ async function loadRun(runId) {
   runMetaEl.textContent = `${run.started_at_local || "Unknown start"} | ${run.trace_filename || "No trace"} | ${formatStatus(run.replay_status)} | ${run.stop_reason || "unknown stop reason"}`;
   if (run.has_video) {
     runVideoEl.src = `/api/runs/${runId}/video`;
+    forceMutedPlayback();
     runVideoEl.load();
   } else {
     runVideoEl.removeAttribute("src");
+    forceMutedPlayback();
     runVideoEl.load();
   }
   terminalAutoFollow = true;
@@ -388,7 +409,12 @@ runVideoEl.addEventListener("seeked", () => {
 });
 
 runVideoEl.addEventListener("loadedmetadata", () => {
+  forceMutedPlayback();
   renderTerminalAt(runVideoEl.currentTime || 0);
+});
+
+runVideoEl.addEventListener("volumechange", () => {
+  forceMutedPlayback();
 });
 
 terminalOutputEl.addEventListener("scroll", () => {
@@ -404,6 +430,12 @@ refreshCatalogButtonEl.addEventListener("click", () => {
 refreshLiveButtonEl.addEventListener("click", () => {
   scheduleLiveRefresh(true);
 });
+
+if (videoHeightScaleEl) {
+  videoHeightScaleEl.addEventListener("input", () => {
+    applyVideoHeightScale(videoHeightScaleEl.value);
+  });
+}
 
 modeReplayEl.addEventListener("click", () => {
   setActiveMode("replay");
@@ -423,6 +455,8 @@ window.addEventListener("beforeunload", () => {
 
 Promise.all([loadRunIndex(), loadLiveProfiles()])
   .then(() => {
+    forceMutedPlayback();
+    applyVideoHeightScale(videoHeightScaleEl ? videoHeightScaleEl.value : 150);
     setActiveMode(getRequestedMode());
     return null;
   })
