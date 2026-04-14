@@ -32,6 +32,7 @@ For a full remote-install checklist and rollback procedure, see
 For the planned LAN-accessible replay server and shared SQL catalog, see
 [`CENTRAL-REPLAY-ARCHITECTURE.md`](/C:/QC/cameras/CENTRAL-REPLAY-ARCHITECTURE.md),
 [`CENTRAL-REPLAY-API.md`](/C:/QC/cameras/CENTRAL-REPLAY-API.md),
+[`CENTRAL-REPLAY-LAN-DEPLOYMENT.md`](/C:/QC/cameras/CENTRAL-REPLAY-LAN-DEPLOYMENT.md),
 and the bootstrap schema in
 [`sql/central-replay-schema.sql`](/C:/QC/cameras/sql/central-replay-schema.sql).
 
@@ -88,6 +89,14 @@ and the bootstrap schema in
     the central SQL catalog, and writes local acknowledgement files.
 - `upload-central-replay.ps1`
   - Operator-friendly wrapper around the central uploader.
+- `central-replay-server.py`
+  - Serves the first LAN browse/API layer on top of the committed central
+    replay catalog so other machines can list runs, fetch trace events, and
+    stream stored MP4 artifacts by `central_run_id`.
+- `start-central-replay-server.ps1`
+  - Central-host launcher that resolves the dedicated LAN server config,
+    starts the server in the foreground or background, waits for the health
+    endpoint, and can open the browser on the host machine.
 - `start-camera-daemon.ps1`
   - Starts the camera daemon in the background for normal workstation use or in
     the foreground for debugging.
@@ -296,6 +305,66 @@ powershell -NoProfile -File C:\QC\cameras\upload-central-replay.ps1 `
   -Limit 10 `
   -AsJson
 ```
+
+## Serve The Central Replay Catalog
+
+After the shared upload root contains a `.central_replay_catalog.sqlite3` and
+managed `storage/` tree, configure the host at
+[`config/central-replay-server.json`](/C:/QC/config/central-replay-server.json)
+or the optional local override `C:\QC\config\central-replay-server.local.json`.
+
+That host config controls:
+
+- bind host and port
+- central upload root and optional explicit catalog path
+- persistent log path
+- health-check route
+
+Then bring up the first LAN browse layer with:
+
+```powershell
+powershell -NoProfile -File C:\QC\cameras\start-central-replay-server.ps1 `
+  -UploadRoot \\server\camera-replay `
+  -Background `
+  -OpenBrowser
+```
+
+That server provides:
+
+- `GET /api/runs`
+  - list centrally ingested runs with optional workstation/status filters
+- `GET /api/runs/{central_run_id}`
+  - run metadata, artifact list, and ingest summary
+- `GET /api/runs/{central_run_id}/trace-events`
+  - replay-ready timed trace lines generated from the stored `.trc`
+- `GET /media/<storage_relpath>`
+  - byte-range-capable media endpoint for the stored MP4
+- `GET /api/healthz`
+  - host health, startup metadata, and catalog row counts for deployment smoke
+    checks
+- `GET /`
+  - a lightweight browser UI for browsing and replaying central runs
+
+The central server is intentionally read-only in this slice. Workstations still
+stage and upload through the existing local tools, and the LAN layer only
+browses the committed catalog plus stored artifacts.
+
+To inspect the resolved host settings without starting the server:
+
+```powershell
+python C:\QC\cameras\central-replay-server.py --print-config --json
+```
+
+To prove the non-hardware pipeline end to end on a development machine, run:
+
+```powershell
+python C:\QC\cameras\test-central-pipeline-e2e.py
+```
+
+That synthetic test stages a sample `.run.json` + MP4 + `.trc`, uploads it
+into a temporary central root, verifies the local acknowledgement and SQL
+catalog rows, then starts the browse server and checks the HTTP catalog, trace,
+static-asset, and byte-range media paths.
 
 ## Bench Test With The Real Camera
 

@@ -1,0 +1,13 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 5080,
+    "site_name": "Central Replay",
+    "log_path": "C:\\QC\\logs\\central-replay-server.log",
+    "healthcheck_path": "/api/healthz"
+  },
+  "storage": {
+    "upload_root": "C:\\QC\\cameras\\central_replay_root",
+    "catalog_path": ""
+  }
+}

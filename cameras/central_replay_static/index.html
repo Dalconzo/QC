@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hamilton Central Replay</title>
+  <link rel="stylesheet" href="/static/central.css">
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="catalog-panel">
+      <div class="panel-head">
+        <h1>Central Replay</h1>
+        <p>Browse centrally ingested Hamilton runs by workstation and replay status.</p>
+        <div class="toolbar">
+          <label class="field">
+            <span>Workstation</span>
+            <select id="workstation-filter"></select>
+          </label>
+          <label class="field">
+            <span>Status</span>
+            <select id="status-filter">
+              <option value="">All statuses</option>
+              <option value="ready">Ready</option>
+              <option value="uploaded">Uploaded</option>
+              <option value="artifacts_missing">Artifacts missing</option>
+              <option value="quarantined">Quarantined</option>
+              <option value="archived">Archived</option>
+            </select>
+          </label>
+          <button id="refresh-runs" type="button">Reload</button>
+        </div>
+        <p id="catalog-state" class="catalog-state">Loading catalog...</p>
+      </div>
+      <div id="run-list" class="run-list"></div>
+    </aside>
+
+    <section class="viewer-panel">
+      <div class="panel-head">
+        <h2 id="run-title">No run selected</h2>
+        <p id="run-meta">Pick a centrally ingested run to open replay.</p>
+      </div>
+
+      <section class="playback-stack">
+        <div class="video-pane">
+          <video id="run-video" controls preload="metadata"></video>
+        </div>
+        <div class="terminal-pane">
+          <div class="terminal-toolbar">
+            <span id="terminal-state">Trace lines at playback time 0.0s</span>
+            <span id="terminal-count">0 lines</span>
+          </div>
+          <pre id="terminal-output" class="terminal-output"></pre>
+        </div>
+      </section>
+
+      <section class="detail-grid">
+        <div class="detail-card">
+          <h3>Run</h3>
+          <dl id="run-details" class="detail-list"></dl>
+        </div>
+        <div class="detail-card">
+          <h3>Artifacts</h3>
+          <ul id="artifact-list" class="artifact-list"></ul>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/static/central.js"></script>
+</body>
+</html>
