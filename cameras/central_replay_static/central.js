@@ -28,7 +28,7 @@ function forceMutedPlayback() {
 
 function applyVideoHeightScale(value) {
   const scale = Math.max(1, Number(value || 150) / 100);
-  document.documentElement.style.setProperty("--video-pane-scale", String(scale));
+  document.documentElement.style.setProperty("--video-pane-row", `${scale}fr`);
   if (videoHeightScaleValueEl) {
     videoHeightScaleValueEl.textContent = `${scale.toFixed(1)}x`;
   }

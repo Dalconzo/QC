@@ -11,7 +11,7 @@
   --terminal-ink: #daf7f0;
   --terminal-muted: #8bb4a9;
   --shadow: 0 14px 40px rgba(28, 48, 41, 0.08);
-  --video-pane-scale: 1.5;
+  --video-pane-row: 1.5fr;
 }
 
 * {
@@ -177,7 +177,7 @@ body {
 
 .playback-stack {
   display: grid;
-  grid-template-rows: auto minmax(0, calc(var(--video-pane-scale) * 1fr)) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, var(--video-pane-row)) minmax(0, 1fr);
   gap: 1rem;
   height: min(76vh, 60rem);
   padding: 0 1.25rem 1rem;
@@ -329,7 +329,7 @@ body {
 
   .playback-stack {
     height: auto;
-    grid-template-rows: 18rem 18rem;
+    grid-template-rows: auto 18rem 18rem;
   }
 
   .detail-grid {
