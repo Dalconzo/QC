@@ -56,6 +56,7 @@ DEFAULT_CONFIG = {
         "staging_root": str(REPO_ROOT / "cameras" / "central_staging"),
         "upload_root": str(REPO_ROOT / "cameras" / "central_replay_root"),
         "transport": "filesystem",
+        "auto_upload_on_run_complete": False,
     },
     "daemon": {
         "task_name": "HamiltonCameraRecorderDaemon",

@@ -27,6 +27,8 @@ import time
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
+from stage_central_replay import stage_runs
+from upload_central_replay import upload_staged_runs
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -176,6 +178,64 @@ def build_recorder_command(
     return command
 
 
+def run_post_run_central_ingest(
+    *,
+    config_path: Path,
+    local_config_path: Path,
+    daemon_log_path: Path | None,
+    update_status_fn=None,
+) -> dict | None:
+    """Stage and upload newly completed runs when auto-upload is enabled."""
+    config = load_effective_config(config_path=config_path, local_override_path=local_config_path)
+    central_ingest = config.get("central_ingest", {})
+    if not bool(central_ingest.get("auto_upload_on_run_complete", False)):
+        return None
+
+    if update_status_fn is not None:
+        update_status_fn("uploading", upload_phase="staging")
+
+    emit_log("[daemon] Auto-staging completed runs for central replay ingest", log_path=daemon_log_path)
+    stage_payload = stage_runs(
+        config_path=config_path,
+        local_config_path=local_config_path,
+        runs_root=None,
+        staging_root=None,
+        limit=0,
+        restage=False,
+    )
+    emit_log(
+        f"[daemon] Auto-stage complete: staged={stage_payload['staged_run_count']} skipped={stage_payload['skipped_run_count']}",
+        log_path=daemon_log_path,
+    )
+
+    if update_status_fn is not None:
+        update_status_fn(
+            "uploading",
+            upload_phase="uploading",
+            last_stage_batch_id=stage_payload["batch_id"],
+            last_stage_staged_run_count=stage_payload["staged_run_count"],
+            last_stage_skipped_run_count=stage_payload["skipped_run_count"],
+        )
+
+    upload_payload = upload_staged_runs(
+        config_path=config_path,
+        local_config_path=local_config_path,
+        staging_root=None,
+        upload_root=None,
+        limit=0,
+        batch_id="",
+    )
+    emit_log(
+        f"[daemon] Auto-upload complete: uploaded={upload_payload['uploaded_run_count']} failed={upload_payload['failed_run_count']}",
+        log_path=daemon_log_path,
+        is_error=(upload_payload["failed_run_count"] > 0),
+    )
+    return {
+        "stage": stage_payload,
+        "upload": upload_payload,
+    }
+
+
 def run_supervisor(
     *,
     config_path: Path,
@@ -197,6 +257,7 @@ def run_supervisor(
     max_cycles: int,
     recorder_script: Path,
     is_process_running_fn=is_any_proc_running,
+    post_run_ingest_fn=run_post_run_central_ingest,
 ) -> int:
     """Run the idle->record->idle loop until explicitly stopped."""
     config = load_effective_config(config_path=config_path, local_override_path=local_config_path)
@@ -231,6 +292,7 @@ def run_supervisor(
     loop_started_at = time.monotonic()
     last_heartbeat = 0.0
     run_session_active = False
+    sticky_status_fields: dict[str, object] = {}
 
     def update_status(state: str, **extra: object) -> None:
         payload = {
@@ -250,6 +312,8 @@ def run_supervisor(
             "daemon_log_path": str(daemon_log_path) if daemon_log_path else "",
             "recorder_log_path": str(recorder_log_path) if recorder_log_path else "",
         }
+        sticky_status_fields.update(extra)
+        payload.update(sticky_status_fields)
         payload.update(extra)
         write_status(status_path, payload)
 
@@ -293,7 +357,44 @@ def run_supervisor(
                     log_path=daemon_log_path,
                     is_error=(return_code != 0),
                 )
-                update_status("idle", last_exit_code=return_code, last_cycle_completed_at=dt.datetime.now().isoformat())
+                ingest_payload = None
+                if return_code == 0 and post_run_ingest_fn is not None:
+                    try:
+                        ingest_payload = post_run_ingest_fn(
+                            config_path=config_path,
+                            local_config_path=local_config_path,
+                            daemon_log_path=daemon_log_path,
+                            update_status_fn=update_status,
+                        )
+                    except Exception as exc:
+                        emit_log(
+                            f"[daemon] Auto-upload failed: {exc}",
+                            log_path=daemon_log_path,
+                            is_error=True,
+                        )
+                        update_status(
+                            "idle",
+                            last_exit_code=return_code,
+                            last_cycle_completed_at=dt.datetime.now().isoformat(),
+                            last_upload_error=str(exc),
+                        )
+                    else:
+                        if ingest_payload:
+                            update_status(
+                                "idle",
+                                last_exit_code=return_code,
+                                last_cycle_completed_at=dt.datetime.now().isoformat(),
+                                last_stage_batch_id=ingest_payload["stage"]["batch_id"],
+                                last_stage_staged_run_count=ingest_payload["stage"]["staged_run_count"],
+                                last_stage_skipped_run_count=ingest_payload["stage"]["skipped_run_count"],
+                                last_upload_batch_id=ingest_payload["upload"]["ingest_batch_id"],
+                                last_uploaded_run_count=ingest_payload["upload"]["uploaded_run_count"],
+                                last_failed_upload_run_count=ingest_payload["upload"]["failed_run_count"],
+                            )
+                        else:
+                            update_status("idle", last_exit_code=return_code, last_cycle_completed_at=dt.datetime.now().isoformat())
+                else:
+                    update_status("idle", last_exit_code=return_code, last_cycle_completed_at=dt.datetime.now().isoformat())
                 child_proc = None
                 child_started_at = 0.0
                 last_heartbeat = 0.0
