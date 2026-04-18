@@ -15,33 +15,14 @@ import shutil
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config
-
-
-def compute_run_id(manifest_path: Path, payload: dict) -> str:
-    """Mirror the replay app's stable run id derivation."""
-    import hashlib
-
-    identity = {
-        "manifest_path": str(manifest_path.resolve()),
-        "video_path": str(Path(payload.get("video_path", "")).resolve()) if payload.get("video_path") else "",
-        "trace_path": str(Path(payload.get("trace_path", "")).resolve()) if payload.get("trace_path") else "",
-        "started_at_local": payload.get("started_at_local") or "",
-        "stopped_at_local": payload.get("stopped_at_local") or "",
-        "label": payload.get("label") or "",
-    }
-    return hashlib.sha1(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+from replay_manifest import normalize_replay_manifest_payload
 
 
 def load_run_manifest(manifest_path: Path) -> dict:
     """Read one run manifest and normalize the main absolute paths."""
     with manifest_path.open("r", encoding="utf-8-sig") as handle:
         payload = json.load(handle)
-
-    payload["manifest_path"] = str(manifest_path.resolve())
-    payload["video_path"] = str(Path(payload.get("video_path", "")).resolve()) if payload.get("video_path") else ""
-    payload["trace_path"] = str(Path(payload.get("trace_path", "")).resolve()) if payload.get("trace_path") else ""
-    payload["run_id"] = compute_run_id(manifest_path, payload)
-    return payload
+    return normalize_replay_manifest_payload(payload, manifest_path=manifest_path)
 
 
 def determine_replay_status(payload: dict) -> str:
@@ -83,7 +64,7 @@ def describe_manifest(manifest_path: Path) -> dict:
         problems.append(f"Trace path is missing on disk: {payload['trace_path']}")
 
     return {
-        "run_id": payload.get("run_id") or compute_run_id(manifest_path, payload),
+        "run_id": payload.get("run_id") or "",
         "manifest_path": str(manifest_path.resolve()),
         "label": payload.get("label") or "run",
         "started_at_local": payload.get("started_at_local"),

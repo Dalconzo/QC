@@ -67,7 +67,29 @@ def upload_batch_id() -> str:
 def init_central_db(conn: sqlite3.Connection) -> None:
     """Create the central replay catalog from the shared bootstrap schema."""
     conn.executescript(SCHEMA_SQL_PATH.read_text(encoding="utf-8"))
+    ensure_central_db_migrations(conn)
     conn.commit()
+
+
+def ensure_central_db_migrations(conn: sqlite3.Connection) -> None:
+    """Add newer run metadata columns when the central catalog predates them."""
+    expected_columns = {
+        "replay_manifest_version": "TEXT NOT NULL DEFAULT ''",
+        "replay_capabilities_json": "TEXT NOT NULL DEFAULT '[]'",
+        "storage_tier": "TEXT NOT NULL DEFAULT ''",
+        "replay_default_mode": "TEXT NOT NULL DEFAULT ''",
+        "segment_count": "INTEGER NOT NULL DEFAULT 0",
+        "idle_segment_count": "INTEGER NOT NULL DEFAULT 0",
+        "active_segment_count": "INTEGER NOT NULL DEFAULT 0",
+    }
+    existing_columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(runs)")
+    }
+    for column_name, column_type in expected_columns.items():
+        if column_name in existing_columns:
+            continue
+        conn.execute(f"ALTER TABLE runs ADD COLUMN {column_name} {column_type}")
 
 
 def get_pending_runs(conn: sqlite3.Connection, *, batch_id: str = "", limit: int = 0) -> list[sqlite3.Row]:
@@ -366,13 +388,20 @@ def ingest_one_run(
                 hamilton_log_dir,
                 hamilton_log_glob,
                 trace_pairing_delta_sec,
+                replay_manifest_version,
+                replay_capabilities_json,
+                storage_tier,
+                replay_default_mode,
+                segment_count,
+                idle_segment_count,
+                active_segment_count,
                 replay_status,
                 ready_artifact_count,
                 required_artifact_count,
                 first_ingested_utc,
                 last_ingested_utc,
                 archived_at_utc
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 3, 3, ?, ?, '')
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 3, 3, ?, ?, '')
             """,
             (
                 central_run_id,
@@ -391,6 +420,13 @@ def ingest_one_run(
                 run.get("hamilton_log_dir") or "",
                 run.get("hamilton_log_glob") or "",
                 run.get("trace_pairing_delta_sec"),
+                run.get("replay_manifest_version") or "",
+                json.dumps(run.get("replay_capabilities") or []),
+                run.get("storage_tier") or "",
+                run.get("replay_default_mode") or "",
+                int(run.get("segment_count") or 0),
+                int(run.get("idle_segment_count") or 0),
+                int(run.get("active_segment_count") or 0),
                 run.get("replay_status") or "ready",
                 now_utc,
                 now_utc,
@@ -442,6 +478,13 @@ def ingest_one_run(
                 hamilton_log_dir = ?,
                 hamilton_log_glob = ?,
                 trace_pairing_delta_sec = ?,
+                replay_manifest_version = ?,
+                replay_capabilities_json = ?,
+                storage_tier = ?,
+                replay_default_mode = ?,
+                segment_count = ?,
+                idle_segment_count = ?,
+                active_segment_count = ?,
                 replay_status = ?,
                 ready_artifact_count = 3,
                 required_artifact_count = 3,
@@ -461,6 +504,13 @@ def ingest_one_run(
                 run.get("hamilton_log_dir") or "",
                 run.get("hamilton_log_glob") or "",
                 run.get("trace_pairing_delta_sec"),
+                run.get("replay_manifest_version") or "",
+                json.dumps(run.get("replay_capabilities") or []),
+                run.get("storage_tier") or "",
+                run.get("replay_default_mode") or "",
+                int(run.get("segment_count") or 0),
+                int(run.get("idle_segment_count") or 0),
+                int(run.get("active_segment_count") or 0),
                 run.get("replay_status") or "ready",
                 now_utc,
                 central_run_id,
