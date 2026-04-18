@@ -64,6 +64,11 @@ def compute_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def compute_text_sha256(text: str) -> str:
+    """Hash generated JSON content before it is written to disk."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def stage_batch_id() -> str:
     """Generate one local batch id for this staging pass."""
     stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -115,8 +120,8 @@ def artifact_metadata(artifact_type: str, source_path: Path, staged_path: Path) 
         "staged_path": str(staged_path.resolve()),
         "staged_filename": staged_path.name,
         "mime_type": mime_type or "application/octet-stream",
-        "size_bytes": source_path.stat().st_size,
-        "sha256": compute_sha256(source_path),
+        "size_bytes": staged_path.stat().st_size,
+        "sha256": compute_sha256(staged_path),
     }
 
 
@@ -276,6 +281,14 @@ def build_payload(
             "local_video_path": payload.get("video_path") or "",
             "local_trace_path": payload.get("trace_path") or "",
             "replay_status": item["replay_status"],
+            "replay_manifest_version": payload.get("replay_manifest_version") or "",
+            "replay_capabilities": payload.get("replay_capabilities") or [],
+            "storage_tier": payload.get("storage_tier") or "",
+            "replay_default_mode": payload.get("replay_default_mode") or "",
+            "full_detail_retained_until_local": payload.get("full_detail_retained_until_local") or "",
+            "segment_count": len(payload.get("segments") or []),
+            "idle_segment_count": int(payload.get("idle_segment_count") or 0),
+            "active_segment_count": int(payload.get("active_segment_count") or 0),
         },
         "artifacts": artifact_rows,
     }
@@ -301,8 +314,9 @@ def stage_one_run(
     if item["replay_status"] != "ready":
         return {"action": "skipped_not_ready", "run_id": item["run_id"], "label": item["label"]}
 
+    normalized_manifest_text = json.dumps(payload, indent=2)
     artifact_hashes = {
-        "run_manifest_json": compute_sha256(manifest_path),
+        "run_manifest_json": compute_text_sha256(normalized_manifest_text),
         "video_mp4": compute_sha256(video_path),
         "trace_trc": compute_sha256(trace_path),
     }
@@ -320,7 +334,7 @@ def stage_one_run(
     staged_manifest = run_dir / "run_manifest.json"
     staged_video = run_dir / "video.mp4"
     staged_trace = run_dir / "trace.trc"
-    shutil.copy2(manifest_path, staged_manifest)
+    staged_manifest.write_text(normalized_manifest_text, encoding="utf-8")
     shutil.copy2(video_path, staged_video)
     shutil.copy2(trace_path, staged_trace)
 

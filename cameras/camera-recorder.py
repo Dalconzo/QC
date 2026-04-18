@@ -22,12 +22,55 @@ import shutil
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
 from camera_source import is_numeric_source, to_ffmpeg_input
+from replay_manifest import (
+    DEFAULT_FULL_DETAIL_RETENTION,
+    DEFAULT_REPLAY_MODE,
+    DEFAULT_STORAGE_TIER,
+    REPLAY_MANIFEST_CAPABILITIES,
+    REPLAY_MANIFEST_VERSION,
+)
+from trace_replay import build_trace_replay_summary
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+RECORDER_REARM_EXIT_CODE = 20
+
+
+@dataclass(frozen=True)
+class TraceMatch:
+    """Describe the trace file chosen for one recorded segment."""
+
+    path: Path
+    delta_sec: float
+    modified_at: dt.datetime
+
+
+@dataclass(frozen=True)
+class RunWindow:
+    """Track raw capture timing separately from the logical assay window."""
+
+    capture_started_at: dt.datetime
+    capture_stopped_at: dt.datetime
+    logical_started_at: dt.datetime
+    logical_stopped_at: dt.datetime
+    logical_stop_reason: str
+    logical_stop_details: dict | None = None
+
+    def capture_duration_sec(self) -> float:
+        return round((self.capture_stopped_at - self.capture_started_at).total_seconds(), 3)
+
+    def logical_duration_sec(self) -> float:
+        return round((self.logical_stopped_at - self.logical_started_at).total_seconds(), 3)
+
+    def logical_start_offset_sec(self) -> float:
+        return round((self.logical_started_at - self.capture_started_at).total_seconds(), 3)
+
+    def logical_stop_offset_sec(self) -> float:
+        return round((self.logical_stopped_at - self.capture_started_at).total_seconds(), 3)
 
 
 def find_ffmpeg(explicit: str | None = None) -> tuple[bool, str | None]:
@@ -189,7 +232,7 @@ def choose_trace_file(
     log_dir: Path,
     log_glob: str,
     stop_time: dt.datetime,
-) -> tuple[Path | None, float | None]:
+) -> TraceMatch | None:
     """Pick the trace file whose last-write time is closest to recorder stop.
 
     Hamilton only flushes the `.trc` to disk when the method completes, so the
@@ -197,24 +240,169 @@ def choose_trace_file(
     file modification time near recorder shutdown.
     """
     if not log_dir.exists():
-        return None, None
+        return None
 
     patterns = [pattern.strip() for pattern in str(log_glob or "*.trc").split(";") if pattern.strip()]
-    candidates: list[tuple[float, Path]] = []
+    candidates: list[tuple[float, Path, dt.datetime]] = []
     for pattern in patterns:
         for path in log_dir.glob(pattern):
             if not path.is_file():
                 continue
             modified = dt.datetime.fromtimestamp(path.stat().st_mtime)
             delta = abs((modified - stop_time).total_seconds())
-            candidates.append((delta, path))
+            candidates.append((delta, path, modified))
 
     if not candidates:
-        return None, None
+        return None
 
     candidates.sort(key=lambda item: (item[0], item[1].name.lower()))
-    nearest_delta, nearest_path = candidates[0]
-    return nearest_path, nearest_delta
+    nearest_delta, nearest_path, nearest_modified = candidates[0]
+    return TraceMatch(path=nearest_path, delta_sec=nearest_delta, modified_at=nearest_modified)
+
+
+def snapshot_log_files(log_dir: Path, log_glob: str) -> dict[str, float]:
+    """Capture the current mtime view of matching Hamilton log files."""
+    if not log_dir.exists():
+        return {}
+    snapshot: dict[str, float] = {}
+    patterns = [pattern.strip() for pattern in str(log_glob or "*.trc").split(";") if pattern.strip()]
+    for pattern in patterns:
+        for path in log_dir.glob(pattern):
+            if not path.is_file():
+                continue
+            try:
+                snapshot[str(path.resolve())] = path.stat().st_mtime
+            except Exception:
+                continue
+    return snapshot
+
+
+def detect_log_activity(previous: dict[str, float], current: dict[str, float]) -> list[dict]:
+    """Return files that are new or whose mtime advanced since the prior snapshot."""
+    changes: list[dict] = []
+    for path, mtime in current.items():
+        prior = previous.get(path)
+        if prior is None or mtime > prior:
+            changes.append(
+                {
+                    "path": path,
+                    "modified_at_local": dt.datetime.fromtimestamp(mtime).isoformat(),
+                    "change_type": "created" if prior is None else "updated",
+                }
+            )
+    changes.sort(key=lambda item: (item["modified_at_local"], item["path"]))
+    return changes
+
+
+@dataclass(frozen=True)
+class CaptureResult:
+    """Describe one completed recorder segment and any mid-session trigger details."""
+
+    video_path: Path
+    capture_started_at: dt.datetime
+    capture_stopped_at: dt.datetime
+    stop_reason: str
+    logical_stopped_at: dt.datetime | None = None
+    logical_stop_reason: str | None = None
+    logical_stop_details: dict | None = None
+    trace_activity_seen: bool = False
+
+
+def build_run_window(
+    *,
+    capture_started_at: dt.datetime,
+    capture_stopped_at: dt.datetime,
+    stop_reason: str,
+    logical_started_at: dt.datetime | None = None,
+    logical_stopped_at: dt.datetime | None = None,
+    logical_stop_reason: str | None = None,
+    logical_stop_details: dict | None = None,
+) -> RunWindow:
+    """Normalize recorder timing into capture and logical assay windows."""
+    return RunWindow(
+        capture_started_at=capture_started_at,
+        capture_stopped_at=capture_stopped_at,
+        logical_started_at=logical_started_at or capture_started_at,
+        logical_stopped_at=logical_stopped_at or capture_stopped_at,
+        logical_stop_reason=logical_stop_reason or stop_reason,
+        logical_stop_details=logical_stop_details or {},
+    )
+
+
+def build_run_manifest_payload(
+    *,
+    label: str,
+    source: str,
+    video_path: Path,
+    run_window: RunWindow,
+    stop_reason: str,
+    process_gate: str,
+    log_dir: Path,
+    log_glob: str,
+    trace_match: TraceMatch | None,
+) -> dict:
+    """Build the replay manifest payload for one recorded run."""
+    trace_path = trace_match.path if trace_match else None
+    trace_delta_sec = trace_match.delta_sec if trace_match else None
+    trace_modified_at = trace_match.modified_at if trace_match else None
+    trace_summary = build_trace_replay_summary(trace_path) if trace_path and trace_path.exists() else {}
+    segments: list[dict] = []
+    for item in trace_summary.get("segments", []):
+        normalized = dict(item)
+        normalized["video_path"] = str(video_path.resolve())
+        segments.append(normalized)
+    payload = {
+        "label": label,
+        "source": source,
+        "video_path": str(video_path.resolve()),
+        "video_filename": video_path.name,
+        "started_at_local": run_window.capture_started_at.isoformat(),
+        "stopped_at_local": run_window.capture_stopped_at.isoformat(),
+        "duration_sec": run_window.capture_duration_sec(),
+        "stop_reason": stop_reason,
+        "process_gate": process_gate,
+        "hamilton_log_dir": str(log_dir.resolve()),
+        "hamilton_log_glob": log_glob,
+        "trace_path": str(trace_path.resolve()) if trace_path else "",
+        "trace_filename": trace_path.name if trace_path else "",
+        "trace_mtime_delta_sec": round(trace_delta_sec, 3) if trace_delta_sec is not None else None,
+        "capture_started_at_local": run_window.capture_started_at.isoformat(),
+        "capture_stopped_at_local": run_window.capture_stopped_at.isoformat(),
+        "capture_duration_sec": run_window.capture_duration_sec(),
+        "logical_run_started_at_local": run_window.logical_started_at.isoformat(),
+        "logical_run_stopped_at_local": run_window.logical_stopped_at.isoformat(),
+        "logical_run_duration_sec": run_window.logical_duration_sec(),
+        "logical_run_start_offset_sec": run_window.logical_start_offset_sec(),
+        "logical_run_stop_offset_sec": run_window.logical_stop_offset_sec(),
+        "logical_stop_reason": run_window.logical_stop_reason,
+        "logical_stop_details": dict(run_window.logical_stop_details or {}),
+        "trace_modified_at_local": trace_modified_at.isoformat() if trace_modified_at else "",
+        "trace_match_mode": "nearest_mtime_to_reference_time",
+        "trace_finalized_after_logical_stop_sec": (
+            round((trace_modified_at - run_window.logical_stopped_at).total_seconds(), 3)
+            if trace_modified_at
+            else None
+        ),
+        "trace_finalized_after_capture_stop_sec": (
+            round((trace_modified_at - run_window.capture_stopped_at).total_seconds(), 3)
+            if trace_modified_at
+            else None
+        ),
+        "replay_manifest_version": REPLAY_MANIFEST_VERSION,
+        "replay_capabilities": list(REPLAY_MANIFEST_CAPABILITIES),
+        "storage_tier": DEFAULT_STORAGE_TIER,
+        "replay_default_mode": DEFAULT_REPLAY_MODE,
+        "full_detail_retained_until_local": DEFAULT_FULL_DETAIL_RETENTION,
+        "trace_event_count": trace_summary.get("trace_event_count", 0),
+        "trace_started_at_local": trace_summary.get("trace_started_at_local", ""),
+        "trace_stopped_at_local": trace_summary.get("trace_stopped_at_local", ""),
+        "trace_duration_sec": trace_summary.get("trace_duration_sec"),
+        "chapters": trace_summary.get("chapters", []),
+        "segments": segments,
+        "idle_segment_count": sum(1 for item in segments if item.get("kind") == "idle"),
+        "active_segment_count": sum(1 for item in segments if item.get("kind") == "active"),
+    }
+    return payload
 
 
 def write_run_manifest(
@@ -223,33 +411,26 @@ def write_run_manifest(
     label: str,
     source: str,
     video_path: Path,
-    started_at: dt.datetime,
-    stopped_at: dt.datetime,
+    run_window: RunWindow,
     stop_reason: str,
     process_gate: str,
     log_dir: Path,
     log_glob: str,
-    trace_path: Path | None,
-    trace_delta_sec: float | None,
+    trace_match: TraceMatch | None,
 ) -> None:
     """Persist the pairing artifact the replay UI will load later."""
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "label": label,
-        "source": source,
-        "video_path": str(video_path.resolve()),
-        "video_filename": video_path.name,
-        "started_at_local": started_at.isoformat(),
-        "stopped_at_local": stopped_at.isoformat(),
-        "duration_sec": round((stopped_at - started_at).total_seconds(), 3),
-        "stop_reason": stop_reason,
-        "process_gate": process_gate,
-        "hamilton_log_dir": str(log_dir.resolve()),
-        "hamilton_log_glob": log_glob,
-        "trace_path": str(trace_path.resolve()) if trace_path else "",
-        "trace_filename": trace_path.name if trace_path else "",
-        "trace_mtime_delta_sec": round(trace_delta_sec, 3) if trace_delta_sec is not None else None,
-    }
+    payload = build_run_manifest_payload(
+        label=label,
+        source=source,
+        video_path=video_path,
+        run_window=run_window,
+        stop_reason=stop_reason,
+        process_gate=process_gate,
+        log_dir=log_dir,
+        log_glob=log_glob,
+        trace_match=trace_match,
+    )
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)
         handle.write("\n")
@@ -299,6 +480,20 @@ def _is_valid_recording(video_path: Path, *, stop_reason: str) -> bool:
 
     # A backend exit with a trivially small file is still a failed launch.
     if stop_reason == "backend_exit" and size < 1024:
+        return False
+    return True
+
+
+def should_split_on_log_activity(
+    *,
+    enable_midrun_split: bool,
+    changed_files: list[dict],
+    stop_when_exe: str,
+) -> bool:
+    """Return True when mid-session log activity should finalize the current segment."""
+    if not enable_midrun_split or not changed_files:
+        return False
+    if stop_when_exe and not _is_any_proc_running(stop_when_exe):
         return False
     return True
 
@@ -372,8 +567,11 @@ def run_ffmpeg(
     video_size: str | None = None,
     dshow_rtbufsize: str | None = None,
     max_record_sec: int = 0,
+    log_dir: Path | None = None,
+    log_glob: str = "*.trc",
+    enable_midrun_split: bool = False,
     log_path: Path | None = None,
-) -> tuple[Path, dt.datetime, dt.datetime, str]:
+) -> CaptureResult:
     """Record a single MP4 until the process gate exits, timeout, or stop file appears."""
     out_dir.mkdir(parents=True, exist_ok=True)
     started_at = ts_now()
@@ -401,6 +599,9 @@ def run_ffmpeg(
     stop_reason = "backend_exit"
     monotonic_started = time.monotonic()
     last_heartbeat = monotonic_started
+    log_snapshot = snapshot_log_files(log_dir, log_glob) if log_dir else {}
+    split_details: dict | None = None
+    trace_activity_seen = False
 
     try:
         while True:
@@ -418,6 +619,22 @@ def run_ffmpeg(
                 stop_reason = "max_record_sec"
                 request_ffmpeg_stop(proc, verbose, log_path)
                 break
+
+            if log_dir:
+                current_snapshot = snapshot_log_files(log_dir, log_glob)
+                changed_files = detect_log_activity(log_snapshot, current_snapshot)
+                if changed_files:
+                    trace_activity_seen = True
+                if should_split_on_log_activity(
+                    enable_midrun_split=enable_midrun_split,
+                    changed_files=changed_files,
+                    stop_when_exe=stop_when_exe,
+                ):
+                    stop_reason = "trace_log_activity"
+                    split_details = {"changed_files": changed_files}
+                    request_ffmpeg_stop(proc, verbose, log_path)
+                    break
+                log_snapshot = current_snapshot
 
             ret = proc.poll()
             if ret is not None:
@@ -455,7 +672,16 @@ def run_ffmpeg(
             pass
 
     stopped_at = ts_now()
-    return out_path, started_at, stopped_at, stop_reason
+    return CaptureResult(
+        video_path=out_path,
+        capture_started_at=started_at,
+        capture_stopped_at=stopped_at,
+        stop_reason=stop_reason,
+        logical_stopped_at=stopped_at,
+        logical_stop_reason=stop_reason,
+        logical_stop_details=split_details or {},
+        trace_activity_seen=trace_activity_seen,
+    )
 
 
 def run_opencv(
@@ -470,8 +696,11 @@ def run_opencv(
     poll_sec: float = 1.0,
     max_record_sec: int = 0,
     verbose: bool = False,
+    log_dir: Path | None = None,
+    log_glob: str = "*.trc",
+    enable_midrun_split: bool = False,
     log_path: Path | None = None,
-) -> tuple[Path, dt.datetime, dt.datetime, str]:
+) -> CaptureResult:
     """Fallback continuous recorder when ffmpeg is unavailable."""
     import cv2  # type: ignore
 
@@ -489,6 +718,9 @@ def run_opencv(
     monotonic_started = time.monotonic()
     last_heartbeat = monotonic_started
     stop_reason = "stop_file"
+    log_snapshot = snapshot_log_files(log_dir, log_glob) if log_dir else {}
+    split_details: dict | None = None
+    trace_activity_seen = False
 
     try:
         while True:
@@ -509,6 +741,21 @@ def run_opencv(
                 stop_reason = "max_record_sec"
                 break
 
+            if log_dir:
+                current_snapshot = snapshot_log_files(log_dir, log_glob)
+                changed_files = detect_log_activity(log_snapshot, current_snapshot)
+                if changed_files:
+                    trace_activity_seen = True
+                if should_split_on_log_activity(
+                    enable_midrun_split=enable_midrun_split,
+                    changed_files=changed_files,
+                    stop_when_exe=stop_when_exe,
+                ):
+                    stop_reason = "trace_log_activity"
+                    split_details = {"changed_files": changed_files}
+                    break
+                log_snapshot = current_snapshot
+
             now = time.monotonic()
             if (verbose or log_path) and (now - last_heartbeat) >= 5.0:
                 elapsed_sec = now - monotonic_started
@@ -528,7 +775,16 @@ def run_opencv(
             pass
 
     stopped_at = ts_now()
-    return out_path, started_at, stopped_at, stop_reason
+    return CaptureResult(
+        video_path=out_path,
+        capture_started_at=started_at,
+        capture_stopped_at=stopped_at,
+        stop_reason=stop_reason,
+        logical_stopped_at=stopped_at,
+        logical_stop_reason=stop_reason,
+        logical_stop_details=split_details or {},
+        trace_activity_seen=trace_activity_seen,
+    )
 
 
 def main() -> int:
@@ -556,6 +812,8 @@ def main() -> int:
     ap.add_argument("--log-glob", default="", help="Semicolon-separated glob(s) used to find Hamilton traces")
     ap.add_argument("--manifest-dir", default="", help="Optional directory for run manifests; defaults next to the video")
     ap.add_argument("--recorder-log", default="", help="Optional path for a persistent recorder diagnostic log")
+    ap.add_argument("--enable-midrun-split", action="store_true", help="Cut the current segment when matching log activity appears while the process gate stays open")
+    ap.add_argument("--discard-without-trace", action="store_true", help="If this speculative segment ends without any matched trace, discard it instead of writing a bogus manifest")
     ap.add_argument("--dump-config", action="store_true", help="Print the effective camera config and exit")
     ap.add_argument("--validate-config", action="store_true", help="Validate the effective camera config and exit")
     ap.add_argument("--list-profiles", action="store_true", help="List configured camera profiles and exit")
@@ -669,7 +927,7 @@ def main() -> int:
         if args.verbose:
             emit_log(f"Using ffmpeg backend: {ffmpeg_bin}", log_path=recorder_log)
         try:
-            video_path, started_at, stopped_at, stop_reason = run_ffmpeg(
+            capture = run_ffmpeg(
                 ffmpeg_bin,
                 source,
                 out_dir,
@@ -682,6 +940,9 @@ def main() -> int:
                 video_size=video_size,
                 dshow_rtbufsize=dshow_rtbufsize,
                 max_record_sec=max_record_sec,
+                log_dir=log_dir,
+                log_glob=log_glob,
+                enable_midrun_split=args.enable_midrun_split,
                 log_path=recorder_log,
             )
         except Exception as exc:
@@ -694,7 +955,7 @@ def main() -> int:
             else:
                 emit_log("Using OpenCV backend (ffmpeg not found)", log_path=recorder_log)
         try:
-            video_path, started_at, stopped_at, stop_reason = run_opencv(
+            capture = run_opencv(
                 source,
                 out_dir,
                 label,
@@ -703,6 +964,9 @@ def main() -> int:
                 poll_sec=poll_sec,
                 max_record_sec=max_record_sec,
                 verbose=args.verbose,
+                log_dir=log_dir,
+                log_glob=log_glob,
+                enable_midrun_split=args.enable_midrun_split,
                 log_path=recorder_log,
             )
         except Exception as exc:
@@ -711,6 +975,11 @@ def main() -> int:
             emit_log("Or specify ffmpeg: --ffmpeg C:\\QC\\cameras\\ffmpeg.exe", log_path=recorder_log, is_error=True)
             emit_log(f"Details: {exc}", log_path=recorder_log, is_error=True)
             return 2
+
+    video_path = capture.video_path
+    started_at = capture.capture_started_at
+    stopped_at = capture.capture_stopped_at
+    stop_reason = capture.stop_reason
 
     if not _is_valid_recording(video_path, stop_reason=stop_reason):
         emit_log(
@@ -724,7 +993,27 @@ def main() -> int:
             pass
         return 4
 
-    trace_path, trace_delta_sec = choose_trace_file(log_dir, log_glob, stopped_at)
+    pair_time = capture.logical_stopped_at or stopped_at
+    trace_match = choose_trace_file(log_dir, log_glob, pair_time)
+    if args.discard_without_trace and trace_match is None:
+        emit_log(
+            f"Discarding speculative segment without matched trace: {video_path}",
+            log_path=recorder_log,
+        )
+        try:
+            video_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return 0
+
+    run_window = build_run_window(
+        capture_started_at=started_at,
+        capture_stopped_at=stopped_at,
+        stop_reason=stop_reason,
+        logical_stopped_at=capture.logical_stopped_at,
+        logical_stop_reason=capture.logical_stop_reason,
+        logical_stop_details=capture.logical_stop_details,
+    )
     manifest_root = Path(manifest_dir) if manifest_dir else video_path.parent
     manifest_path = manifest_root / f"{video_path.stem}.run.json"
     write_run_manifest(
@@ -732,22 +1021,24 @@ def main() -> int:
         label=label,
         source=source,
         video_path=video_path,
-        started_at=started_at,
-        stopped_at=stopped_at,
+        run_window=run_window,
         stop_reason=stop_reason,
         process_gate=effective_stop_when_exe,
         log_dir=log_dir,
         log_glob=log_glob,
-        trace_path=trace_path,
-        trace_delta_sec=trace_delta_sec,
+        trace_match=trace_match,
     )
 
     emit_log(f"Wrote video: {video_path}", log_path=recorder_log)
     emit_log(f"Wrote run manifest: {manifest_path}", log_path=recorder_log)
-    if trace_path:
-        emit_log(f"Paired trace: {trace_path} (mtime delta {trace_delta_sec:.2f}s)", log_path=recorder_log)
+    if trace_match:
+        emit_log(f"Paired trace: {trace_match.path} (mtime delta {trace_match.delta_sec:.2f}s)", log_path=recorder_log)
     else:
         emit_log("No matching trace file found.", log_path=recorder_log)
+
+    if stop_reason == "trace_log_activity":
+        emit_log("Mid-session trace activity detected; signaling daemon to rearm recorder.", log_path=recorder_log)
+        return RECORDER_REARM_EXIT_CODE
 
     return 0
 

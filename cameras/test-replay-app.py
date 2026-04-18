@@ -65,6 +65,7 @@ class ReplayAppTests(unittest.TestCase):
             self.assertEqual(len(runs_payload), 1)
             self.assertEqual(runs_payload[0]["label"], "demo-catalog")
             self.assertEqual(runs_payload[0]["replay_status"], "ready")
+            self.assertGreaterEqual(runs_payload[0]["segment_count"], 1)
 
     def test_parse_trace_events_uses_first_timestamp_as_zero(self) -> None:
         sample_trace = Path(__file__).resolve().parents[1] / "data" / "samples"
@@ -115,6 +116,47 @@ class ReplayAppTests(unittest.TestCase):
             detail_payload = MODULE.get_run_detail(root, run_id)
             self.assertEqual(detail_payload["run"]["label"], "demo")
             self.assertGreater(len(detail_payload["events"]), 10)
+            self.assertIn("segments", detail_payload)
+            self.assertIn("chapters", detail_payload)
+            self.assertGreaterEqual(len(detail_payload["segments"]), 1)
+            self.assertEqual(detail_payload["manifest"]["replay_manifest_version"], "hybrid-replay.v1")
+            self.assertEqual(detail_payload["manifest"]["replay_capabilities"], ["trace_chapters", "trace_segments", "idle_skip_default"])
+
+    def test_load_run_manifest_upgrades_old_hybrid_fields_from_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            video_path = root / "demo.mp4"
+            trace_path = root / "demo.trc"
+            manifest_path = root / "demo.run.json"
+
+            video_path.write_bytes(b"fake video payload")
+            sample_trace = Path(__file__).resolve().parents[1] / "data" / "samples"
+            trace_path.write_bytes(next(sample_trace.glob("*.trc")).read_bytes())
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "label": "demo-old",
+                        "source": "0",
+                        "video_path": str(video_path),
+                        "trace_path": str(trace_path),
+                        "started_at_local": "2026-03-24T14:00:00",
+                        "stopped_at_local": "2026-03-24T14:05:00",
+                        "duration_sec": 300,
+                        "stop_reason": "process_exit",
+                        "process_gate": "HxRun.exe",
+                        "chapters": "stale",
+                        "segments": [{"kind": "idle"}],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            payload = MODULE.load_run_manifest(manifest_path)
+            self.assertEqual(payload["replay_manifest_version"], "hybrid-replay.v1")
+            self.assertGreaterEqual(len(payload["chapters"]), 1)
+            self.assertGreaterEqual(len(payload["segments"]), 1)
+            self.assertTrue(all(item["video_path"] == str(video_path.resolve()) for item in payload["segments"]))
 
     def test_http_api_serves_run_index(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

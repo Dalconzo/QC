@@ -145,6 +145,9 @@ class CentralReplayServerTests(unittest.TestCase):
                 self.assertEqual(detail["run"]["central_run_id"], central_run_id)
                 self.assertEqual(len(detail["artifacts"]), 3)
                 self.assertTrue(detail["run"]["video_url"].startswith("/media/"))
+                self.assertEqual(detail["run"]["replay_manifest_version"], "hybrid-replay.v1")
+                self.assertIn("trace_segments", detail["run"]["replay_capabilities"])
+                self.assertGreaterEqual(detail["run"]["segment_count"], 1)
 
                 events = self.fetch_json(f"http://127.0.0.1:{server.server_port}/api/runs/{central_run_id}/trace-events")
                 self.assertGreater(events["item_count"], 10)

@@ -97,6 +97,15 @@ function formatStatus(status) {
   return (status || "unknown").replaceAll("_", " ");
 }
 
+function formatSegmentSummary(item) {
+  const segmentCount = Number(item.segment_count || 0);
+  const idleCount = Number(item.idle_segment_count || 0);
+  if (!segmentCount) {
+    return "Segments: pending";
+  }
+  return `Segments: ${segmentCount} total, ${idleCount} idle`;
+}
+
 function setActiveMode(mode) {
   activeMode = mode === "live" ? "live" : "replay";
   modeReplayEl.classList.toggle("active", activeMode === "replay");
@@ -137,6 +146,7 @@ function renderRunList(items) {
       <p>Video: ${item.video_filename || "Missing video"}</p>
       <p>Trace: ${item.trace_filename || "Missing trace"}</p>
       <p>Gate: ${item.process_gate || "unknown"}</p>
+      <p>${formatSegmentSummary(item)}</p>
       <span class="status-chip ${item.replay_status || "unknown"}">${formatStatus(item.replay_status)}</span>
     `;
     button.addEventListener("click", () => {
@@ -226,9 +236,11 @@ async function loadRun(runId) {
   const payload = await response.json();
   activeEvents = payload.events || [];
   const run = payload.run;
+  const chapters = payload.chapters || [];
+  const segments = payload.segments || [];
 
   runTitleEl.textContent = `${run.label} (${run.video_filename || "missing video"})`;
-  runMetaEl.textContent = `${run.started_at_local || "Unknown start"} | ${run.trace_filename || "No trace"} | ${formatStatus(run.replay_status)} | ${run.stop_reason || "unknown stop reason"}`;
+  runMetaEl.textContent = `${run.started_at_local || "Unknown start"} | ${run.trace_filename || "No trace"} | ${formatStatus(run.replay_status)} | ${run.stop_reason || "unknown stop reason"} | ${segments.length} segments / ${chapters.length} chapters`;
   if (run.has_video) {
     runVideoEl.src = `/api/runs/${runId}/video`;
     forceMutedPlayback();

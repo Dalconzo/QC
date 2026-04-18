@@ -160,6 +160,18 @@ class CentralUploadTests(unittest.TestCase):
             self.assertEqual(run_count, 1)
             self.assertEqual(artifact_count, 3)
             self.assertEqual(batch_count, 1)
+            with closing(sqlite3.connect(central_catalog)) as conn:
+                row = conn.execute(
+                    "SELECT replay_manifest_version, replay_capabilities_json, segment_count FROM runs"
+                ).fetchone()
+            self.assertEqual(row[0], "hybrid-replay.v1")
+            self.assertEqual(json.loads(row[1]), ["trace_chapters", "trace_segments", "idle_skip_default"])
+            self.assertGreaterEqual(row[2], 1)
+
+            staged_payload_path = Path(result["items"][0]["ack_path"]).parent / "run-upload.json"
+            staged_payload = json.loads(staged_payload_path.read_text(encoding="utf-8"))
+            self.assertEqual(staged_payload["run"]["replay_manifest_version"], "hybrid-replay.v1")
+            self.assertIn("trace_segments", staged_payload["run"]["replay_capabilities"])
 
     def test_restaged_duplicate_reuses_existing_central_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
