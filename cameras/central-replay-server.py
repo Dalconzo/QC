@@ -14,6 +14,7 @@ import logging
 import mimetypes
 import re
 import sqlite3
+import socket
 from contextlib import closing
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
@@ -27,9 +28,68 @@ from upload_central_replay import CENTRAL_CATALOG_FILENAME
 
 STATIC_DIR = Path(__file__).resolve().parent / "central_replay_static"
 REPO_ROOT = Path(__file__).resolve().parents[1]
+SCHEMA_SQL_PATH = Path(__file__).resolve().parent / "sql" / "central-replay-schema.sql"
 DEFAULT_SERVER_CONFIG_PATH = REPO_ROOT / "config" / "central-replay-server.json"
 DEFAULT_SERVER_LOCAL_CONFIG_PATH = REPO_ROOT / "config" / "central-replay-server.local.json"
 TRACE_LINE_RE = re.compile(r"^(?P<stamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})> ?(?P<body>.*)$")
+PENDING_RUN_PREFIX = "pending-run:"
+STATUS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS workstation_runtime_status (
+    workstation_id TEXT PRIMARY KEY,
+    hostname TEXT NOT NULL DEFAULT '',
+    machine_alias TEXT NOT NULL DEFAULT '',
+    repo_root TEXT NOT NULL DEFAULT '',
+    profile_key TEXT NOT NULL DEFAULT '',
+    profile_label TEXT NOT NULL DEFAULT '',
+    source_name TEXT NOT NULL DEFAULT '',
+    local_ip TEXT NOT NULL DEFAULT '',
+    software_version TEXT NOT NULL DEFAULT '',
+    current_state TEXT NOT NULL DEFAULT 'idle',
+    upload_phase TEXT NOT NULL DEFAULT '',
+    current_local_run_id TEXT NOT NULL DEFAULT '',
+    current_label TEXT NOT NULL DEFAULT '',
+    current_started_at_local TEXT NOT NULL DEFAULT '',
+    last_error TEXT NOT NULL DEFAULT '',
+    last_event_kind TEXT NOT NULL DEFAULT '',
+    last_event_utc TEXT NOT NULL DEFAULT '',
+    last_heartbeat_utc TEXT NOT NULL DEFAULT '',
+    updated_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pending_runs (
+    pending_run_id TEXT PRIMARY KEY,
+    workstation_id TEXT NOT NULL,
+    local_run_id TEXT NOT NULL,
+    camera_profile_id TEXT NOT NULL DEFAULT '',
+    label TEXT NOT NULL DEFAULT '',
+    source_name TEXT NOT NULL DEFAULT '',
+    process_gate TEXT NOT NULL DEFAULT '',
+    stop_reason TEXT NOT NULL DEFAULT '',
+    started_at_local TEXT NOT NULL DEFAULT '',
+    stopped_at_local TEXT NOT NULL DEFAULT '',
+    duration_sec REAL NOT NULL DEFAULT 0,
+    hamilton_log_dir TEXT NOT NULL DEFAULT '',
+    hamilton_log_glob TEXT NOT NULL DEFAULT '',
+    trace_pairing_delta_sec REAL,
+    replay_status TEXT NOT NULL DEFAULT 'pending_upload',
+    upload_phase TEXT NOT NULL DEFAULT '',
+    local_manifest_path TEXT NOT NULL DEFAULT '',
+    local_video_path TEXT NOT NULL DEFAULT '',
+    local_trace_path TEXT NOT NULL DEFAULT '',
+    last_error TEXT NOT NULL DEFAULT '',
+    first_reported_utc TEXT NOT NULL,
+    last_reported_utc TEXT NOT NULL,
+    promoted_central_run_id TEXT NOT NULL DEFAULT '',
+    UNIQUE (workstation_id, local_run_id),
+    FOREIGN KEY (workstation_id) REFERENCES workstations(workstation_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pending_runs_started
+    ON pending_runs(started_at_local DESC);
+
+CREATE INDEX IF NOT EXISTS idx_pending_runs_workstation_started
+    ON pending_runs(workstation_id, started_at_local DESC);
+"""
 
 DEFAULT_SERVER_CONFIG = {
     "server": {
@@ -79,6 +139,18 @@ def read_json_file(path: Path) -> dict:
     if not isinstance(payload, dict):
         raise ValueError(f"Central replay server config must be a JSON object: {path}")
     return payload
+
+
+def utc_now_text() -> str:
+    return dt.datetime.now(dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def pending_run_id_for(workstation_id: str, local_run_id: str) -> str:
+    return f"{PENDING_RUN_PREFIX}{workstation_id}:{local_run_id}"
+
+
+def is_pending_run_id(value: str) -> bool:
+    return value.startswith(PENDING_RUN_PREFIX)
 
 
 def deep_merge(base: dict, overlay: dict) -> dict:
@@ -212,8 +284,12 @@ def parse_trace_events(trace_path: Path) -> list[TraceEvent]:
 
 
 def get_db_connection(catalog_path: Path) -> sqlite3.Connection:
+    catalog_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(catalog_path)
     conn.row_factory = sqlite3.Row
+    conn.executescript(SCHEMA_SQL_PATH.read_text(encoding="utf-8"))
+    conn.executescript(STATUS_SCHEMA_SQL)
+    conn.commit()
     return conn
 
 
@@ -285,14 +361,350 @@ def summarize_run_row(row: sqlite3.Row, artifacts: list[dict]) -> dict:
     }
 
 
+def summarize_pending_run_row(row: sqlite3.Row) -> dict:
+    return {
+        "central_run_id": row["pending_run_id"],
+        "local_run_id": row["local_run_id"],
+        "label": row["label"],
+        "source_name": row["source_name"],
+        "process_gate": row["process_gate"],
+        "stop_reason": row["stop_reason"],
+        "started_at_local": row["started_at_local"],
+        "stopped_at_local": row["stopped_at_local"],
+        "duration_sec": row["duration_sec"],
+        "hamilton_log_dir": row["hamilton_log_dir"],
+        "hamilton_log_glob": row["hamilton_log_glob"],
+        "trace_pairing_delta_sec": row["trace_pairing_delta_sec"],
+        "replay_status": row["replay_status"],
+        "ready_artifact_count": 0,
+        "required_artifact_count": 3,
+        "first_ingested_utc": row["first_reported_utc"],
+        "last_ingested_utc": row["last_reported_utc"],
+        "workstation_id": row["workstation_id"],
+        "workstation_hostname": row["hostname"],
+        "machine_alias": row["machine_alias"],
+        "camera_profile_id": row["camera_profile_id"],
+        "camera_profile_label": row["profile_label"],
+        "video_filename": Path(str(row["local_video_path"] or "")).name,
+        "trace_filename": Path(str(row["local_trace_path"] or "")).name,
+        "manifest_filename": Path(str(row["local_manifest_path"] or "")).name,
+        "video_url": "",
+        "trace_events_url": "",
+        "artifacts_url": f"/api/runs/{row['pending_run_id']}/artifacts",
+        "upload_phase": row["upload_phase"],
+        "last_error": row["last_error"],
+        "is_pending": True,
+    }
+
+
+def ensure_workstation_record(conn: sqlite3.Connection, payload: dict, *, now_utc: str) -> str:
+    workstation = payload.get("workstation") or {}
+    workstation_id = str(workstation.get("workstation_id") or workstation.get("hostname") or socket.gethostname()).strip().lower()
+    hostname = str(workstation.get("hostname") or workstation_id).strip() or workstation_id
+    machine_alias = str(workstation.get("machine_alias") or "").strip()
+    repo_root = str(workstation.get("repo_root") or "").strip()
+    existing = conn.execute(
+        "SELECT workstation_id FROM workstations WHERE workstation_id = ?",
+        (workstation_id,),
+    ).fetchone()
+    if existing is None:
+        conn.execute(
+            """
+            INSERT INTO workstations (
+                workstation_id,
+                hostname,
+                machine_alias,
+                instrument_name,
+                site_name,
+                repo_root,
+                first_seen_utc,
+                last_seen_utc
+            ) VALUES (?, ?, ?, '', '', ?, ?, ?)
+            """,
+            (workstation_id, hostname, machine_alias, repo_root, now_utc, now_utc),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE workstations
+            SET hostname = ?,
+                machine_alias = ?,
+                repo_root = ?,
+                last_seen_utc = ?
+            WHERE workstation_id = ?
+            """,
+            (hostname, machine_alias, repo_root, now_utc, workstation_id),
+        )
+    return workstation_id
+
+
+def ensure_camera_profile_record(conn: sqlite3.Connection, payload: dict, workstation_id: str, *, now_utc: str) -> str:
+    profile = payload.get("camera_profile") or {}
+    profile_key = str(profile.get("profile_key") or profile.get("profile_id") or "default").strip() or "default"
+    camera_profile_id = f"{workstation_id}:{profile_key}"
+    profile_label = str(profile.get("profile_label") or profile_key).strip() or profile_key
+    source_name = str(profile.get("source_name") or "").strip()
+    existing = conn.execute(
+        "SELECT camera_profile_id FROM camera_profiles WHERE camera_profile_id = ?",
+        (camera_profile_id,),
+    ).fetchone()
+    if existing is None:
+        conn.execute(
+            """
+            INSERT INTO camera_profiles (
+                camera_profile_id,
+                workstation_id,
+                profile_key,
+                profile_label,
+                source_name,
+                is_active,
+                first_seen_utc,
+                last_seen_utc
+            ) VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+            """,
+            (camera_profile_id, workstation_id, profile_key, profile_label, source_name, now_utc, now_utc),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE camera_profiles
+            SET profile_label = ?,
+                source_name = ?,
+                is_active = 1,
+                last_seen_utc = ?
+            WHERE camera_profile_id = ?
+            """,
+            (profile_label, source_name, now_utc, camera_profile_id),
+        )
+    return camera_profile_id
+
+
+def record_workstation_status(catalog_path: Path, payload: dict, *, event_kind: str) -> dict:
+    now_utc = utc_now_text()
+    workstation = payload.get("workstation") or {}
+    status = payload.get("status") or {}
+    run_payload = payload.get("run") or {}
+
+    with closing(get_db_connection(catalog_path)) as conn:
+        workstation_id = ensure_workstation_record(conn, payload, now_utc=now_utc)
+        camera_profile_id = ensure_camera_profile_record(conn, payload, workstation_id, now_utc=now_utc)
+        conn.execute(
+            """
+            INSERT INTO workstation_runtime_status (
+                workstation_id,
+                hostname,
+                machine_alias,
+                repo_root,
+                profile_key,
+                profile_label,
+                source_name,
+                local_ip,
+                software_version,
+                current_state,
+                upload_phase,
+                current_local_run_id,
+                current_label,
+                current_started_at_local,
+                last_error,
+                last_event_kind,
+                last_event_utc,
+                last_heartbeat_utc,
+                updated_at_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(workstation_id) DO UPDATE SET
+                hostname = excluded.hostname,
+                machine_alias = excluded.machine_alias,
+                repo_root = excluded.repo_root,
+                profile_key = excluded.profile_key,
+                profile_label = excluded.profile_label,
+                source_name = excluded.source_name,
+                local_ip = excluded.local_ip,
+                software_version = excluded.software_version,
+                current_state = excluded.current_state,
+                upload_phase = excluded.upload_phase,
+                current_local_run_id = excluded.current_local_run_id,
+                current_label = excluded.current_label,
+                current_started_at_local = excluded.current_started_at_local,
+                last_error = excluded.last_error,
+                last_event_kind = excluded.last_event_kind,
+                last_event_utc = excluded.last_event_utc,
+                last_heartbeat_utc = excluded.last_heartbeat_utc,
+                updated_at_utc = excluded.updated_at_utc
+            """,
+            (
+                workstation_id,
+                str(workstation.get("hostname") or workstation_id),
+                str(workstation.get("machine_alias") or ""),
+                str(workstation.get("repo_root") or ""),
+                str((payload.get("camera_profile") or {}).get("profile_key") or (payload.get("camera_profile") or {}).get("profile_id") or "default"),
+                str((payload.get("camera_profile") or {}).get("profile_label") or ""),
+                str((payload.get("camera_profile") or {}).get("source_name") or ""),
+                str(workstation.get("local_ip") or ""),
+                str(workstation.get("software_version") or ""),
+                str(status.get("state") or "idle"),
+                str(status.get("upload_phase") or ""),
+                str(run_payload.get("local_run_id") or status.get("current_local_run_id") or ""),
+                str(run_payload.get("label") or status.get("current_label") or ""),
+                str(run_payload.get("started_at_local") or status.get("current_started_at_local") or ""),
+                str(status.get("last_error") or ""),
+                event_kind,
+                now_utc,
+                now_utc if event_kind == "heartbeat" else str(status.get("last_heartbeat_utc") or now_utc),
+                now_utc,
+            ),
+        )
+        conn.commit()
+
+    return {
+        "accepted": True,
+        "workstation_id": workstation_id,
+        "camera_profile_id": camera_profile_id,
+        "updated_at_utc": now_utc,
+        "event_kind": event_kind,
+    }
+
+
+def record_run_status(catalog_path: Path, payload: dict) -> dict:
+    now_utc = utc_now_text()
+    run_payload = payload.get("run") or {}
+    local_run_id = str(run_payload.get("local_run_id") or "").strip()
+    if not local_run_id:
+        raise ValueError("run.local_run_id is required")
+
+    with closing(get_db_connection(catalog_path)) as conn:
+        workstation_id = ensure_workstation_record(conn, payload, now_utc=now_utc)
+        camera_profile_id = ensure_camera_profile_record(conn, payload, workstation_id, now_utc=now_utc)
+        pending_run_id = pending_run_id_for(workstation_id, local_run_id)
+        replay_status = str(run_payload.get("replay_status") or "pending_upload").strip() or "pending_upload"
+        if replay_status == "available":
+            conn.execute(
+                "DELETE FROM pending_runs WHERE workstation_id = ? AND local_run_id = ?",
+                (workstation_id, local_run_id),
+            )
+        else:
+            existing = conn.execute(
+                """
+                SELECT first_reported_utc
+                FROM pending_runs
+                WHERE workstation_id = ? AND local_run_id = ?
+                LIMIT 1
+                """,
+                (workstation_id, local_run_id),
+            ).fetchone()
+            first_reported_utc = now_utc if existing is None else str(existing["first_reported_utc"] or now_utc)
+            conn.execute(
+                """
+                INSERT INTO pending_runs (
+                    pending_run_id,
+                    workstation_id,
+                    local_run_id,
+                    camera_profile_id,
+                    label,
+                    source_name,
+                    process_gate,
+                    stop_reason,
+                    started_at_local,
+                    stopped_at_local,
+                    duration_sec,
+                    hamilton_log_dir,
+                    hamilton_log_glob,
+                    trace_pairing_delta_sec,
+                    replay_status,
+                    upload_phase,
+                    local_manifest_path,
+                    local_video_path,
+                    local_trace_path,
+                    last_error,
+                    first_reported_utc,
+                    last_reported_utc,
+                    promoted_central_run_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(workstation_id, local_run_id) DO UPDATE SET
+                    camera_profile_id = excluded.camera_profile_id,
+                    label = excluded.label,
+                    source_name = excluded.source_name,
+                    process_gate = excluded.process_gate,
+                    stop_reason = excluded.stop_reason,
+                    started_at_local = excluded.started_at_local,
+                    stopped_at_local = excluded.stopped_at_local,
+                    duration_sec = excluded.duration_sec,
+                    hamilton_log_dir = excluded.hamilton_log_dir,
+                    hamilton_log_glob = excluded.hamilton_log_glob,
+                    trace_pairing_delta_sec = excluded.trace_pairing_delta_sec,
+                    replay_status = excluded.replay_status,
+                    upload_phase = excluded.upload_phase,
+                    local_manifest_path = excluded.local_manifest_path,
+                    local_video_path = excluded.local_video_path,
+                    local_trace_path = excluded.local_trace_path,
+                    last_error = excluded.last_error,
+                    last_reported_utc = excluded.last_reported_utc,
+                    promoted_central_run_id = excluded.promoted_central_run_id
+                """,
+                (
+                    pending_run_id,
+                    workstation_id,
+                    local_run_id,
+                    camera_profile_id,
+                    str(run_payload.get("label") or "run"),
+                    str(run_payload.get("source_name") or ""),
+                    str(run_payload.get("process_gate") or ""),
+                    str(run_payload.get("stop_reason") or ""),
+                    str(run_payload.get("started_at_local") or ""),
+                    str(run_payload.get("stopped_at_local") or ""),
+                    float(run_payload.get("duration_sec") or 0),
+                    str(run_payload.get("hamilton_log_dir") or ""),
+                    str(run_payload.get("hamilton_log_glob") or ""),
+                    run_payload.get("trace_pairing_delta_sec"),
+                    replay_status,
+                    str(run_payload.get("upload_phase") or ""),
+                    str(run_payload.get("local_manifest_path") or ""),
+                    str(run_payload.get("local_video_path") or ""),
+                    str(run_payload.get("local_trace_path") or ""),
+                    str(run_payload.get("last_error") or ""),
+                    first_reported_utc,
+                    now_utc,
+                    str(run_payload.get("central_run_id") or ""),
+                ),
+            )
+        conn.commit()
+
+    return {
+        "accepted": True,
+        "workstation_id": workstation_id,
+        "camera_profile_id": camera_profile_id,
+        "pending_run_id": pending_run_id_for(workstation_id, local_run_id),
+        "updated_at_utc": now_utc,
+        "replay_status": replay_status,
+    }
+
+
 def list_workstations(catalog_path: Path) -> list[dict]:
     with closing(get_db_connection(catalog_path)) as conn:
         rows = conn.execute(
             """
-            SELECT workstation_id, hostname, machine_alias, instrument_name, site_name, repo_root,
-                   first_seen_utc, last_seen_utc
+            SELECT workstations.workstation_id,
+                   workstations.hostname,
+                   workstations.machine_alias,
+                   workstations.instrument_name,
+                   workstations.site_name,
+                   workstations.repo_root,
+                   workstations.first_seen_utc,
+                   workstations.last_seen_utc,
+                   workstation_runtime_status.local_ip,
+                   workstation_runtime_status.software_version,
+                   workstation_runtime_status.current_state,
+                   workstation_runtime_status.upload_phase,
+                   workstation_runtime_status.current_local_run_id,
+                   workstation_runtime_status.current_label,
+                   workstation_runtime_status.current_started_at_local,
+                   workstation_runtime_status.last_error,
+                   workstation_runtime_status.last_event_kind,
+                   workstation_runtime_status.last_event_utc,
+                   workstation_runtime_status.last_heartbeat_utc
             FROM workstations
-            ORDER BY machine_alias ASC, hostname ASC, workstation_id ASC
+            LEFT JOIN workstation_runtime_status
+              ON workstation_runtime_status.workstation_id = workstations.workstation_id
+            ORDER BY workstations.machine_alias ASC, workstations.hostname ASC, workstations.workstation_id ASC
             """
         ).fetchall()
     return [dict(row) for row in rows]
@@ -320,7 +732,7 @@ def list_runs(
     started_before: str = "",
     limit: int = 100,
 ) -> list[dict]:
-    query = """
+    uploaded_query = """
         SELECT runs.central_run_id,
                runs.local_run_id,
                runs.label,
@@ -350,24 +762,71 @@ def list_runs(
     """
     params: list[object] = []
     if workstation_id:
-        query += " AND runs.workstation_id = ?"
+        uploaded_query += " AND runs.workstation_id = ?"
         params.append(workstation_id)
     if replay_status:
-        query += " AND runs.replay_status = ?"
+        uploaded_query += " AND runs.replay_status = ?"
         params.append(replay_status)
     if started_after:
-        query += " AND runs.started_at_local >= ?"
+        uploaded_query += " AND runs.started_at_local >= ?"
         params.append(started_after)
     if started_before:
-        query += " AND runs.started_at_local <= ?"
+        uploaded_query += " AND runs.started_at_local <= ?"
         params.append(started_before)
-    query += " ORDER BY COALESCE(runs.started_at_local, '') DESC, runs.last_ingested_utc DESC"
-    if limit > 0:
-        query += " LIMIT ?"
-        params.append(limit)
+    uploaded_query += " ORDER BY COALESCE(runs.started_at_local, '') DESC, runs.last_ingested_utc DESC"
 
     with closing(get_db_connection(catalog_path)) as conn:
-        run_rows = conn.execute(query, tuple(params)).fetchall()
+        run_rows = conn.execute(uploaded_query, tuple(params)).fetchall()
+        pending_query = """
+            SELECT pending_runs.pending_run_id,
+                   pending_runs.local_run_id,
+                   pending_runs.label,
+                   pending_runs.source_name,
+                   pending_runs.process_gate,
+                   pending_runs.stop_reason,
+                   pending_runs.started_at_local,
+                   pending_runs.stopped_at_local,
+                   pending_runs.duration_sec,
+                   pending_runs.hamilton_log_dir,
+                   pending_runs.hamilton_log_glob,
+                   pending_runs.trace_pairing_delta_sec,
+                   pending_runs.replay_status,
+                   pending_runs.upload_phase,
+                   pending_runs.local_manifest_path,
+                   pending_runs.local_video_path,
+                   pending_runs.local_trace_path,
+                   pending_runs.last_error,
+                   pending_runs.first_reported_utc,
+                   pending_runs.last_reported_utc,
+                   pending_runs.workstation_id,
+                   workstations.hostname,
+                   workstations.machine_alias,
+                   pending_runs.camera_profile_id,
+                   camera_profiles.profile_label
+            FROM pending_runs
+            JOIN workstations ON workstations.workstation_id = pending_runs.workstation_id
+            LEFT JOIN camera_profiles ON camera_profiles.camera_profile_id = pending_runs.camera_profile_id
+            LEFT JOIN runs
+              ON runs.workstation_id = pending_runs.workstation_id
+             AND runs.local_run_id = pending_runs.local_run_id
+            WHERE runs.central_run_id IS NULL
+        """
+        pending_params: list[object] = []
+        if workstation_id:
+            pending_query += " AND pending_runs.workstation_id = ?"
+            pending_params.append(workstation_id)
+        if replay_status:
+            pending_query += " AND pending_runs.replay_status = ?"
+            pending_params.append(replay_status)
+        if started_after:
+            pending_query += " AND pending_runs.started_at_local >= ?"
+            pending_params.append(started_after)
+        if started_before:
+            pending_query += " AND pending_runs.started_at_local <= ?"
+            pending_params.append(started_before)
+        pending_query += " ORDER BY COALESCE(pending_runs.started_at_local, '') DESC, pending_runs.last_reported_utc DESC"
+        pending_rows = conn.execute(pending_query, tuple(pending_params)).fetchall()
+
         run_ids = [row["central_run_id"] for row in run_rows]
         artifacts_by_run: dict[str, list[dict]] = {run_id: [] for run_id in run_ids}
         if run_ids:
@@ -384,10 +843,50 @@ def list_runs(
             for artifact in artifact_rows:
                 artifacts_by_run[str(artifact["central_run_id"])].append(artifact_row_to_summary(artifact))
 
-    return [summarize_run_row(row, artifacts_by_run.get(str(row["central_run_id"]), [])) for row in run_rows]
+    items = [summarize_run_row(row, artifacts_by_run.get(str(row["central_run_id"]), [])) for row in run_rows]
+    items.extend(summarize_pending_run_row(row) for row in pending_rows)
+    items.sort(key=lambda item: ((item.get("started_at_local") or ""), (item.get("last_ingested_utc") or "")), reverse=True)
+    return items[:limit] if limit > 0 else items
 
 
 def get_run_artifacts(catalog_path: Path, central_run_id: str) -> list[dict]:
+    if is_pending_run_id(central_run_id):
+        with closing(get_db_connection(catalog_path)) as conn:
+            row = conn.execute(
+                """
+                SELECT local_manifest_path, local_video_path, local_trace_path
+                FROM pending_runs
+                WHERE pending_run_id = ?
+                LIMIT 1
+                """,
+                (central_run_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(central_run_id)
+        items = []
+        for artifact_type, key in (
+            ("run_manifest_json", "local_manifest_path"),
+            ("video_mp4", "local_video_path"),
+            ("trace_trc", "local_trace_path"),
+        ):
+            local_path = str(row[key] or "")
+            items.append(
+                {
+                    "artifact_id": f"{central_run_id}:{artifact_type}",
+                    "artifact_type": artifact_type,
+                    "original_filename": Path(local_path).name if local_path else "",
+                    "storage_relpath": "",
+                    "mime_type": "",
+                    "compression_kind": "none",
+                    "content_sha256": "",
+                    "size_bytes": 0,
+                    "stored_at_utc": "",
+                    "is_required": True,
+                    "is_ready": False,
+                    "media_url": "",
+                }
+            )
+        return items
     with closing(get_db_connection(catalog_path)) as conn:
         rows = conn.execute(
             """
@@ -402,6 +901,67 @@ def get_run_artifacts(catalog_path: Path, central_run_id: str) -> list[dict]:
 
 
 def get_run_detail(catalog_path: Path, central_run_id: str) -> dict:
+    if is_pending_run_id(central_run_id):
+        with closing(get_db_connection(catalog_path)) as conn:
+            row = conn.execute(
+                """
+                SELECT pending_runs.pending_run_id,
+                       pending_runs.local_run_id,
+                       pending_runs.label,
+                       pending_runs.source_name,
+                       pending_runs.process_gate,
+                       pending_runs.stop_reason,
+                       pending_runs.started_at_local,
+                       pending_runs.stopped_at_local,
+                       pending_runs.duration_sec,
+                       pending_runs.hamilton_log_dir,
+                       pending_runs.hamilton_log_glob,
+                       pending_runs.trace_pairing_delta_sec,
+                       pending_runs.replay_status,
+                       pending_runs.upload_phase,
+                       pending_runs.local_manifest_path,
+                       pending_runs.local_video_path,
+                       pending_runs.local_trace_path,
+                       pending_runs.last_error,
+                       pending_runs.first_reported_utc,
+                       pending_runs.last_reported_utc,
+                       pending_runs.workstation_id,
+                       workstations.hostname,
+                       workstations.machine_alias,
+                       workstations.repo_root,
+                       pending_runs.camera_profile_id,
+                       camera_profiles.profile_key,
+                       camera_profiles.profile_label,
+                       camera_profiles.source_name AS camera_source_name
+                FROM pending_runs
+                JOIN workstations ON workstations.workstation_id = pending_runs.workstation_id
+                LEFT JOIN camera_profiles ON camera_profiles.camera_profile_id = pending_runs.camera_profile_id
+                WHERE pending_runs.pending_run_id = ?
+                LIMIT 1
+                """,
+                (central_run_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(central_run_id)
+        artifacts = get_run_artifacts(catalog_path, central_run_id)
+        run_payload = summarize_pending_run_row(row)
+        return {
+            "run": run_payload,
+            "workstation": {
+                "workstation_id": row["workstation_id"],
+                "hostname": row["hostname"],
+                "machine_alias": row["machine_alias"],
+                "repo_root": row["repo_root"],
+            },
+            "camera_profile": {
+                "camera_profile_id": row["camera_profile_id"],
+                "profile_key": row["profile_key"] or "default",
+                "profile_label": row["profile_label"] or "",
+                "source_name": row["camera_source_name"] or "",
+            },
+            "artifacts": artifacts,
+            "ingest_batch": None,
+        }
     with closing(get_db_connection(catalog_path)) as conn:
         row = conn.execute(
             """
@@ -517,6 +1077,8 @@ def get_health_payload(
         run_count = conn.execute("SELECT COUNT(*) AS count FROM runs").fetchone()["count"]
         artifact_count = conn.execute("SELECT COUNT(*) AS count FROM artifacts").fetchone()["count"]
         workstation_count = conn.execute("SELECT COUNT(*) AS count FROM workstations").fetchone()["count"]
+        pending_run_count = conn.execute("SELECT COUNT(*) AS count FROM pending_runs").fetchone()["count"]
+        active_workstation_count = conn.execute("SELECT COUNT(*) AS count FROM workstation_runtime_status").fetchone()["count"]
     return {
         "status": "ok",
         "site_name": site_name,
@@ -525,8 +1087,10 @@ def get_health_payload(
         "catalog_path": str(catalog_path),
         "counts": {
             "runs": run_count,
+            "pending_runs": pending_run_count,
             "artifacts": artifact_count,
             "workstations": workstation_count,
+            "active_workstations": active_workstation_count,
         },
     }
 
@@ -582,6 +1146,16 @@ def make_handler(
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def _read_json_body(self) -> dict:
+            content_length = int(self.headers.get("Content-Length") or "0")
+            if content_length <= 0:
+                raise ValueError("Request body is required")
+            body = self.rfile.read(content_length)
+            payload = json.loads(body.decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("Request JSON body must be an object")
+            return payload
 
         def _parse_range_header(self, header_value: str, file_size: int) -> tuple[int, int]:
             match = re.match(r"bytes=(\d*)-(\d*)$", header_value.strip())
@@ -733,6 +1307,32 @@ def make_handler(
             except Exception:
                 if logger:
                     logger.exception("Unexpected request failure: %s", route)
+                return self._send_text("Central replay server error", HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        def do_POST(self) -> None:  # noqa: N802
+            parsed = urlparse(self.path)
+            route = unquote(parsed.path)
+
+            try:
+                if route == "/api/workstations/heartbeat":
+                    payload = self._read_json_body()
+                    return self._send_json(record_workstation_status(catalog_path, payload, event_kind="heartbeat"))
+
+                if route == "/api/runs/status":
+                    payload = self._read_json_body()
+                    record_workstation_status(catalog_path, payload, event_kind="event")
+                    return self._send_json(record_run_status(catalog_path, payload))
+
+                return self._send_text("Not found", HTTPStatus.NOT_FOUND)
+            except ValueError as exc:
+                return self._send_text(str(exc), HTTPStatus.BAD_REQUEST)
+            except sqlite3.Error:
+                if logger:
+                    logger.exception("HTTP POST failed: %s", route)
+                return self._send_text("Central replay catalog update failed", HTTPStatus.INTERNAL_SERVER_ERROR)
+            except Exception:
+                if logger:
+                    logger.exception("Unexpected POST failure: %s", route)
                 return self._send_text("Central replay server error", HTTPStatus.INTERNAL_SERVER_ERROR)
 
         def log_message(self, format: str, *args) -> None:  # noqa: A003

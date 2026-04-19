@@ -8,6 +8,7 @@ import tempfile
 import threading
 import unittest
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 import importlib.util
@@ -114,6 +115,16 @@ class CentralReplayServerTests(unittest.TestCase):
         with urllib.request.urlopen(url) as response:
             return json.loads(response.read().decode("utf-8"))
 
+    def post_json(self, url: str, payload: dict) -> dict:
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request) as response:
+            return json.loads(response.read().decode("utf-8"))
+
     def test_catalog_api_lists_runs_and_workstations(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             upload_root, central_run_id = self.create_catalog_fixture(Path(tmpdir))
@@ -168,6 +179,81 @@ class CentralReplayServerTests(unittest.TestCase):
                     self.assertEqual(response.status, 206)
                     self.assertEqual(response.headers.get("Content-Range"), "bytes 4-7/22")
                     self.assertEqual(response.read(), b"ftyp")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_status_posts_surface_pending_runs_before_upload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            upload_root = Path(tmpdir) / "central"
+            upload_root.mkdir(parents=True, exist_ok=True)
+            server, thread = self.start_server(upload_root)
+            try:
+                base_url = f"http://127.0.0.1:{server.server_port}"
+                heartbeat_payload = {
+                    "workstation": {
+                        "workstation_id": "bench-1",
+                        "hostname": "BENCH-1",
+                        "machine_alias": "Bench 1",
+                        "repo_root": "C:\\camera-tools",
+                        "local_ip": "192.168.70.55",
+                        "software_version": "camera-daemon.jdp.v1",
+                    },
+                    "camera_profile": {
+                        "profile_id": "default",
+                        "profile_key": "default",
+                        "profile_label": "Top Camera",
+                        "source_name": "Arducam USB Camera",
+                    },
+                    "status": {
+                        "state": "idle",
+                    },
+                }
+                heartbeat_result = self.post_json(f"{base_url}/api/workstations/heartbeat", heartbeat_payload)
+                self.assertEqual(heartbeat_result["workstation_id"], "bench-1")
+
+                run_payload = {
+                    **heartbeat_payload,
+                    "status": {
+                        "state": "pending_upload",
+                        "upload_phase": "",
+                    },
+                    "run": {
+                        "local_run_id": "run-123",
+                        "label": "Top Camera",
+                        "source_name": "Arducam USB Camera",
+                        "process_gate": "HxRun.exe",
+                        "stop_reason": "process_exit",
+                        "started_at_local": "2026-04-19T09:15:00",
+                        "stopped_at_local": "2026-04-19T09:25:00",
+                        "duration_sec": 600,
+                        "hamilton_log_dir": "C:\\Program Files (x86)\\HAMILTON\\LogFiles",
+                        "hamilton_log_glob": "*.trc",
+                        "trace_pairing_delta_sec": 1.2,
+                        "local_manifest_path": "C:\\camera-tools\\runs\\run-123.run.json",
+                        "local_video_path": "C:\\camera-tools\\runs\\run-123.mp4",
+                        "local_trace_path": "C:\\camera-tools\\runs\\run-123.trc",
+                        "replay_status": "pending_upload",
+                    },
+                }
+                run_result = self.post_json(f"{base_url}/api/runs/status", run_payload)
+                pending_run_id = run_result["pending_run_id"]
+                self.assertTrue(pending_run_id.startswith("pending-run:"))
+
+                workstations = self.fetch_json(f"{base_url}/api/workstations")
+                self.assertEqual(workstations["items"][0]["current_state"], "pending_upload")
+                self.assertEqual(workstations["items"][0]["local_ip"], "192.168.70.55")
+
+                runs = self.fetch_json(f"{base_url}/api/runs")
+                self.assertEqual(len(runs["items"]), 1)
+                self.assertEqual(runs["items"][0]["central_run_id"], pending_run_id)
+                self.assertEqual(runs["items"][0]["replay_status"], "pending_upload")
+                self.assertEqual(runs["items"][0]["video_url"], "")
+
+                detail = self.fetch_json(f"{base_url}/api/runs/{pending_run_id}")
+                self.assertEqual(detail["run"]["trace_events_url"], "")
+                self.assertEqual(len(detail["artifacts"]), 3)
             finally:
                 server.shutdown()
                 server.server_close()

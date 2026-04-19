@@ -116,6 +116,19 @@ Query parameters:
 
 - active camera profiles across workstations
 
+### Workstation Status
+
+`POST /api/workstations/heartbeat`
+
+- workstation daemon heartbeat
+- updates workstation presence, local IP, current state, and profile context
+
+`POST /api/runs/status`
+
+- event-driven run status update from the workstation daemon
+- used for `pending_upload`, `uploading`, `available`, and `failed`
+- lets the LAN UI show a run before full media upload finishes
+
 ### Replay
 
 `GET /api/runs/{central_run_id}/trace-events`

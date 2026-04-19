@@ -228,13 +228,16 @@ async function loadRun(centralRunId) {
     throw new Error(`Failed to load run ${centralRunId}`);
   }
   const detailPayload = await detailResponse.json();
-
-  const eventsResponse = await fetch(detailPayload.run.trace_events_url);
-  if (!eventsResponse.ok) {
-    throw new Error(`Failed to load trace events for ${centralRunId}`);
+  if (detailPayload.run.trace_events_url) {
+    const eventsResponse = await fetch(detailPayload.run.trace_events_url);
+    if (!eventsResponse.ok) {
+      throw new Error(`Failed to load trace events for ${centralRunId}`);
+    }
+    const eventsPayload = await eventsResponse.json();
+    activeEvents = eventsPayload.items || [];
+  } else {
+    activeEvents = [];
   }
-  const eventsPayload = await eventsResponse.json();
-  activeEvents = eventsPayload.items || [];
 
   runTitleEl.textContent = `${detailPayload.run.label} (${detailPayload.run.video_filename || "missing video"})`;
   runMetaEl.textContent =

@@ -25,6 +25,9 @@ state in a small SQLite ledger so duplicate bundles can be skipped cleanly.
 The uploader lane then ingests those staged runs into a central filesystem
 root under `central_ingest.upload_root`, assigns server-side `central_run_id`
 values, and writes acknowledgements back into the local staging ledger.
+When `central_ingest.status_server_url` is set, the workstation daemon can also
+push heartbeat and run-status updates to the LAN replay server so pending runs
+appear in the central UI before media upload finishes.
 
 For a full remote-install checklist and rollback procedure, see
 [`WORKSTATION-ROLLOUT.md`](/C:/QC/cameras/WORKSTATION-ROLLOUT.md).
