@@ -238,6 +238,208 @@ class CameraDaemonTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertEqual(counter_path.read_text(encoding="utf-8").strip(), "1")
 
+    def test_supervisor_runs_auto_upload_after_successful_cycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            runs_root = root / "runs"
+            logs_root = root / "logs"
+            logs_root.mkdir()
+
+            config_path = root / "camera-recorder.json"
+            local_path = root / "camera-recorder.local.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {
+                            "log_dir": str(log_dir),
+                            "process_name": "HxRun.exe",
+                        },
+                        "storage": {
+                            "runs_root": str(runs_root),
+                            "recorder_log_dir": str(logs_root),
+                        },
+                        "central_ingest": {
+                            "staging_root": str(root / "staging"),
+                            "upload_root": str(root / "upload"),
+                            "transport": "filesystem",
+                            "auto_upload_on_run_complete": True,
+                        },
+                        "recorder": {
+                            "stop_file": str(root / "recorder.stop"),
+                        },
+                        "daemon": {
+                            "stop_file": str(root / "daemon.stop"),
+                            "pid_file": str(root / "daemon.pid"),
+                            "status_path": str(root / "daemon-status.json"),
+                            "log_path": str(root / "daemon.log"),
+                            "idle_poll_sec": 0.05,
+                            "heartbeat_sec": 0.05,
+                            "relaunch_delay_sec": 0.0,
+                        },
+                        "profiles": [
+                            {
+                                "id": "default",
+                                "label": "BenchCam",
+                                "source": 'dshow:video="Bench Cam"',
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            recorder_script = root / "mock-recorder.py"
+            recorder_script.write_text("import time\ntime.sleep(0.05)\n", encoding="utf-8")
+
+            calls: list[dict] = []
+
+            def fake_post_run_ingest(**kwargs):
+                calls.append(kwargs)
+                return {
+                    "stage": {
+                        "batch_id": "batch-auto-1",
+                        "staged_run_count": 1,
+                        "skipped_run_count": 0,
+                    },
+                    "upload": {
+                        "ingest_batch_id": "ingest-auto-1",
+                        "uploaded_run_count": 1,
+                        "failed_run_count": 0,
+                    },
+                }
+
+            poll_calls = {"count": 0}
+
+            def fake_is_running(_name: str) -> bool:
+                poll_calls["count"] += 1
+                return poll_calls["count"] >= 2
+
+            rc = DAEMON.run_supervisor(
+                config_path=config_path,
+                local_config_path=local_path,
+                profile_id="default",
+                source_override="",
+                out_dir_override="",
+                label_override="",
+                stop_file=root / "daemon.stop",
+                pid_file=root / "daemon.pid",
+                status_path=root / "daemon-status.json",
+                daemon_log_path=root / "daemon.log",
+                recorder_log_path=root / "recorder.log",
+                idle_poll_sec=0.05,
+                heartbeat_sec=0.05,
+                relaunch_delay_sec=0.0,
+                idle_timeout_sec=2,
+                run_once=True,
+                max_cycles=0,
+                recorder_script=recorder_script,
+                is_process_running_fn=fake_is_running,
+                post_run_ingest_fn=fake_post_run_ingest,
+            )
+
+            self.assertEqual(rc, 0)
+            self.assertEqual(len(calls), 1)
+            status = json.loads((root / "daemon-status.json").read_text(encoding="utf-8"))
+            self.assertEqual(status["last_stage_batch_id"], "batch-auto-1")
+            self.assertEqual(status["last_upload_batch_id"], "ingest-auto-1")
+            self.assertEqual(status["last_uploaded_run_count"], 1)
+            self.assertEqual(status["last_failed_upload_run_count"], 0)
+
+    def test_supervisor_skips_auto_upload_after_failed_cycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            runs_root = root / "runs"
+            logs_root = root / "logs"
+            logs_root.mkdir()
+
+            config_path = root / "camera-recorder.json"
+            local_path = root / "camera-recorder.local.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {
+                            "log_dir": str(log_dir),
+                            "process_name": "HxRun.exe",
+                        },
+                        "storage": {
+                            "runs_root": str(runs_root),
+                            "recorder_log_dir": str(logs_root),
+                        },
+                        "central_ingest": {
+                            "staging_root": str(root / "staging"),
+                            "upload_root": str(root / "upload"),
+                            "transport": "filesystem",
+                            "auto_upload_on_run_complete": True,
+                        },
+                        "recorder": {
+                            "stop_file": str(root / "recorder.stop"),
+                        },
+                        "daemon": {
+                            "stop_file": str(root / "daemon.stop"),
+                            "pid_file": str(root / "daemon.pid"),
+                            "status_path": str(root / "daemon-status.json"),
+                            "log_path": str(root / "daemon.log"),
+                            "idle_poll_sec": 0.05,
+                            "heartbeat_sec": 0.05,
+                            "relaunch_delay_sec": 0.0,
+                        },
+                        "profiles": [
+                            {
+                                "id": "default",
+                                "label": "BenchCam",
+                                "source": 'dshow:video="Bench Cam"',
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            recorder_script = root / "mock-recorder.py"
+            recorder_script.write_text("import sys\nsys.exit(3)\n", encoding="utf-8")
+
+            calls = {"count": 0}
+
+            def fake_post_run_ingest(**kwargs):
+                calls["count"] += 1
+                return {}
+
+            poll_calls = {"count": 0}
+
+            def fake_is_running(_name: str) -> bool:
+                poll_calls["count"] += 1
+                return poll_calls["count"] >= 2
+
+            rc = DAEMON.run_supervisor(
+                config_path=config_path,
+                local_config_path=local_path,
+                profile_id="default",
+                source_override="",
+                out_dir_override="",
+                label_override="",
+                stop_file=root / "daemon.stop",
+                pid_file=root / "daemon.pid",
+                status_path=root / "daemon-status.json",
+                daemon_log_path=root / "daemon.log",
+                recorder_log_path=root / "recorder.log",
+                idle_poll_sec=0.05,
+                heartbeat_sec=0.05,
+                relaunch_delay_sec=0.0,
+                idle_timeout_sec=2,
+                run_once=True,
+                max_cycles=0,
+                recorder_script=recorder_script,
+                is_process_running_fn=fake_is_running,
+                post_run_ingest_fn=fake_post_run_ingest,
+            )
+
+            self.assertEqual(rc, 0)
+            self.assertEqual(calls["count"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
