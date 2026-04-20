@@ -4,7 +4,8 @@
     "port": 5080,
     "site_name": "Central Replay",
     "log_path": "C:\\QC\\logs\\central-replay-server.log",
-    "healthcheck_path": "/api/healthz"
+    "healthcheck_path": "/api/healthz",
+    "workstation_heartbeat_timeout_sec": 30.0
   },
   "storage": {
     "upload_root": "C:\\QC\\cameras\\central_replay_root",

@@ -98,6 +98,7 @@ DEFAULT_SERVER_CONFIG = {
         "site_name": "Central Replay",
         "log_path": str(REPO_ROOT / "logs" / "central-replay-server.log"),
         "healthcheck_path": "/api/healthz",
+        "workstation_heartbeat_timeout_sec": 30.0,
     },
     "storage": {
         "upload_root": str(REPO_ROOT / "cameras" / "central_replay_root"),
@@ -129,6 +130,7 @@ class RuntimeSettings:
     site_name: str
     log_path: str
     healthcheck_path: str
+    workstation_heartbeat_timeout_sec: float
 
 
 def read_json_file(path: Path) -> dict:
@@ -143,6 +145,11 @@ def read_json_file(path: Path) -> dict:
 
 def utc_now_text() -> str:
     return dt.datetime.now(dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def heartbeat_cutoff_text(timeout_sec: float) -> str:
+    cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(seconds=timeout_sec)
+    return cutoff.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def pending_run_id_for(workstation_id: str, local_run_id: str) -> str:
@@ -203,6 +210,8 @@ def validate_runtime_settings(runtime: RuntimeSettings) -> dict:
         errors.append("server.site_name is required.")
     if not runtime.healthcheck_path.startswith("/"):
         errors.append("server.healthcheck_path must start with '/'.")
+    if runtime.workstation_heartbeat_timeout_sec <= 0:
+        errors.append("server.workstation_heartbeat_timeout_sec must be greater than 0.")
     if not runtime.upload_root.strip():
         errors.append("storage.upload_root is required.")
     elif not Path(runtime.upload_root).exists():
@@ -254,6 +263,11 @@ def resolve_runtime_settings(args: argparse.Namespace) -> RuntimeSettings:
         site_name=str(args.site_name or server_config["server"].get("site_name") or "").strip(),
         log_path=str(Path(args.log_path).resolve()) if args.log_path else str(server_config["server"].get("log_path") or "").strip(),
         healthcheck_path=str(args.health_path or server_config["server"].get("healthcheck_path") or "/api/healthz").strip(),
+        workstation_heartbeat_timeout_sec=float(
+            args.workstation_heartbeat_timeout_sec
+            if args.workstation_heartbeat_timeout_sec is not None
+            else server_config["server"].get("workstation_heartbeat_timeout_sec", 30.0)
+        ),
     )
 
 
@@ -678,7 +692,8 @@ def record_run_status(catalog_path: Path, payload: dict) -> dict:
     }
 
 
-def list_workstations(catalog_path: Path) -> list[dict]:
+def list_workstations(catalog_path: Path, *, heartbeat_timeout_sec: float = 30.0) -> list[dict]:
+    heartbeat_cutoff_utc = heartbeat_cutoff_text(heartbeat_timeout_sec)
     with closing(get_db_connection(catalog_path)) as conn:
         rows = conn.execute(
             """
@@ -692,22 +707,54 @@ def list_workstations(catalog_path: Path) -> list[dict]:
                    workstations.last_seen_utc,
                    workstation_runtime_status.local_ip,
                    workstation_runtime_status.software_version,
-                   workstation_runtime_status.current_state,
-                   workstation_runtime_status.upload_phase,
-                   workstation_runtime_status.current_local_run_id,
-                   workstation_runtime_status.current_label,
-                   workstation_runtime_status.current_started_at_local,
+                   workstation_runtime_status.current_state AS last_reported_state,
+                   CASE
+                       WHEN workstation_runtime_status.last_heartbeat_utc >= ? THEN workstation_runtime_status.current_state
+                       ELSE 'offline'
+                   END AS current_state,
+                   CASE
+                       WHEN workstation_runtime_status.last_heartbeat_utc >= ? THEN workstation_runtime_status.upload_phase
+                       ELSE ''
+                   END AS upload_phase,
+                   CASE
+                       WHEN workstation_runtime_status.last_heartbeat_utc >= ? THEN workstation_runtime_status.current_local_run_id
+                       ELSE ''
+                   END AS current_local_run_id,
+                   CASE
+                       WHEN workstation_runtime_status.last_heartbeat_utc >= ? THEN workstation_runtime_status.current_label
+                       ELSE ''
+                   END AS current_label,
+                   CASE
+                       WHEN workstation_runtime_status.last_heartbeat_utc >= ? THEN workstation_runtime_status.current_started_at_local
+                       ELSE ''
+                   END AS current_started_at_local,
                    workstation_runtime_status.last_error,
                    workstation_runtime_status.last_event_kind,
                    workstation_runtime_status.last_event_utc,
-                   workstation_runtime_status.last_heartbeat_utc
+                   workstation_runtime_status.last_heartbeat_utc,
+                   CASE
+                       WHEN workstation_runtime_status.last_heartbeat_utc >= ? THEN 1
+                       ELSE 0
+                   END AS is_online
             FROM workstations
             LEFT JOIN workstation_runtime_status
               ON workstation_runtime_status.workstation_id = workstations.workstation_id
             ORDER BY workstations.machine_alias ASC, workstations.hostname ASC, workstations.workstation_id ASC
-            """
+            """,
+            (
+                heartbeat_cutoff_utc,
+                heartbeat_cutoff_utc,
+                heartbeat_cutoff_utc,
+                heartbeat_cutoff_utc,
+                heartbeat_cutoff_utc,
+                heartbeat_cutoff_utc,
+            ),
         ).fetchall()
-    return [dict(row) for row in rows]
+    items = [dict(row) for row in rows]
+    for item in items:
+        item["is_online"] = bool(item["is_online"])
+        item["heartbeat_timeout_sec"] = heartbeat_timeout_sec
+    return items
 
 
 def list_camera_profiles(catalog_path: Path) -> list[dict]:
@@ -774,6 +821,9 @@ def list_runs(
         uploaded_query += " AND runs.started_at_local <= ?"
         params.append(started_before)
     uploaded_query += " ORDER BY COALESCE(runs.started_at_local, '') DESC, runs.last_ingested_utc DESC"
+    if limit > 0:
+        uploaded_query += " LIMIT ?"
+        params.append(limit)
 
     with closing(get_db_connection(catalog_path)) as conn:
         run_rows = conn.execute(uploaded_query, tuple(params)).fetchall()
@@ -825,6 +875,9 @@ def list_runs(
             pending_query += " AND pending_runs.started_at_local <= ?"
             pending_params.append(started_before)
         pending_query += " ORDER BY COALESCE(pending_runs.started_at_local, '') DESC, pending_runs.last_reported_utc DESC"
+        if limit > 0:
+            pending_query += " LIMIT ?"
+            pending_params.append(limit)
         pending_rows = conn.execute(pending_query, tuple(pending_params)).fetchall()
 
         run_ids = [row["central_run_id"] for row in run_rows]
@@ -1121,6 +1174,7 @@ def make_handler(
     site_name: str = "Central Replay",
     healthcheck_path: str = "/api/healthz",
     startup_utc: str = "",
+    workstation_heartbeat_timeout_sec: float = 30.0,
     logger: logging.Logger | None = None,
 ):
     class CentralReplayHandler(BaseHTTPRequestHandler):
@@ -1261,7 +1315,9 @@ def make_handler(
                     )
 
                 if route == "/api/workstations":
-                    return self._send_json({"items": list_workstations(catalog_path)})
+                    return self._send_json(
+                        {"items": list_workstations(catalog_path, heartbeat_timeout_sec=workstation_heartbeat_timeout_sec)}
+                    )
 
                 if route == "/api/camera-profiles":
                     return self._send_json({"items": list_camera_profiles(catalog_path)})
@@ -1363,6 +1419,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log-path", default="", help="Persistent host-local server log path")
     parser.add_argument("--site-name", default="", help="Friendly site label for health and diagnostics")
     parser.add_argument("--health-path", default="", help="Health-check route path")
+    parser.add_argument(
+        "--workstation-heartbeat-timeout-sec",
+        type=float,
+        default=None,
+        help="Seconds before a workstation is treated as offline without a heartbeat",
+    )
     parser.add_argument("--print-config", action="store_true", help="Print the resolved runtime config and exit")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON for --print-config")
     return parser
@@ -1409,6 +1471,7 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("Upload root: %s", upload_root)
     logger.info("Catalog path: %s", catalog_path)
     logger.info("Health path: %s", runtime.healthcheck_path)
+    logger.info("Workstation heartbeat timeout: %.1fs", runtime.workstation_heartbeat_timeout_sec)
 
     handler = make_handler(
         upload_root,
@@ -1416,6 +1479,7 @@ def main(argv: list[str] | None = None) -> int:
         site_name=runtime.site_name,
         healthcheck_path=runtime.healthcheck_path,
         startup_utc=startup_utc,
+        workstation_heartbeat_timeout_sec=runtime.workstation_heartbeat_timeout_sec,
         logger=logger,
     )
     with ThreadingHTTPServer((runtime.host, runtime.port), handler) as server:

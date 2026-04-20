@@ -322,12 +322,14 @@ That host config controls:
 - central upload root and optional explicit catalog path
 - persistent log path
 - health-check route
+- workstation heartbeat timeout before LAN presence flips to offline
 
 Then bring up the first LAN browse layer with:
 
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\start-central-replay-server.ps1 `
   -UploadRoot \\server\camera-replay `
+  -WorkstationHeartbeatTimeoutSec 30 `
   -Background `
   -OpenBrowser
 ```

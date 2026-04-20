@@ -54,6 +54,13 @@ python C:\QC\cameras\central-replay-server.py `
   --print-config --json
 ```
 
+The host config now also controls workstation presence expiry:
+
+- `server.workstation_heartbeat_timeout_sec`
+- default: `30.0`
+- if a workstation misses heartbeats longer than this window, `/api/workstations`
+  reports it as offline until a fresh heartbeat arrives
+
 Host-local health check:
 
 ```powershell
