@@ -22,6 +22,16 @@ REPLAY_MANIFEST_CAPABILITIES = [
 DEFAULT_STORAGE_TIER = "full_run_source"
 DEFAULT_REPLAY_MODE = "skip_idle"
 DEFAULT_FULL_DETAIL_RETENTION = ""
+DEFAULT_LOCAL_COMPACTION = {
+    "status": "not_requested",
+    "artifacts_root": "",
+    "generated_at_local": "",
+    "failure": "",
+    "source_video_path": "",
+    "source_video_size_bytes": 0,
+    "total_derived_size_bytes": 0,
+    "segment_derivatives": [],
+}
 
 
 def compute_run_id(manifest_path: Path, payload: dict) -> str:
@@ -58,6 +68,10 @@ def normalize_replay_manifest_payload(payload: dict, *, manifest_path: Path | No
     enriched["replay_default_mode"] = str(enriched.get("replay_default_mode") or DEFAULT_REPLAY_MODE)
     enriched["full_detail_retained_until_local"] = str(
         enriched.get("full_detail_retained_until_local") or DEFAULT_FULL_DETAIL_RETENTION
+    )
+    enriched["local_compaction"] = _normalize_local_compaction(
+        enriched.get("local_compaction"),
+        source_video_path=enriched.get("video_path") or "",
     )
     enriched["trace_event_count"] = int(enriched.get("trace_event_count") or trace_summary.get("trace_event_count") or 0)
     enriched["trace_started_at_local"] = (
@@ -193,6 +207,43 @@ def _normalize_segments(segments, *, video_path: str) -> list[dict]:
                 "is_skipped_by_default": bool(
                     item.get("is_skipped_by_default") if "is_skipped_by_default" in item else kind == "idle"
                 ),
+                "derived_video_path": str(item.get("derived_video_path") or ""),
+                "derived_video_filename": str(item.get("derived_video_filename") or ""),
+                "derived_video_encoding_profile": str(item.get("derived_video_encoding_profile") or ""),
+                "derived_size_bytes": int(item.get("derived_size_bytes") or 0),
             }
         )
     return normalized
+
+
+def _normalize_local_compaction(raw_value, *, source_video_path: str) -> dict:
+    if not isinstance(raw_value, dict):
+        raw_value = {}
+
+    derivatives = raw_value.get("segment_derivatives")
+    normalized_derivatives: list[dict] = []
+    if isinstance(derivatives, list):
+        for item in derivatives:
+            if not isinstance(item, dict):
+                continue
+            normalized_derivatives.append(
+                {
+                    "segment_id": str(item.get("segment_id") or ""),
+                    "kind": str(item.get("kind") or ""),
+                    "video_path": str(item.get("video_path") or ""),
+                    "video_filename": str(item.get("video_filename") or ""),
+                    "video_encoding_profile": str(item.get("video_encoding_profile") or ""),
+                    "size_bytes": int(item.get("size_bytes") or 0),
+                }
+            )
+
+    return {
+        "status": str(raw_value.get("status") or DEFAULT_LOCAL_COMPACTION["status"]),
+        "artifacts_root": str(raw_value.get("artifacts_root") or ""),
+        "generated_at_local": str(raw_value.get("generated_at_local") or ""),
+        "failure": str(raw_value.get("failure") or ""),
+        "source_video_path": str(raw_value.get("source_video_path") or source_video_path or ""),
+        "source_video_size_bytes": int(raw_value.get("source_video_size_bytes") or 0),
+        "total_derived_size_bytes": int(raw_value.get("total_derived_size_bytes") or 0),
+        "segment_derivatives": normalized_derivatives,
+    }

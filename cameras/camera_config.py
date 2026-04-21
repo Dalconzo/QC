@@ -31,6 +31,16 @@ DEFAULT_CONFIG = {
         "runs_root": str(REPO_ROOT / "cameras" / "video_clips"),
         "manifest_dir": "",
         "recorder_log_dir": str(REPO_ROOT / "logs"),
+        "compaction": {
+            "enabled": False,
+            "artifacts_root": "",
+            "min_segment_duration_sec": 5.0,
+            "active_crf": 30,
+            "active_preset": "veryfast",
+            "idle_crf": 36,
+            "idle_preset": "veryfast",
+            "idle_fps": 2,
+        },
     },
     "recorder": {
         "default_profile": "default",
@@ -342,5 +352,26 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     recorder_log_dir = str(storage.get("recorder_log_dir") or "")
     if recorder_log_dir and not Path(recorder_log_dir).exists():
         warnings.append(f"Recorder log dir does not exist yet and will be created on first use: {recorder_log_dir}")
+
+    compaction = storage.get("compaction") or {}
+    if not isinstance(compaction, dict):
+        errors.append("storage.compaction must be an object when provided.")
+    else:
+        min_segment_duration_sec = float(compaction.get("min_segment_duration_sec", 0) or 0)
+        if min_segment_duration_sec < 0:
+            errors.append("storage.compaction.min_segment_duration_sec cannot be negative.")
+
+        idle_fps = int(compaction.get("idle_fps", 0) or 0)
+        if idle_fps < 0:
+            errors.append("storage.compaction.idle_fps cannot be negative.")
+
+        for field_name in ("active_crf", "idle_crf"):
+            value = int(compaction.get(field_name, -1) or -1)
+            if value < 0 or value > 51:
+                errors.append(f"storage.compaction.{field_name} must be between 0 and 51.")
+
+        for field_name in ("active_preset", "idle_preset"):
+            if not str(compaction.get(field_name) or "").strip():
+                errors.append(f"storage.compaction.{field_name} is required.")
 
     return {"errors": errors, "warnings": warnings}

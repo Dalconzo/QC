@@ -27,12 +27,15 @@ from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
 from camera_source import is_numeric_source, to_ffmpeg_input
+from local_compaction import apply_compaction_metadata_to_segments, generate_local_compaction
 from replay_manifest import (
     DEFAULT_FULL_DETAIL_RETENTION,
+    DEFAULT_LOCAL_COMPACTION,
     DEFAULT_REPLAY_MODE,
     DEFAULT_STORAGE_TIER,
     REPLAY_MANIFEST_CAPABILITIES,
     REPLAY_MANIFEST_VERSION,
+    normalize_replay_manifest_payload,
 )
 from trace_replay import build_trace_replay_summary
 
@@ -340,14 +343,18 @@ def build_run_manifest_payload(
     log_dir: Path,
     log_glob: str,
     trace_match: TraceMatch | None,
+    storage_tier: str = DEFAULT_STORAGE_TIER,
+    segments_override: list[dict] | None = None,
+    local_compaction: dict | None = None,
 ) -> dict:
     """Build the replay manifest payload for one recorded run."""
     trace_path = trace_match.path if trace_match else None
     trace_delta_sec = trace_match.delta_sec if trace_match else None
     trace_modified_at = trace_match.modified_at if trace_match else None
     trace_summary = build_trace_replay_summary(trace_path) if trace_path and trace_path.exists() else {}
+    source_segments = segments_override if segments_override is not None else trace_summary.get("segments", [])
     segments: list[dict] = []
-    for item in trace_summary.get("segments", []):
+    for item in source_segments:
         normalized = dict(item)
         normalized["video_path"] = str(video_path.resolve())
         segments.append(normalized)
@@ -390,9 +397,10 @@ def build_run_manifest_payload(
         ),
         "replay_manifest_version": REPLAY_MANIFEST_VERSION,
         "replay_capabilities": list(REPLAY_MANIFEST_CAPABILITIES),
-        "storage_tier": DEFAULT_STORAGE_TIER,
+        "storage_tier": storage_tier,
         "replay_default_mode": DEFAULT_REPLAY_MODE,
         "full_detail_retained_until_local": DEFAULT_FULL_DETAIL_RETENTION,
+        "local_compaction": dict(local_compaction or DEFAULT_LOCAL_COMPACTION),
         "trace_event_count": trace_summary.get("trace_event_count", 0),
         "trace_started_at_local": trace_summary.get("trace_started_at_local", ""),
         "trace_stopped_at_local": trace_summary.get("trace_stopped_at_local", ""),
@@ -417,6 +425,9 @@ def write_run_manifest(
     log_dir: Path,
     log_glob: str,
     trace_match: TraceMatch | None,
+    storage_tier: str = DEFAULT_STORAGE_TIER,
+    segments_override: list[dict] | None = None,
+    local_compaction: dict | None = None,
 ) -> None:
     """Persist the pairing artifact the replay UI will load later."""
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -430,7 +441,11 @@ def write_run_manifest(
         log_dir=log_dir,
         log_glob=log_glob,
         trace_match=trace_match,
+        storage_tier=storage_tier,
+        segments_override=segments_override,
+        local_compaction=local_compaction,
     )
+    payload = normalize_replay_manifest_payload(payload, manifest_path=manifest_path)
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)
         handle.write("\n")
@@ -853,6 +868,7 @@ def main() -> int:
     hamilton = config["hamilton"]
     storage = config["storage"]
     recorder = config["recorder"]
+    compaction_config = storage.get("compaction") or {}
 
     source = args.source or profile.get("source") or "0"
     out_dir = Path(args.out_dir or storage.get("runs_root") or (REPO_ROOT / "cameras" / "video_clips"))
@@ -1016,6 +1032,37 @@ def main() -> int:
     )
     manifest_root = Path(manifest_dir) if manifest_dir else video_path.parent
     manifest_path = manifest_root / f"{video_path.stem}.run.json"
+    trace_summary = build_trace_replay_summary(trace_match.path) if trace_match and trace_match.path.exists() else {}
+    trace_segments = trace_summary.get("segments", [])
+    local_compaction = dict(DEFAULT_LOCAL_COMPACTION)
+    segments_override = None
+    storage_tier = DEFAULT_STORAGE_TIER
+    if bool(compaction_config.get("enabled")):
+        emit_log(f"Generating local compaction artifacts for {video_path.name}", log_path=recorder_log)
+        local_compaction = generate_local_compaction(
+            ffmpeg_bin=ffmpeg_bin,
+            source_video_path=video_path,
+            segments=trace_segments,
+            configured_root=str(compaction_config.get("artifacts_root") or ""),
+            min_segment_duration_sec=float(compaction_config.get("min_segment_duration_sec", 5.0) or 5.0),
+            active_crf=int(compaction_config.get("active_crf", 30) or 30),
+            active_preset=str(compaction_config.get("active_preset") or "veryfast"),
+            idle_crf=int(compaction_config.get("idle_crf", 36) or 36),
+            idle_preset=str(compaction_config.get("idle_preset") or "veryfast"),
+            idle_fps=int(compaction_config.get("idle_fps", 2) or 2),
+        )
+        segments_override = apply_compaction_metadata_to_segments(trace_segments, local_compaction)
+        if local_compaction.get("status") == "succeeded":
+            storage_tier = "full_run_plus_local_derivatives"
+            emit_log(
+                f"Local compaction wrote {len(local_compaction.get('segment_derivatives') or [])} derived segment files.",
+                log_path=recorder_log,
+            )
+        else:
+            emit_log(
+                f"Local compaction did not produce derivatives: {local_compaction.get('status')}",
+                log_path=recorder_log,
+            )
     write_run_manifest(
         manifest_path,
         label=label,
@@ -1027,6 +1074,9 @@ def main() -> int:
         log_dir=log_dir,
         log_glob=log_glob,
         trace_match=trace_match,
+        storage_tier=storage_tier,
+        segments_override=segments_override,
+        local_compaction=local_compaction,
     )
 
     emit_log(f"Wrote video: {video_path}", log_path=recorder_log)

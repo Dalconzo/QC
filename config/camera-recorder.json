@@ -13,7 +13,17 @@
   "storage": {
     "runs_root": "C:\\QC\\cameras\\video_clips",
     "manifest_dir": "",
-    "recorder_log_dir": "C:\\QC\\logs"
+    "recorder_log_dir": "C:\\QC\\logs",
+    "compaction": {
+      "enabled": false,
+      "artifacts_root": "",
+      "min_segment_duration_sec": 5.0,
+      "active_crf": 30,
+      "active_preset": "veryfast",
+      "idle_crf": 36,
+      "idle_preset": "veryfast",
+      "idle_fps": 2
+    }
   },
   "recorder": {
     "default_profile": "default",
