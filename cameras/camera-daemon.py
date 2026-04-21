@@ -32,6 +32,7 @@ from stage_central_replay import stage_runs
 from upload_central_replay import upload_staged_runs
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+RECORDER_REARM_EXIT_CODE = 20
 
 
 def emit_log(message: str, *, log_path: Path | None = None, is_error: bool = False) -> None:
@@ -151,6 +152,8 @@ def build_recorder_command(
     source: str,
     out_dir: str,
     label: str,
+    enable_midrun_split: bool,
+    discard_without_trace: bool,
 ) -> list[str]:
     """Construct one child recorder invocation for a single Hamilton run."""
     command = [
@@ -176,6 +179,10 @@ def build_recorder_command(
         command += ["--label", label]
     if recorder_log_path:
         command += ["--recorder-log", str(recorder_log_path)]
+    if enable_midrun_split:
+        command.append("--enable-midrun-split")
+    if discard_without_trace:
+        command.append("--discard-without-trace")
     return command
 
 
@@ -236,9 +243,18 @@ def run_post_run_central_ingest(
     if bool(retention.get("cleanup_on_run_complete", False)):
         runs_root = Path(config["storage"]["runs_root"]).resolve()
         emit_log("[daemon] Running local retention cleanup", log_path=daemon_log_path)
-        cleanup_payload = cleanup_runs(runs_root=runs_root, delete=True, limit=0)
+        cleanup_payload = cleanup_runs(
+            runs_root=runs_root,
+            delete=True,
+            limit=0,
+            emergency_config=retention.get("emergency") or {},
+        )
         emit_log(
-            f"[daemon] Local cleanup complete: deleted={cleanup_payload['deleted_run_count']} eligible={cleanup_payload['eligible_run_count']}",
+            "[daemon] Local cleanup complete: "
+            f"deleted={cleanup_payload['deleted_run_count']} "
+            f"eligible={cleanup_payload['eligible_run_count']} "
+            f"emergency_deleted={cleanup_payload['emergency_deleted_run_count']} "
+            f"critical={cleanup_payload['critical_pressure_remaining']}",
             log_path=daemon_log_path,
         )
     return {
@@ -305,6 +321,7 @@ def run_supervisor(
     last_heartbeat = 0.0
     run_session_active = False
     sticky_status_fields: dict[str, object] = {}
+    next_launch_speculative = False
 
     def update_status(state: str, **extra: object) -> None:
         payload = {
@@ -414,7 +431,13 @@ def run_supervisor(
                 child_proc = None
                 child_started_at = 0.0
                 last_heartbeat = 0.0
-                run_session_active = True
+                if return_code == RECORDER_REARM_EXIT_CODE:
+                    emit_log("[daemon] Recorder requested immediate rearm inside the same HxRun session.", log_path=daemon_log_path)
+                    run_session_active = False
+                    next_launch_speculative = True
+                else:
+                    run_session_active = True
+                    next_launch_speculative = False
 
                 if run_once or (max_cycles > 0 and cycle_count >= max_cycles):
                     emit_log("[daemon] Run limit reached. Exiting.", log_path=daemon_log_path)
@@ -452,6 +475,41 @@ def run_supervisor(
                 time.sleep(max(0.25, idle_poll_sec))
                 continue
 
+            retention_config = config.get("storage", {}).get("retention", {})
+            emergency_config = retention_config.get("emergency") or {}
+            if bool(emergency_config.get("enabled", False)):
+                headroom_payload = cleanup_runs(
+                    runs_root=Path(config["storage"]["runs_root"]).resolve(),
+                    delete=True,
+                    limit=0,
+                    emergency_config=emergency_config,
+                    run_normal_cleanup=False,
+                )
+                update_status(
+                    "idle",
+                    low_disk_emergency_active=bool(headroom_payload.get("emergency_active")),
+                    low_disk_free_bytes=int(headroom_payload.get("disk_free_bytes_after", 0) or 0),
+                    low_disk_emergency_deleted_run_count=int(headroom_payload.get("emergency_deleted_run_count", 0) or 0),
+                    low_disk_critical=bool(headroom_payload.get("critical_pressure_remaining")),
+                )
+                if bool(headroom_payload.get("critical_pressure_remaining")):
+                    emit_log(
+                        "[daemon] Critical low disk remains after emergency cleanup. Blocking new recording launch.",
+                        log_path=daemon_log_path,
+                        is_error=True,
+                    )
+                    update_status(
+                        "blocked_low_disk",
+                        low_disk_emergency_active=bool(headroom_payload.get("emergency_active")),
+                        low_disk_free_bytes=int(headroom_payload.get("disk_free_bytes_after", 0) or 0),
+                        low_disk_emergency_deleted_run_count=int(
+                            headroom_payload.get("emergency_deleted_run_count", 0) or 0
+                        ),
+                        low_disk_critical=True,
+                    )
+                    time.sleep(max(0.25, idle_poll_sec))
+                    continue
+
             child_command = build_recorder_command(
                 config_path=config_path,
                 local_config_path=local_config_path,
@@ -462,6 +520,8 @@ def run_supervisor(
                 source=source,
                 out_dir=out_dir,
                 label=label,
+                enable_midrun_split=True,
+                discard_without_trace=next_launch_speculative,
             )
             emit_log(f"[daemon] Launching recorder child for active {process_name} session", log_path=daemon_log_path)
             emit_log(f"[daemon] Recorder cmd: {' '.join(child_command)}", log_path=daemon_log_path)

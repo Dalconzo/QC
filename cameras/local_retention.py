@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import shutil
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config
@@ -24,6 +25,17 @@ def local_now(now: dt.datetime | None = None) -> dt.datetime:
 
 def local_now_text(now: dt.datetime | None = None) -> str:
     return local_now(now).isoformat(timespec="seconds")
+
+
+def resolve_disk_usage_root(path: Path) -> Path:
+    anchor = path.anchor
+    if anchor:
+        return Path(anchor)
+    return path.resolve()
+
+
+def bytes_from_gb(value: float | int) -> int:
+    return max(0, int(float(value or 0) * (1024**3)))
 
 
 def load_manifest(manifest_path: Path) -> dict:
@@ -160,21 +172,52 @@ def evaluate_cleanup(manifest_payload: dict, *, now_local: dt.datetime | None = 
     return ("eligible", "eligible_for_deletion")
 
 
-def cleanup_one_manifest(manifest_path: Path, *, now_local: dt.datetime | None = None, delete: bool = True) -> dict:
-    payload = load_manifest(manifest_path)
+def evaluate_emergency_cleanup(manifest_payload: dict) -> tuple[str, str]:
+    retention = manifest_payload.get("local_retention") or {}
+    if not bool(retention.get("enabled", False)):
+        return ("disabled", "retention_disabled")
+    if retention.get("original_deleted_at_local"):
+        return ("already_deleted", "original_already_deleted")
+
+    video_path = Path(str(manifest_payload.get("video_path") or ""))
+    if not video_path.exists():
+        return ("missing_original", "original_missing")
+
+    if str(retention.get("upload_status") or "") != "acknowledged":
+        return ("blocked", "upload_not_acknowledged")
+
+    if bool(retention.get("require_local_compaction", False)):
+        compaction_status = str((manifest_payload.get("local_compaction") or {}).get("status") or "")
+        if compaction_status != "succeeded":
+            return ("blocked", "local_compaction_not_ready")
+
+    return ("eligible", "emergency_low_disk_uploaded_original")
+
+
+def _apply_cleanup_result(
+    manifest_path: Path,
+    payload: dict,
+    *,
+    action: str,
+    reason: str,
+    now_local: dt.datetime | None = None,
+    delete: bool = True,
+    mode: str = "normal",
+) -> dict:
     retention = dict(payload.get("local_retention") or DEFAULT_LOCAL_RETENTION)
     video_path = Path(str(payload.get("video_path") or ""))
-    action, reason = evaluate_cleanup(payload, now_local=now_local)
     result = {
         "manifest_path": str(manifest_path.resolve()),
         "video_path": str(video_path.resolve()) if str(video_path) else "",
         "action": action,
         "reason": reason,
         "deleted_bytes": 0,
+        "mode": mode,
     }
 
     retention["last_cleanup_at_local"] = local_now_text(now_local)
     retention["last_cleanup_action"] = action
+    retention["last_cleanup_mode"] = mode
     retention["last_cleanup_reason"] = reason
 
     if action == "eligible" and delete:
@@ -196,6 +239,20 @@ def cleanup_one_manifest(manifest_path: Path, *, now_local: dt.datetime | None =
     return result
 
 
+def cleanup_one_manifest(manifest_path: Path, *, now_local: dt.datetime | None = None, delete: bool = True) -> dict:
+    payload = load_manifest(manifest_path)
+    action, reason = evaluate_cleanup(payload, now_local=now_local)
+    return _apply_cleanup_result(
+        manifest_path,
+        payload,
+        action=action,
+        reason=reason,
+        now_local=now_local,
+        delete=delete,
+        mode="normal",
+    )
+
+
 def collect_usage(payload: dict) -> dict:
     retention = payload.get("local_retention") or {}
     return {
@@ -204,24 +261,51 @@ def collect_usage(payload: dict) -> dict:
     }
 
 
+def _parse_manifest_sort_timestamp(payload: dict) -> tuple[int, str]:
+    for field_name in ("original_delete_eligible_at_local", "retain_until_local", "stopped_at_local", "started_at_local"):
+        value = ""
+        if field_name in {"original_delete_eligible_at_local", "retain_until_local"}:
+            value = str((payload.get("local_retention") or {}).get(field_name) or "")
+        else:
+            value = str(payload.get(field_name) or "")
+        parsed = _parse_local_timestamp(value)
+        if parsed is not None:
+            return (int(parsed.timestamp()), value)
+    return (0, str(payload.get("manifest_path") or ""))
+
+
 def cleanup_runs(
     *,
     runs_root: Path,
     now_local: dt.datetime | None = None,
     delete: bool = True,
     limit: int = 0,
+    emergency_config: dict | None = None,
+    run_normal_cleanup: bool = True,
+    disk_usage_fn=shutil.disk_usage,
 ) -> dict:
     manifests = sorted(runs_root.rglob("*.run.json"))
     if limit > 0:
         manifests = manifests[:limit]
 
+    emergency_config = dict(emergency_config or {})
+    emergency_enabled = bool(emergency_config.get("enabled", False))
+    min_free_bytes = bytes_from_gb(emergency_config.get("min_free_gb", 0))
+    target_free_bytes = max(min_free_bytes, bytes_from_gb(emergency_config.get("target_free_gb", 0)))
+    block_new_recording_free_bytes = bytes_from_gb(emergency_config.get("block_new_recording_free_gb", 0))
+    usage_root = resolve_disk_usage_root(runs_root)
+    disk_before = disk_usage_fn(usage_root)
+
     items: list[dict] = []
+    emergency_candidates: list[tuple[Path, dict]] = []
     scanned_count = 0
     deleted_count = 0
     eligible_count = 0
     blocked_count = 0
     missing_count = 0
     deleted_bytes = 0
+    emergency_deleted_count = 0
+    emergency_deleted_bytes = 0
     original_bytes = 0
     derived_bytes = 0
 
@@ -230,18 +314,62 @@ def cleanup_runs(
         usage = collect_usage(payload)
         original_bytes += usage["original_bytes"]
         derived_bytes += usage["derived_bytes"]
-        result = cleanup_one_manifest(manifest_path, now_local=now_local, delete=delete)
-        items.append(result)
         scanned_count += 1
-        if result["action"] == "deleted":
-            deleted_count += 1
-            deleted_bytes += int(result["deleted_bytes"] or 0)
-        elif result["action"] == "eligible":
-            eligible_count += 1
-        elif result["action"] == "missing_original":
-            missing_count += 1
-        elif result["action"] == "blocked":
-            blocked_count += 1
+        if run_normal_cleanup:
+            action, reason = evaluate_cleanup(payload, now_local=now_local)
+            result = _apply_cleanup_result(
+                manifest_path,
+                payload,
+                action=action,
+                reason=reason,
+                now_local=now_local,
+                delete=delete,
+                mode="normal",
+            )
+            items.append(result)
+            if result["action"] == "deleted":
+                deleted_count += 1
+                deleted_bytes += int(result["deleted_bytes"] or 0)
+            elif result["action"] == "eligible":
+                eligible_count += 1
+            elif result["action"] == "missing_original":
+                missing_count += 1
+            elif result["action"] == "blocked":
+                blocked_count += 1
+        emergency_candidates.append((manifest_path, payload))
+
+    disk_mid = disk_usage_fn(usage_root)
+    emergency_active = emergency_enabled and disk_mid.free < min_free_bytes
+    if emergency_active:
+        for manifest_path, payload in sorted(emergency_candidates, key=lambda item: _parse_manifest_sort_timestamp(item[1])):
+            current_usage = disk_usage_fn(usage_root)
+            if current_usage.free >= target_free_bytes:
+                break
+            action, reason = evaluate_emergency_cleanup(payload)
+            if action != "eligible":
+                continue
+            result = _apply_cleanup_result(
+                manifest_path,
+                payload,
+                action=action,
+                reason=reason,
+                now_local=now_local,
+                delete=delete,
+                mode="emergency",
+            )
+            items.append(result)
+            if result["action"] == "deleted":
+                deleted_count += 1
+                deleted_bytes += int(result["deleted_bytes"] or 0)
+                emergency_deleted_count += 1
+                emergency_deleted_bytes += int(result["deleted_bytes"] or 0)
+
+    disk_after = disk_usage_fn(usage_root)
+    critical_pressure_remaining = bool(
+        emergency_enabled
+        and block_new_recording_free_bytes > 0
+        and disk_after.free < block_new_recording_free_bytes
+    )
 
     return {
         "scanned_run_count": scanned_count,
@@ -250,8 +378,20 @@ def cleanup_runs(
         "blocked_run_count": blocked_count,
         "missing_original_run_count": missing_count,
         "deleted_bytes": deleted_bytes,
+        "emergency_deleted_run_count": emergency_deleted_count,
+        "emergency_deleted_bytes": emergency_deleted_bytes,
         "original_bytes": original_bytes,
         "derived_bytes": derived_bytes,
+        "disk_total_bytes": int(disk_before.total),
+        "disk_used_bytes_before": int(disk_before.used),
+        "disk_free_bytes_before": int(disk_before.free),
+        "disk_used_bytes_after": int(disk_after.used),
+        "disk_free_bytes_after": int(disk_after.free),
+        "emergency_active": emergency_active,
+        "emergency_min_free_bytes": int(min_free_bytes),
+        "emergency_target_free_bytes": int(target_free_bytes),
+        "block_new_recording_free_bytes": int(block_new_recording_free_bytes),
+        "critical_pressure_remaining": critical_pressure_remaining,
         "items": items,
     }
 
@@ -271,7 +411,12 @@ def main() -> int:
         local_override_path=Path(args.local_config).resolve(),
     )
     runs_root = Path(args.runs_root).resolve() if args.runs_root else Path(config["storage"]["runs_root"]).resolve()
-    payload = cleanup_runs(runs_root=runs_root, delete=not args.dry_run, limit=args.limit)
+    payload = cleanup_runs(
+        runs_root=runs_root,
+        delete=not args.dry_run,
+        limit=args.limit,
+        emergency_config=(config.get("storage", {}).get("retention", {}) or {}).get("emergency") or {},
+    )
     if args.json:
         print(json.dumps(payload, indent=2))
     else:

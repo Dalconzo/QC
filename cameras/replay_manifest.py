@@ -52,6 +52,7 @@ DEFAULT_LOCAL_RETENTION = {
     "original_deleted_at_local": "",
     "last_cleanup_at_local": "",
     "last_cleanup_action": "",
+    "last_cleanup_mode": "",
     "last_cleanup_reason": "",
 }
 
@@ -383,5 +384,6 @@ def _normalize_local_retention(raw_value, *, payload: dict) -> dict:
         "original_deleted_at_local": str(raw_value.get("original_deleted_at_local") or ""),
         "last_cleanup_at_local": str(raw_value.get("last_cleanup_at_local") or ""),
         "last_cleanup_action": str(raw_value.get("last_cleanup_action") or ""),
+        "last_cleanup_mode": str(raw_value.get("last_cleanup_mode") or ""),
         "last_cleanup_reason": str(raw_value.get("last_cleanup_reason") or ""),
     }

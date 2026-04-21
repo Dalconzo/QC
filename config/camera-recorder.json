@@ -29,7 +29,13 @@
       "original_retention_days": 7,
       "require_upload_ack": true,
       "require_local_compaction": false,
-      "cleanup_on_run_complete": true
+      "cleanup_on_run_complete": true,
+      "emergency": {
+        "enabled": true,
+        "min_free_gb": 20,
+        "target_free_gb": 30,
+        "block_new_recording_free_gb": 8
+      }
     }
   },
   "recorder": {

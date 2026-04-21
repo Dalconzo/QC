@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import importlib.util
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -123,6 +124,67 @@ class LocalRetentionTests(unittest.TestCase):
 
             self.assertEqual(result["action"], "blocked")
             self.assertEqual(result["reason"], "upload_not_acknowledged")
+            self.assertTrue((root / "run.mp4").exists())
+
+    def test_emergency_cleanup_deletes_uploaded_original_before_age_window(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = self.write_manifest(root, stopped_at="2026-04-10T10:01:00")
+            RETENTION.record_upload_ack(
+                manifest_path,
+                central_run_id="central-run-1",
+                acknowledged_at_utc="2026-04-10T12:00:00Z",
+                ack_path=str(root / "run-ack.json"),
+            )
+
+            def fake_disk_usage(_path: Path):
+                free_value = 35 * (1024**3) if not (root / "run.mp4").exists() else 4 * (1024**3)
+                return shutil._ntuple_diskusage(100 * (1024**3), 100 * (1024**3) - free_value, free_value)
+
+            payload = RETENTION.cleanup_runs(
+                runs_root=root,
+                now_local=dt.datetime(2026, 4, 11, 9, 0, 0),
+                delete=True,
+                emergency_config={
+                    "enabled": True,
+                    "min_free_gb": 20,
+                    "target_free_gb": 30,
+                    "block_new_recording_free_gb": 8,
+                },
+                disk_usage_fn=fake_disk_usage,
+            )
+
+            self.assertEqual(payload["emergency_deleted_run_count"], 1)
+            self.assertTrue(payload["emergency_active"])
+            self.assertFalse(payload["critical_pressure_remaining"])
+            updated = RETENTION.load_manifest(manifest_path)
+            self.assertEqual(updated["local_retention"]["last_cleanup_mode"], "emergency")
+            self.assertFalse((root / "run.mp4").exists())
+
+    def test_emergency_cleanup_never_deletes_without_upload_ack(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.write_manifest(root, stopped_at="2026-04-10T10:01:00")
+
+            def fake_disk_usage(_path: Path):
+                return shutil._ntuple_diskusage(100 * (1024**3), 96 * (1024**3), 4 * (1024**3))
+
+            payload = RETENTION.cleanup_runs(
+                runs_root=root,
+                now_local=dt.datetime(2026, 4, 11, 9, 0, 0),
+                delete=True,
+                emergency_config={
+                    "enabled": True,
+                    "min_free_gb": 20,
+                    "target_free_gb": 30,
+                    "block_new_recording_free_gb": 8,
+                },
+                run_normal_cleanup=False,
+                disk_usage_fn=fake_disk_usage,
+            )
+
+            self.assertEqual(payload["deleted_run_count"], 0)
+            self.assertTrue(payload["critical_pressure_remaining"])
             self.assertTrue((root / "run.mp4").exists())
 
 

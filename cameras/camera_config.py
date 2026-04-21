@@ -47,6 +47,12 @@ DEFAULT_CONFIG = {
             "require_upload_ack": True,
             "require_local_compaction": False,
             "cleanup_on_run_complete": True,
+            "emergency": {
+                "enabled": True,
+                "min_free_gb": 20,
+                "target_free_gb": 30,
+                "block_new_recording_free_gb": 8,
+            },
         },
     },
     "recorder": {
@@ -388,5 +394,22 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     else:
         if int(retention.get("original_retention_days", 0) or 0) < 0:
             errors.append("storage.retention.original_retention_days cannot be negative.")
+        emergency = retention.get("emergency") or {}
+        if not isinstance(emergency, dict):
+            errors.append("storage.retention.emergency must be an object when provided.")
+        else:
+            for field_name in ("min_free_gb", "target_free_gb", "block_new_recording_free_gb"):
+                value = float(emergency.get(field_name, 0) or 0)
+                if value < 0:
+                    errors.append(f"storage.retention.emergency.{field_name} cannot be negative.")
+            min_free_gb = float(emergency.get("min_free_gb", 0) or 0)
+            target_free_gb = float(emergency.get("target_free_gb", 0) or 0)
+            block_new_recording_free_gb = float(emergency.get("block_new_recording_free_gb", 0) or 0)
+            if target_free_gb < min_free_gb:
+                errors.append("storage.retention.emergency.target_free_gb must be greater than or equal to min_free_gb.")
+            if block_new_recording_free_gb > min_free_gb:
+                errors.append(
+                    "storage.retention.emergency.block_new_recording_free_gb must be less than or equal to min_free_gb."
+                )
 
     return {"errors": errors, "warnings": warnings}

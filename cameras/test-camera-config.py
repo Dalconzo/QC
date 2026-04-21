@@ -72,6 +72,8 @@ class CameraConfigTests(unittest.TestCase):
             self.assertFalse(config["storage"]["compaction"]["enabled"])
             self.assertIn("retention", config["storage"])
             self.assertEqual(config["storage"]["retention"]["original_retention_days"], 7)
+            self.assertIn("emergency", config["storage"]["retention"])
+            self.assertEqual(config["storage"]["retention"]["emergency"]["min_free_gb"], 20)
             self.assertEqual(MODULE.get_profile(config)["id"], "top")
             self.assertTrue(config["daemon"]["task_name"])
 
@@ -184,6 +186,35 @@ class CameraConfigTests(unittest.TestCase):
             config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
             validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
             self.assertTrue(any("storage.retention.original_retention_days" in item for item in validation["errors"]))
+
+    def test_validation_rejects_invalid_emergency_retention_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "storage": {
+                            "retention": {
+                                "emergency": {
+                                    "min_free_gb": 20,
+                                    "target_free_gb": 10,
+                                    "block_new_recording_free_gb": 25,
+                                }
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("target_free_gb" in item for item in validation["errors"]))
+            self.assertTrue(any("block_new_recording_free_gb" in item for item in validation["errors"]))
 
 
 if __name__ == "__main__":

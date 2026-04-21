@@ -86,6 +86,7 @@ def canonicalize_manifest_for_staging(payload: dict) -> dict:
             "original_deleted_at_local",
             "last_cleanup_at_local",
             "last_cleanup_action",
+            "last_cleanup_mode",
             "last_cleanup_reason",
         ):
             local_retention[field_name] = ""

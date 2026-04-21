@@ -447,6 +447,218 @@ class CameraDaemonTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertEqual(calls["count"], 0)
 
+    def test_supervisor_rearms_immediately_after_midrun_split(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            runs_root = root / "runs"
+            logs_root = root / "logs"
+            logs_root.mkdir()
+
+            config_path = root / "camera-recorder.json"
+            local_path = root / "camera-recorder.local.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {
+                            "log_dir": str(log_dir),
+                            "process_name": "HxRun.exe",
+                        },
+                        "storage": {
+                            "runs_root": str(runs_root),
+                            "recorder_log_dir": str(logs_root),
+                        },
+                        "recorder": {
+                            "stop_file": str(root / "recorder.stop"),
+                        },
+                        "daemon": {
+                            "stop_file": str(root / "daemon.stop"),
+                            "pid_file": str(root / "daemon.pid"),
+                            "status_path": str(root / "daemon-status.json"),
+                            "log_path": str(root / "daemon.log"),
+                            "idle_poll_sec": 0.02,
+                            "heartbeat_sec": 0.02,
+                            "relaunch_delay_sec": 0.0,
+                        },
+                        "profiles": [
+                            {
+                                "id": "default",
+                                "label": "BenchCam",
+                                "source": 'dshow:video="Bench Cam"',
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            launches_path = root / "launches.jsonl"
+            recorder_script = root / "mock-recorder.py"
+            recorder_script.write_text(
+                textwrap.dedent(
+                    f"""
+                    import json
+                    import pathlib
+                    import sys
+
+                    launches = pathlib.Path(r"{launches_path}")
+                    count = 0
+                    if launches.exists():
+                        count = len([line for line in launches.read_text(encoding="utf-8").splitlines() if line.strip()])
+                    argv = sys.argv[1:]
+                    with launches.open("a", encoding="utf-8") as handle:
+                        handle.write(json.dumps({{"argv": argv}}) + "\\n")
+                    raise SystemExit(20 if count == 0 else 0)
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            polls = {"count": 0}
+
+            def fake_is_running(_name: str) -> bool:
+                polls["count"] += 1
+                return polls["count"] < 8
+
+            rc = DAEMON.run_supervisor(
+                config_path=config_path,
+                local_config_path=local_path,
+                profile_id="default",
+                source_override="",
+                out_dir_override="",
+                label_override="",
+                stop_file=root / "daemon.stop",
+                pid_file=root / "daemon.pid",
+                status_path=root / "daemon-status.json",
+                daemon_log_path=root / "daemon.log",
+                recorder_log_path=root / "recorder.log",
+                idle_poll_sec=0.02,
+                heartbeat_sec=0.02,
+                relaunch_delay_sec=0.0,
+                idle_timeout_sec=2,
+                run_once=False,
+                max_cycles=2,
+                recorder_script=recorder_script,
+                is_process_running_fn=fake_is_running,
+            )
+
+            self.assertEqual(rc, 0)
+            launches = [json.loads(line) for line in launches_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            self.assertEqual(len(launches), 2)
+            self.assertIn("--enable-midrun-split", launches[0]["argv"])
+            self.assertNotIn("--discard-without-trace", launches[0]["argv"])
+            self.assertIn("--discard-without-trace", launches[1]["argv"])
+
+    def test_supervisor_blocks_recording_when_critical_low_disk_remains(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            runs_root = root / "runs"
+            logs_root = root / "logs"
+            logs_root.mkdir()
+
+            config_path = root / "camera-recorder.json"
+            local_path = root / "camera-recorder.local.json"
+            stop_file = root / "daemon.stop"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {
+                            "log_dir": str(log_dir),
+                            "process_name": "HxRun.exe",
+                        },
+                        "storage": {
+                            "runs_root": str(runs_root),
+                            "recorder_log_dir": str(logs_root),
+                            "retention": {
+                                "emergency": {
+                                    "enabled": True,
+                                    "min_free_gb": 20,
+                                    "target_free_gb": 30,
+                                    "block_new_recording_free_gb": 8,
+                                }
+                            },
+                        },
+                        "recorder": {
+                            "stop_file": str(root / "recorder.stop"),
+                        },
+                        "daemon": {
+                            "stop_file": str(stop_file),
+                            "pid_file": str(root / "daemon.pid"),
+                            "status_path": str(root / "daemon-status.json"),
+                            "log_path": str(root / "daemon.log"),
+                            "idle_poll_sec": 0.02,
+                            "heartbeat_sec": 0.02,
+                            "relaunch_delay_sec": 0.0,
+                        },
+                        "profiles": [
+                            {
+                                "id": "default",
+                                "label": "BenchCam",
+                                "source": 'dshow:video="Bench Cam"',
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            recorder_script = root / "mock-recorder.py"
+            recorder_script.write_text("raise SystemExit(0)\n", encoding="utf-8")
+
+            calls = {"count": 0}
+            original_cleanup_runs = DAEMON.cleanup_runs
+
+            def fake_cleanup_runs(**kwargs):
+                calls["count"] += 1
+                stop_file.write_text("stop", encoding="utf-8")
+                return {
+                    "deleted_run_count": 0,
+                    "eligible_run_count": 0,
+                    "emergency_deleted_run_count": 0,
+                    "disk_free_bytes_after": 2 * (1024**3),
+                    "emergency_active": True,
+                    "critical_pressure_remaining": True,
+                }
+
+            def fake_is_running(_name: str) -> bool:
+                return True
+
+            try:
+                DAEMON.cleanup_runs = fake_cleanup_runs
+                rc = DAEMON.run_supervisor(
+                    config_path=config_path,
+                    local_config_path=local_path,
+                    profile_id="default",
+                    source_override="",
+                    out_dir_override="",
+                    label_override="",
+                    stop_file=stop_file,
+                    pid_file=root / "daemon.pid",
+                    status_path=root / "daemon-status.json",
+                    daemon_log_path=root / "daemon.log",
+                    recorder_log_path=root / "recorder.log",
+                    idle_poll_sec=0.02,
+                    heartbeat_sec=0.02,
+                    relaunch_delay_sec=0.0,
+                    idle_timeout_sec=1,
+                    run_once=False,
+                    max_cycles=0,
+                    recorder_script=recorder_script,
+                    is_process_running_fn=fake_is_running,
+                )
+            finally:
+                DAEMON.cleanup_runs = original_cleanup_runs
+
+            self.assertEqual(rc, 0)
+            self.assertEqual(calls["count"], 1)
+            status = json.loads((root / "daemon-status.json").read_text(encoding="utf-8"))
+            self.assertTrue(status["low_disk_critical"])
+            self.assertEqual(status["low_disk_free_bytes"], 2 * (1024**3))
+
 
 if __name__ == "__main__":
     unittest.main()
