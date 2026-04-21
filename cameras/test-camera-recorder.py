@@ -171,6 +171,7 @@ class CameraRecorderTests(unittest.TestCase):
         self.assertEqual(payload["replay_capabilities"], ["trace_chapters", "trace_segments", "idle_skip_default"])
         self.assertEqual(payload["storage_tier"], "full_run_source")
         self.assertEqual(payload["replay_default_mode"], "skip_idle")
+        self.assertIn("local_retention", payload)
         self.assertIn("segments", payload)
         self.assertIn("chapters", payload)
         self.assertTrue(all(item["video_path"] == str(Path(r"C:\video\run.mp4").resolve()) for item in payload["segments"]))
@@ -220,6 +221,8 @@ class CameraRecorderTests(unittest.TestCase):
             self.assertIn("segments", payload)
             self.assertIn("chapters", payload)
             self.assertEqual(payload["local_compaction"]["status"], "not_requested")
+            self.assertEqual(payload["local_retention"]["upload_status"], "pending")
+            self.assertEqual(payload["local_retention"]["retention_days"], 7)
 
     def test_write_run_manifest_persists_local_compaction_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -297,6 +300,7 @@ class CameraRecorderTests(unittest.TestCase):
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["storage_tier"], "full_run_plus_local_derivatives")
             self.assertEqual(payload["local_compaction"]["status"], "succeeded")
+            self.assertEqual(payload["local_retention"]["derived_total_size_bytes"], 1024)
             self.assertEqual(payload["segments"][0]["derived_video_filename"], "idle-001_idle.mp4")
             self.assertEqual(payload["local_compaction"]["segment_derivatives"][0]["video_encoding_profile"], "derived_idle_h264_2fps")
 

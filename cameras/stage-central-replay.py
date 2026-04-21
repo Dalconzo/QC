@@ -18,6 +18,7 @@ central replay server:
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as dt
 import hashlib
 import importlib.util
@@ -67,6 +68,29 @@ def compute_sha256(path: Path) -> str:
 def compute_text_sha256(text: str) -> str:
     """Hash generated JSON content before it is written to disk."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def canonicalize_manifest_for_staging(payload: dict) -> dict:
+    """Strip workstation-local upload/cleanup churn before hashing or copying."""
+    canonical = copy.deepcopy(payload)
+    local_retention = canonical.get("local_retention")
+    if isinstance(local_retention, dict):
+        for field_name in (
+            "upload_status",
+            "upload_completed_at_utc",
+            "upload_error",
+            "ack_path",
+            "central_run_id",
+            "lan_available",
+            "original_delete_eligible_at_local",
+            "original_deleted_at_local",
+            "last_cleanup_at_local",
+            "last_cleanup_action",
+            "last_cleanup_reason",
+        ):
+            local_retention[field_name] = ""
+        local_retention["lan_available"] = False
+    return canonical
 
 
 def stage_batch_id() -> str:
@@ -314,7 +338,8 @@ def stage_one_run(
     if item["replay_status"] != "ready":
         return {"action": "skipped_not_ready", "run_id": item["run_id"], "label": item["label"]}
 
-    normalized_manifest_text = json.dumps(payload, indent=2)
+    staging_manifest_payload = canonicalize_manifest_for_staging(payload)
+    normalized_manifest_text = json.dumps(staging_manifest_payload, indent=2)
     artifact_hashes = {
         "run_manifest_json": compute_text_sha256(normalized_manifest_text),
         "video_mp4": compute_sha256(video_path),

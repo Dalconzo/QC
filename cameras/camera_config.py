@@ -41,6 +41,13 @@ DEFAULT_CONFIG = {
             "idle_preset": "veryfast",
             "idle_fps": 2,
         },
+        "retention": {
+            "enabled": True,
+            "original_retention_days": 7,
+            "require_upload_ack": True,
+            "require_local_compaction": False,
+            "cleanup_on_run_complete": True,
+        },
     },
     "recorder": {
         "default_profile": "default",
@@ -374,5 +381,12 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
         for field_name in ("active_preset", "idle_preset"):
             if not str(compaction.get(field_name) or "").strip():
                 errors.append(f"storage.compaction.{field_name} is required.")
+
+    retention = storage.get("retention") or {}
+    if not isinstance(retention, dict):
+        errors.append("storage.retention must be an object when provided.")
+    else:
+        if int(retention.get("original_retention_days", 0) or 0) < 0:
+            errors.append("storage.retention.original_retention_days cannot be negative.")
 
     return {"errors": errors, "warnings": warnings}

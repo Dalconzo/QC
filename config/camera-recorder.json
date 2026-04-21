@@ -23,6 +23,13 @@
       "idle_crf": 36,
       "idle_preset": "veryfast",
       "idle_fps": 2
+    },
+    "retention": {
+      "enabled": true,
+      "original_retention_days": 7,
+      "require_upload_ack": true,
+      "require_local_compaction": false,
+      "cleanup_on_run_complete": true
     }
   },
   "recorder": {

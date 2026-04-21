@@ -70,6 +70,8 @@ class CameraConfigTests(unittest.TestCase):
             self.assertEqual(config["live"]["jpeg_quality"], 4)
             self.assertIn("compaction", config["storage"])
             self.assertFalse(config["storage"]["compaction"]["enabled"])
+            self.assertIn("retention", config["storage"])
+            self.assertEqual(config["storage"]["retention"]["original_retention_days"], 7)
             self.assertEqual(MODULE.get_profile(config)["id"], "top")
             self.assertTrue(config["daemon"]["task_name"])
 
@@ -162,6 +164,26 @@ class CameraConfigTests(unittest.TestCase):
             self.assertTrue(any("storage.compaction.idle_crf" in item for item in validation["errors"]))
             self.assertTrue(any("storage.compaction.idle_preset" in item for item in validation["errors"]))
             self.assertTrue(any("storage.compaction.idle_fps" in item for item in validation["errors"]))
+
+    def test_validation_rejects_negative_retention_days(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "storage": {"retention": {"original_retention_days": -7}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("storage.retention.original_retention_days" in item for item in validation["errors"]))
 
 
 if __name__ == "__main__":

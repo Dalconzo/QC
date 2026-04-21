@@ -308,6 +308,11 @@ class CameraDaemonTests(unittest.TestCase):
                         "uploaded_run_count": 1,
                         "failed_run_count": 0,
                     },
+                    "cleanup": {
+                        "deleted_run_count": 1,
+                        "deleted_bytes": 2048,
+                        "eligible_run_count": 0,
+                    },
                 }
 
             poll_calls = {"count": 0}
@@ -346,6 +351,8 @@ class CameraDaemonTests(unittest.TestCase):
             self.assertEqual(status["last_upload_batch_id"], "ingest-auto-1")
             self.assertEqual(status["last_uploaded_run_count"], 1)
             self.assertEqual(status["last_failed_upload_run_count"], 0)
+            self.assertEqual(status["last_cleanup_deleted_run_count"], 1)
+            self.assertEqual(status["last_cleanup_deleted_bytes"], 2048)
 
     def test_supervisor_skips_auto_upload_after_failed_cycle(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

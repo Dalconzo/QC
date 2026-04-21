@@ -7,6 +7,7 @@ local replay, and central staging/upload paths.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 from pathlib import Path
 
@@ -31,6 +32,27 @@ DEFAULT_LOCAL_COMPACTION = {
     "source_video_size_bytes": 0,
     "total_derived_size_bytes": 0,
     "segment_derivatives": [],
+}
+DEFAULT_LOCAL_RETENTION = {
+    "enabled": True,
+    "retention_days": 7,
+    "require_upload_ack": True,
+    "require_local_compaction": False,
+    "upload_status": "pending",
+    "upload_completed_at_utc": "",
+    "upload_error": "",
+    "ack_path": "",
+    "central_run_id": "",
+    "lan_available": False,
+    "original_video_path": "",
+    "original_video_size_bytes": 0,
+    "derived_total_size_bytes": 0,
+    "retain_until_local": "",
+    "original_delete_eligible_at_local": "",
+    "original_deleted_at_local": "",
+    "last_cleanup_at_local": "",
+    "last_cleanup_action": "",
+    "last_cleanup_reason": "",
 }
 
 
@@ -72,6 +94,10 @@ def normalize_replay_manifest_payload(payload: dict, *, manifest_path: Path | No
     enriched["local_compaction"] = _normalize_local_compaction(
         enriched.get("local_compaction"),
         source_video_path=enriched.get("video_path") or "",
+    )
+    enriched["local_retention"] = _normalize_local_retention(
+        enriched.get("local_retention"),
+        payload=enriched,
     )
     enriched["trace_event_count"] = int(enriched.get("trace_event_count") or trace_summary.get("trace_event_count") or 0)
     enriched["trace_started_at_local"] = (
@@ -246,4 +272,116 @@ def _normalize_local_compaction(raw_value, *, source_video_path: str) -> dict:
         "source_video_size_bytes": int(raw_value.get("source_video_size_bytes") or 0),
         "total_derived_size_bytes": int(raw_value.get("total_derived_size_bytes") or 0),
         "segment_derivatives": normalized_derivatives,
+    }
+
+
+def _parse_local_datetime(value: str) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is not None:
+        return parsed.astimezone().replace(tzinfo=None)
+    return parsed
+
+
+def _parse_utc_datetime(value: str) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        normalized = value.replace("Z", "+00:00")
+        parsed = dt.datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.UTC)
+    return parsed.astimezone().replace(tzinfo=None)
+
+
+def _normalize_local_retention(raw_value, *, payload: dict) -> dict:
+    if not isinstance(raw_value, dict):
+        raw_value = {}
+
+    video_path = str(payload.get("video_path") or "")
+    video_size_bytes = 0
+    if video_path:
+        try:
+            video_size_bytes = Path(video_path).stat().st_size
+        except Exception:
+            video_size_bytes = 0
+
+    local_compaction = payload.get("local_compaction") or {}
+    derived_total_size_bytes = int(
+        raw_value.get("derived_total_size_bytes")
+        or local_compaction.get("total_derived_size_bytes")
+        or 0
+    )
+    retention_days = int(raw_value.get("retention_days") or DEFAULT_LOCAL_RETENTION["retention_days"])
+    require_upload_ack = bool(
+        raw_value.get("require_upload_ack")
+        if "require_upload_ack" in raw_value
+        else DEFAULT_LOCAL_RETENTION["require_upload_ack"]
+    )
+    require_local_compaction = bool(
+        raw_value.get("require_local_compaction")
+        if "require_local_compaction" in raw_value
+        else DEFAULT_LOCAL_RETENTION["require_local_compaction"]
+    )
+
+    stopped_at_local = _parse_local_datetime(str(payload.get("stopped_at_local") or ""))
+    retain_until_local = ""
+    if stopped_at_local is not None:
+        retain_until_local = (stopped_at_local + dt.timedelta(days=retention_days)).isoformat(timespec="seconds")
+
+    upload_completed_at_utc = str(raw_value.get("upload_completed_at_utc") or "")
+    upload_completed_local = _parse_utc_datetime(upload_completed_at_utc)
+    compaction_status = str(local_compaction.get("status") or "")
+    upload_status = str(raw_value.get("upload_status") or DEFAULT_LOCAL_RETENTION["upload_status"])
+    lan_available = bool(raw_value.get("lan_available")) or upload_status == "acknowledged"
+
+    eligible_at_local = ""
+    eligibility_candidates: list[dt.datetime] = []
+    if retain_until_local:
+        retain_until_dt = _parse_local_datetime(retain_until_local)
+        if retain_until_dt is not None:
+            eligibility_candidates.append(retain_until_dt)
+    if require_upload_ack:
+        if upload_status == "acknowledged" and upload_completed_local is not None:
+            eligibility_candidates.append(upload_completed_local)
+        else:
+            eligibility_candidates = []
+    if require_local_compaction:
+        if compaction_status == "succeeded":
+            generated_at = _parse_local_datetime(str(local_compaction.get("generated_at_local") or ""))
+            if generated_at is not None:
+                eligibility_candidates.append(generated_at)
+        else:
+            eligibility_candidates = []
+    if eligibility_candidates:
+        eligible_at_local = max(eligibility_candidates).isoformat(timespec="seconds")
+
+    return {
+        "enabled": bool(raw_value.get("enabled") if "enabled" in raw_value else DEFAULT_LOCAL_RETENTION["enabled"]),
+        "retention_days": retention_days,
+        "require_upload_ack": require_upload_ack,
+        "require_local_compaction": require_local_compaction,
+        "upload_status": upload_status,
+        "upload_completed_at_utc": upload_completed_at_utc,
+        "upload_error": str(raw_value.get("upload_error") or ""),
+        "ack_path": str(raw_value.get("ack_path") or ""),
+        "central_run_id": str(raw_value.get("central_run_id") or ""),
+        "lan_available": lan_available,
+        "original_video_path": str(raw_value.get("original_video_path") or video_path or ""),
+        "original_video_size_bytes": int(raw_value.get("original_video_size_bytes") or video_size_bytes),
+        "derived_total_size_bytes": derived_total_size_bytes,
+        "retain_until_local": str(raw_value.get("retain_until_local") or retain_until_local),
+        "original_delete_eligible_at_local": str(
+            raw_value.get("original_delete_eligible_at_local") or eligible_at_local
+        ),
+        "original_deleted_at_local": str(raw_value.get("original_deleted_at_local") or ""),
+        "last_cleanup_at_local": str(raw_value.get("last_cleanup_at_local") or ""),
+        "last_cleanup_action": str(raw_value.get("last_cleanup_action") or ""),
+        "last_cleanup_reason": str(raw_value.get("last_cleanup_reason") or ""),
     }

@@ -141,6 +141,9 @@ class CentralUploadTests(unittest.TestCase):
             item = result["items"][0]
             self.assertEqual(item["action"], "acknowledged")
             self.assertTrue(Path(item["ack_path"]).exists())
+            local_manifest = json.loads((runs_root / "H7" / "2026-04-10" / "demo.run.json").read_text(encoding="utf-8"))
+            self.assertEqual(local_manifest["local_retention"]["upload_status"], "acknowledged")
+            self.assertTrue(local_manifest["local_retention"]["lan_available"])
 
             staging_catalog = staging_root / STAGE_MODULE.CATALOG_FILENAME
             with closing(STAGE_MODULE.get_db_connection(staging_catalog)) as conn:

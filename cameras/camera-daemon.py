@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
+from local_retention import cleanup_runs
 from stage_central_replay import stage_runs
 from upload_central_replay import upload_staged_runs
 
@@ -230,9 +231,20 @@ def run_post_run_central_ingest(
         log_path=daemon_log_path,
         is_error=(upload_payload["failed_run_count"] > 0),
     )
+    cleanup_payload = None
+    retention = config.get("storage", {}).get("retention", {})
+    if bool(retention.get("cleanup_on_run_complete", False)):
+        runs_root = Path(config["storage"]["runs_root"]).resolve()
+        emit_log("[daemon] Running local retention cleanup", log_path=daemon_log_path)
+        cleanup_payload = cleanup_runs(runs_root=runs_root, delete=True, limit=0)
+        emit_log(
+            f"[daemon] Local cleanup complete: deleted={cleanup_payload['deleted_run_count']} eligible={cleanup_payload['eligible_run_count']}",
+            log_path=daemon_log_path,
+        )
     return {
         "stage": stage_payload,
         "upload": upload_payload,
+        "cleanup": cleanup_payload,
     }
 
 
@@ -380,6 +392,7 @@ def run_supervisor(
                         )
                     else:
                         if ingest_payload:
+                            cleanup_payload = ingest_payload.get("cleanup") or {}
                             update_status(
                                 "idle",
                                 last_exit_code=return_code,
@@ -390,6 +403,9 @@ def run_supervisor(
                                 last_upload_batch_id=ingest_payload["upload"]["ingest_batch_id"],
                                 last_uploaded_run_count=ingest_payload["upload"]["uploaded_run_count"],
                                 last_failed_upload_run_count=ingest_payload["upload"]["failed_run_count"],
+                                last_cleanup_deleted_run_count=int(cleanup_payload.get("deleted_run_count", 0) or 0),
+                                last_cleanup_deleted_bytes=int(cleanup_payload.get("deleted_bytes", 0) or 0),
+                                last_cleanup_eligible_run_count=int(cleanup_payload.get("eligible_run_count", 0) or 0),
                             )
                         else:
                             update_status("idle", last_exit_code=return_code, last_cycle_completed_at=dt.datetime.now().isoformat())

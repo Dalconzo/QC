@@ -30,6 +30,7 @@ from contextlib import closing
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config
+from local_retention import record_upload_ack, record_upload_failure
 
 
 CAMERAS_DIR = Path(__file__).resolve().parent
@@ -587,6 +588,22 @@ def write_ack(stage_row: sqlite3.Row, ack_payload: dict) -> Path:
     return ack_path
 
 
+def update_local_manifest_after_upload(stage_row: sqlite3.Row, *, ack_payload: dict | None = None, error_text: str = "") -> None:
+    manifest_path = Path(str(stage_row["manifest_path"] or "")).resolve()
+    if not manifest_path.exists():
+        return
+    if ack_payload is not None:
+        record_upload_ack(
+            manifest_path,
+            central_run_id=str(ack_payload.get("central_run_id") or ""),
+            acknowledged_at_utc=str(ack_payload.get("acknowledged_at_utc") or ""),
+            ack_path=str(Path(str(stage_row["run_dir"])) / ACK_FILENAME),
+        )
+        return
+    if error_text:
+        record_upload_failure(manifest_path, error_text=error_text)
+
+
 def mark_upload_result(
     conn: sqlite3.Connection,
     *,
@@ -724,6 +741,7 @@ def upload_staged_runs(
                         "stored_artifacts": ingest_result["stored_artifacts"],
                     }
                     ack_path = write_ack(stage_row, ack_payload)
+                    update_local_manifest_after_upload(stage_row, ack_payload=ack_payload)
                     mark_upload_result(
                         stage_conn,
                         stage_run_id=stage_row["stage_run_id"],
@@ -746,6 +764,7 @@ def upload_staged_runs(
                     )
                 except Exception as exc:
                     failed_count += 1
+                    update_local_manifest_after_upload(stage_row, error_text=str(exc))
                     mark_upload_result(
                         stage_conn,
                         stage_run_id=stage_row["stage_run_id"],

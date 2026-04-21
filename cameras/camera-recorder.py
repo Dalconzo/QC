@@ -28,6 +28,7 @@ from pathlib import Path
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
 from camera_source import is_numeric_source, to_ffmpeg_input
 from local_compaction import apply_compaction_metadata_to_segments, generate_local_compaction
+from local_retention import build_local_retention_payload
 from replay_manifest import (
     DEFAULT_FULL_DETAIL_RETENTION,
     DEFAULT_LOCAL_COMPACTION,
@@ -346,6 +347,7 @@ def build_run_manifest_payload(
     storage_tier: str = DEFAULT_STORAGE_TIER,
     segments_override: list[dict] | None = None,
     local_compaction: dict | None = None,
+    local_retention: dict | None = None,
 ) -> dict:
     """Build the replay manifest payload for one recorded run."""
     trace_path = trace_match.path if trace_match else None
@@ -399,8 +401,11 @@ def build_run_manifest_payload(
         "replay_capabilities": list(REPLAY_MANIFEST_CAPABILITIES),
         "storage_tier": storage_tier,
         "replay_default_mode": DEFAULT_REPLAY_MODE,
-        "full_detail_retained_until_local": DEFAULT_FULL_DETAIL_RETENTION,
+        "full_detail_retained_until_local": str(
+            (local_retention or {}).get("retain_until_local") or DEFAULT_FULL_DETAIL_RETENTION
+        ),
         "local_compaction": dict(local_compaction or DEFAULT_LOCAL_COMPACTION),
+        "local_retention": dict(local_retention or {}),
         "trace_event_count": trace_summary.get("trace_event_count", 0),
         "trace_started_at_local": trace_summary.get("trace_started_at_local", ""),
         "trace_stopped_at_local": trace_summary.get("trace_stopped_at_local", ""),
@@ -428,6 +433,7 @@ def write_run_manifest(
     storage_tier: str = DEFAULT_STORAGE_TIER,
     segments_override: list[dict] | None = None,
     local_compaction: dict | None = None,
+    local_retention: dict | None = None,
 ) -> None:
     """Persist the pairing artifact the replay UI will load later."""
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -444,6 +450,7 @@ def write_run_manifest(
         storage_tier=storage_tier,
         segments_override=segments_override,
         local_compaction=local_compaction,
+        local_retention=local_retention,
     )
     payload = normalize_replay_manifest_payload(payload, manifest_path=manifest_path)
     with manifest_path.open("w", encoding="utf-8") as handle:
@@ -869,6 +876,7 @@ def main() -> int:
     storage = config["storage"]
     recorder = config["recorder"]
     compaction_config = storage.get("compaction") or {}
+    retention_config = storage.get("retention") or {}
 
     source = args.source or profile.get("source") or "0"
     out_dir = Path(args.out_dir or storage.get("runs_root") or (REPO_ROOT / "cameras" / "video_clips"))
@@ -1063,6 +1071,17 @@ def main() -> int:
                 f"Local compaction did not produce derivatives: {local_compaction.get('status')}",
                 log_path=recorder_log,
             )
+    local_retention = build_local_retention_payload(
+        manifest_payload={
+            "video_path": str(video_path.resolve()),
+            "stopped_at_local": run_window.capture_stopped_at.isoformat(),
+            "local_compaction": local_compaction,
+        },
+        enabled=bool(retention_config.get("enabled", True)),
+        retention_days=int(retention_config.get("original_retention_days", 7) or 7),
+        require_upload_ack=bool(retention_config.get("require_upload_ack", True)),
+        require_local_compaction=bool(retention_config.get("require_local_compaction", False)),
+    )
     write_run_manifest(
         manifest_path,
         label=label,
@@ -1077,6 +1096,7 @@ def main() -> int:
         storage_tier=storage_tier,
         segments_override=segments_override,
         local_compaction=local_compaction,
+        local_retention=local_retention,
     )
 
     emit_log(f"Wrote video: {video_path}", log_path=recorder_log)
