@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import hashlib
 import json
 import mimetypes
 import re
@@ -31,11 +30,12 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config, validate_config
 from camera_live import capture_live_frame as capture_live_frame_once, summarize_profile
+from replay_manifest import DEFAULT_REPLAY_MODE, DEFAULT_STORAGE_TIER, normalize_replay_manifest_payload
+from trace_replay import TRACE_LINE_RE, parse_trace_lines
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "replay_static"
-TRACE_LINE_RE = re.compile(r"^(?P<stamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})> ?(?P<body>.*)$")
 CATALOG_FILENAME = ".replay_catalog.sqlite3"
 
 
@@ -68,55 +68,22 @@ def capture_live_frame(config: dict, profile_id: str | None = None) -> tuple[byt
 
 def parse_trace_events(trace_path: Path) -> list[TraceEvent]:
     """Convert the raw `.trc` file into replayable timed events."""
-    events: list[TraceEvent] = []
-    first_stamp: dt.datetime | None = None
-    with trace_path.open("r", encoding="utf-8-sig", errors="replace") as handle:
-        for raw_line in handle:
-            line = raw_line.rstrip("\r\n")
-            if not line:
-                continue
-            match = TRACE_LINE_RE.match(line)
-            if not match:
-                continue
-
-            stamp = dt.datetime.strptime(match.group("stamp"), "%Y-%m-%d %H:%M:%S")
-            if first_stamp is None:
-                first_stamp = stamp
-            elapsed_sec = max(0.0, (stamp - first_stamp).total_seconds())
-            events.append(
-                TraceEvent(
-                    index=len(events),
-                    elapsed_sec=elapsed_sec,
-                    stamp_local=stamp.isoformat(sep=" "),
-                    line=line,
-                )
-            )
-    return events
+    return [
+        TraceEvent(
+            index=item.index,
+            elapsed_sec=item.elapsed_sec,
+            stamp_local=item.stamp.isoformat(sep=" "),
+            line=item.line,
+        )
+        for item in parse_trace_lines(trace_path)
+    ]
 
 
 def load_run_manifest(manifest_path: Path) -> dict:
     """Read one run manifest and normalize common fields."""
     with manifest_path.open("r", encoding="utf-8-sig") as handle:
         payload = json.load(handle)
-
-    payload["manifest_path"] = str(manifest_path.resolve())
-    payload["video_path"] = str(Path(payload.get("video_path", "")).resolve()) if payload.get("video_path") else ""
-    payload["trace_path"] = str(Path(payload.get("trace_path", "")).resolve()) if payload.get("trace_path") else ""
-    payload["run_id"] = compute_run_id(manifest_path, payload)
-    return payload
-
-
-def compute_run_id(manifest_path: Path, payload: dict) -> str:
-    """Build a stable run identifier from the manifest identity and timing."""
-    identity = {
-        "manifest_path": str(manifest_path.resolve()),
-        "video_path": str(Path(payload.get("video_path", "")).resolve()) if payload.get("video_path") else "",
-        "trace_path": str(Path(payload.get("trace_path", "")).resolve()) if payload.get("trace_path") else "",
-        "started_at_local": payload.get("started_at_local") or "",
-        "stopped_at_local": payload.get("stopped_at_local") or "",
-        "label": payload.get("label") or "",
-    }
-    return hashlib.sha1(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    return normalize_replay_manifest_payload(payload, manifest_path=manifest_path)
 
 
 def get_catalog_path(runs_root: Path) -> Path:
@@ -151,6 +118,8 @@ def init_catalog_db(conn: sqlite3.Connection) -> None:
             stop_reason TEXT,
             process_gate TEXT,
             trace_mtime_delta_sec REAL,
+            segment_count INTEGER NOT NULL DEFAULT 0,
+            idle_segment_count INTEGER NOT NULL DEFAULT 0,
             has_video INTEGER NOT NULL,
             has_trace INTEGER NOT NULL,
             replay_status TEXT NOT NULL,
@@ -161,6 +130,11 @@ def init_catalog_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(replay_status, started_at_local DESC);
         """
     )
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(runs)").fetchall()}
+    if "segment_count" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN segment_count INTEGER NOT NULL DEFAULT 0")
+    if "idle_segment_count" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN idle_segment_count INTEGER NOT NULL DEFAULT 0")
     conn.commit()
 
 
@@ -225,11 +199,13 @@ def refresh_catalog(runs_root: Path) -> dict:
                     stop_reason,
                     process_gate,
                     trace_mtime_delta_sec,
+                    segment_count,
+                    idle_segment_count,
                     has_video,
                     has_trace,
                     replay_status,
                     cataloged_at_utc
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_id) DO UPDATE SET
                     manifest_path = excluded.manifest_path,
                     manifest_mtime_ns = excluded.manifest_mtime_ns,
@@ -245,6 +221,8 @@ def refresh_catalog(runs_root: Path) -> dict:
                     stop_reason = excluded.stop_reason,
                     process_gate = excluded.process_gate,
                     trace_mtime_delta_sec = excluded.trace_mtime_delta_sec,
+                    segment_count = excluded.segment_count,
+                    idle_segment_count = excluded.idle_segment_count,
                     has_video = excluded.has_video,
                     has_trace = excluded.has_trace,
                     replay_status = excluded.replay_status,
@@ -266,6 +244,8 @@ def refresh_catalog(runs_root: Path) -> dict:
                     payload.get("stop_reason"),
                     payload.get("process_gate"),
                     payload.get("trace_mtime_delta_sec"),
+                    len(payload.get("segments") or []),
+                    int(payload.get("idle_segment_count") or 0),
                     int(payload["has_video"]),
                     int(payload["has_trace"]),
                     payload["replay_status"],
@@ -309,6 +289,8 @@ def summarize_catalog_row(row: sqlite3.Row) -> dict:
         "replay_status": row["replay_status"],
         "trace_mtime_delta_sec": row["trace_mtime_delta_sec"],
         "process_gate": row["process_gate"],
+        "segment_count": row["segment_count"],
+        "idle_segment_count": row["idle_segment_count"],
     }
 
 
@@ -386,6 +368,10 @@ def summarize_run(run: dict) -> dict:
         "replay_status": determine_replay_status(run),
         "trace_mtime_delta_sec": run.get("trace_mtime_delta_sec"),
         "process_gate": run.get("process_gate"),
+        "segment_count": len(run.get("segments") or []),
+        "idle_segment_count": int(run.get("idle_segment_count") or 0),
+        "storage_tier": run.get("storage_tier") or DEFAULT_STORAGE_TIER,
+        "replay_default_mode": run.get("replay_default_mode") or DEFAULT_REPLAY_MODE,
     }
 
 
@@ -409,7 +395,15 @@ def get_run_detail(runs_root: Path, run_id: str) -> dict:
             "trace_mtime_delta_sec": run.get("trace_mtime_delta_sec"),
             "process_gate": run.get("process_gate"),
             "source": run.get("source"),
+            "replay_manifest_version": run.get("replay_manifest_version"),
+            "replay_capabilities": run.get("replay_capabilities") or [],
+            "storage_tier": run.get("storage_tier"),
+            "replay_default_mode": run.get("replay_default_mode"),
+            "full_detail_retained_until_local": run.get("full_detail_retained_until_local"),
+            "trace_duration_sec": run.get("trace_duration_sec"),
         },
+        "chapters": run.get("chapters") or [],
+        "segments": run.get("segments") or [],
         "events": [asdict(event) for event in events],
     }
 
