@@ -21,10 +21,13 @@ import datetime as dt
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib import error as urlerror
+from urllib import request as urlrequest
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
 from stage_central_replay import stage_runs
@@ -53,6 +56,89 @@ def write_status(status_path: Path, payload: dict) -> None:
     with status_path.open("w", encoding="utf-8") as handle:
         json.dump(enriched, handle, indent=2)
         handle.write("\n")
+
+
+def guess_local_ip() -> str:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            return str(sock.getsockname()[0] or "")
+    except Exception:
+        return ""
+
+
+def post_status_json(base_url: str, route: str, payload: dict, *, timeout_sec: float) -> None:
+    if not base_url:
+        return
+    url = f"{base_url.rstrip('/')}{route}"
+    body = json.dumps(payload).encode("utf-8")
+    request = urlrequest.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json; charset=utf-8"},
+        method="POST",
+    )
+    with urlrequest.urlopen(request, timeout=max(0.5, timeout_sec)) as response:
+        if response.status >= 400:
+            raise RuntimeError(f"Status push failed: {response.status}")
+
+
+def iter_run_manifests(runs_root: Path) -> list[Path]:
+    return sorted(runs_root.rglob("*.run.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+
+
+def find_recent_run_payload(runs_root: Path, *, not_before: dt.datetime | None = None) -> dict | None:
+    for manifest_path in iter_run_manifests(runs_root):
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        stopped_at_local = str(payload.get("stopped_at_local") or "").strip()
+        if not_before and stopped_at_local:
+            try:
+                stopped_at = dt.datetime.fromisoformat(stopped_at_local)
+            except ValueError:
+                stopped_at = None
+            if stopped_at and stopped_at < (not_before - dt.timedelta(seconds=5)):
+                continue
+        payload.setdefault("manifest_path", str(manifest_path.resolve()))
+        return payload
+    return None
+
+
+def build_status_envelope(*, config: dict, profile: dict, source: str, state: str, extra: dict | None = None, run_payload: dict | None = None) -> dict:
+    central_ingest = config.get("central_ingest", {})
+    daemon_status = config.get("daemon", {})
+    return {
+        "workstation": {
+            "workstation_id": socket.gethostname().lower(),
+            "hostname": socket.gethostname(),
+            "machine_alias": socket.gethostname(),
+            "repo_root": str(REPO_ROOT),
+            "local_ip": guess_local_ip(),
+            "software_version": "camera-daemon.jdp.v1",
+        },
+        "camera_profile": {
+            "profile_id": str(profile.get("id") or "default"),
+            "profile_key": str(profile.get("id") or "default"),
+            "profile_label": str(profile.get("label") or profile.get("id") or "default"),
+            "source_name": source,
+        },
+        "status": {
+            "state": state,
+            "upload_phase": str((extra or {}).get("upload_phase") or ""),
+            "last_error": str((extra or {}).get("last_error") or (extra or {}).get("last_upload_error") or ""),
+            "current_local_run_id": str((run_payload or {}).get("local_run_id") or ""),
+            "current_label": str((run_payload or {}).get("label") or ""),
+            "current_started_at_local": str((run_payload or {}).get("started_at_local") or ""),
+            "daemon_status_path": str(daemon_status.get("status_path") or ""),
+            "staging_root": str(central_ingest.get("staging_root") or ""),
+            "upload_root": str(central_ingest.get("upload_root") or ""),
+        },
+        "run": run_payload or {},
+    }
 
 
 def read_pid_file(pid_path: Path) -> int | None:
@@ -278,6 +364,9 @@ def run_supervisor(
     out_dir = out_dir_override or str(config["storage"]["runs_root"])
     label = label_override or str(profile.get("label") or profile["id"])
     recorder_stop_file = Path(str(config["recorder"]["stop_file"]))
+    status_server_url = str(config.get("central_ingest", {}).get("status_server_url") or "").strip()
+    status_timeout_sec = float(config.get("central_ingest", {}).get("status_timeout_sec", 5) or 5)
+    runs_root = Path(str(config["storage"]["runs_root"])).resolve()
 
     try:
         claim_singleton(pid_file)
@@ -293,6 +382,53 @@ def run_supervisor(
     last_heartbeat = 0.0
     run_session_active = False
     sticky_status_fields: dict[str, object] = {}
+    current_run_payload: dict | None = None
+
+    def publish_workstation_status(state: str, *, extra: dict | None = None, event_kind: str = "heartbeat") -> None:
+        if not status_server_url:
+            return
+        payload = build_status_envelope(
+            config=config,
+            profile=profile,
+            source=source,
+            state=state,
+            extra=extra,
+            run_payload=current_run_payload,
+        )
+        try:
+            post_status_json(
+                status_server_url,
+                "/api/workstations/heartbeat",
+                payload,
+                timeout_sec=status_timeout_sec,
+            )
+        except (OSError, RuntimeError, urlerror.URLError) as exc:
+            emit_log(f"[daemon] Status heartbeat failed: {exc}", log_path=daemon_log_path, is_error=True)
+
+    def publish_run_status(state: str, run_payload: dict | None, *, extra: dict | None = None) -> None:
+        if not status_server_url or not run_payload or not run_payload.get("local_run_id"):
+            return
+        run_update = dict(run_payload)
+        run_update["replay_status"] = state
+        if extra:
+            run_update.update(extra)
+        payload = build_status_envelope(
+            config=config,
+            profile=profile,
+            source=source,
+            state=state,
+            extra=extra,
+            run_payload=run_update,
+        )
+        try:
+            post_status_json(
+                status_server_url,
+                "/api/runs/status",
+                payload,
+                timeout_sec=status_timeout_sec,
+            )
+        except (OSError, RuntimeError, urlerror.URLError) as exc:
+            emit_log(f"[daemon] Run status push failed: {exc}", log_path=daemon_log_path, is_error=True)
 
     def update_status(state: str, **extra: object) -> None:
         payload = {
@@ -316,6 +452,7 @@ def run_supervisor(
         payload.update(sticky_status_fields)
         payload.update(extra)
         write_status(status_path, payload)
+        publish_workstation_status(state, extra=payload, event_kind="heartbeat")
 
     emit_log(
         f"[daemon] Starting supervisor for profile '{profile['id']}' gated on {process_name}",
@@ -352,14 +489,21 @@ def run_supervisor(
                     continue
 
                 cycle_count += 1
+                recorder_finished_at = dt.datetime.now()
                 emit_log(
                     f"[daemon] Recorder child exited with code {return_code}",
                     log_path=daemon_log_path,
                     is_error=(return_code != 0),
                 )
                 ingest_payload = None
+                if return_code == 0:
+                    current_run_payload = find_recent_run_payload(runs_root, not_before=recorder_finished_at - dt.timedelta(minutes=30))
+                    if current_run_payload:
+                        publish_run_status("pending_upload", current_run_payload)
                 if return_code == 0 and post_run_ingest_fn is not None:
                     try:
+                        if current_run_payload:
+                            publish_run_status("uploading", current_run_payload, extra={"upload_phase": "staging"})
                         ingest_payload = post_run_ingest_fn(
                             config_path=config_path,
                             local_config_path=local_config_path,
@@ -372,6 +516,8 @@ def run_supervisor(
                             log_path=daemon_log_path,
                             is_error=True,
                         )
+                        if current_run_payload:
+                            publish_run_status("failed", current_run_payload, extra={"last_error": str(exc)})
                         update_status(
                             "idle",
                             last_exit_code=return_code,
@@ -391,6 +537,23 @@ def run_supervisor(
                                 last_uploaded_run_count=ingest_payload["upload"]["uploaded_run_count"],
                                 last_failed_upload_run_count=ingest_payload["upload"]["failed_run_count"],
                             )
+                            if current_run_payload:
+                                matching_item = next(
+                                    (
+                                        item
+                                        for item in ingest_payload["upload"].get("items", [])
+                                        if item.get("local_run_id") == current_run_payload.get("local_run_id") and item.get("action") == "acknowledged"
+                                    ),
+                                    None,
+                                )
+                                if matching_item:
+                                    publish_run_status(
+                                        "available",
+                                        current_run_payload,
+                                        extra={"central_run_id": matching_item.get("central_run_id", "")},
+                                    )
+                                elif ingest_payload["upload"].get("failed_run_count", 0) > 0:
+                                    publish_run_status("failed", current_run_payload, extra={"last_error": "auto_upload_failed"})
                         else:
                             update_status("idle", last_exit_code=return_code, last_cycle_completed_at=dt.datetime.now().isoformat())
                 else:
@@ -399,6 +562,7 @@ def run_supervisor(
                 child_started_at = 0.0
                 last_heartbeat = 0.0
                 run_session_active = True
+                current_run_payload = None
 
                 if run_once or (max_cycles > 0 and cycle_count >= max_cycles):
                     emit_log("[daemon] Run limit reached. Exiting.", log_path=daemon_log_path)
@@ -452,6 +616,7 @@ def run_supervisor(
             child_proc = subprocess.Popen(child_command)
             child_started_at = time.monotonic()
             last_heartbeat = 0.0
+            current_run_payload = None
             update_status("recording", child_started_at=dt.datetime.now().isoformat())
             time.sleep(max(0.25, idle_poll_sec))
 

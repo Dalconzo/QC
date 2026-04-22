@@ -57,6 +57,8 @@ DEFAULT_CONFIG = {
         "upload_root": str(REPO_ROOT / "cameras" / "central_replay_root"),
         "transport": "filesystem",
         "auto_upload_on_run_complete": False,
+        "status_server_url": "",
+        "status_timeout_sec": 5,
     },
     "daemon": {
         "task_name": "HamiltonCameraRecorderDaemon",
@@ -287,6 +289,13 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     transport = str(central_ingest.get("transport") or "").strip().lower()
     if transport not in {"filesystem"}:
         errors.append("central_ingest.transport must currently be 'filesystem'.")
+
+    status_server_url = str(central_ingest.get("status_server_url") or "").strip()
+    if status_server_url and not (status_server_url.startswith("http://") or status_server_url.startswith("https://")):
+        errors.append("central_ingest.status_server_url must start with http:// or https:// when set.")
+
+    if int(central_ingest.get("status_timeout_sec", 0) or 0) < 0:
+        errors.append("central_ingest.status_timeout_sec cannot be negative.")
 
     default_live_profile = str(live.get("default_profile") or "").strip()
     if default_live_profile and default_live_profile not in {str(profile.get("id")) for profile in profiles}:

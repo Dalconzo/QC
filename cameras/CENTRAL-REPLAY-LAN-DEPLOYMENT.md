@@ -54,6 +54,13 @@ python C:\QC\cameras\central-replay-server.py `
   --print-config --json
 ```
 
+The host config now also controls workstation presence expiry:
+
+- `server.workstation_heartbeat_timeout_sec`
+- default: `30.0`
+- if a workstation misses heartbeats longer than this window, `/api/workstations`
+  reports it as offline until a fresh heartbeat arrives
+
 Host-local health check:
 
 ```powershell
@@ -102,7 +109,9 @@ Recommended target setting:
   "central_ingest": {
     "staging_root": "C:\\QC\\cameras\\central_staging",
     "upload_root": "\\\\DESKTOP-JL79UJV\\QCReplayUpload",
-    "transport": "filesystem"
+    "transport": "filesystem",
+    "auto_upload_on_run_complete": true,
+    "status_server_url": "http://192.168.70.121:5080"
   }
 }
 ```
@@ -168,3 +177,15 @@ The current data pipeline is good enough for the first trusted-LAN deployment,
 but it still depends on SMB write access from the target workstation. The next
 cleaner cutover is the planned HTTP ingest service, which would let the target
 workstation upload over HTTP while this host alone owns the filesystem layout.
+
+## Immediate Status Pushes
+
+With `central_ingest.status_server_url` configured, the workstation daemon also
+posts:
+
+- `POST /api/workstations/heartbeat`
+- `POST /api/runs/status`
+
+That lets the LAN UI show workstation presence plus run states like
+`pending_upload`, `uploading`, `available`, and `failed` before the central
+artifact upload is complete.

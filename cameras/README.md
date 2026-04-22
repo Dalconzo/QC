@@ -25,6 +25,9 @@ state in a small SQLite ledger so duplicate bundles can be skipped cleanly.
 The uploader lane then ingests those staged runs into a central filesystem
 root under `central_ingest.upload_root`, assigns server-side `central_run_id`
 values, and writes acknowledgements back into the local staging ledger.
+When `central_ingest.status_server_url` is set, the workstation daemon can also
+push heartbeat and run-status updates to the LAN replay server so pending runs
+appear in the central UI before media upload finishes.
 
 For a full remote-install checklist and rollback procedure, see
 [`WORKSTATION-ROLLOUT.md`](/C:/QC/cameras/WORKSTATION-ROLLOUT.md).
@@ -319,12 +322,14 @@ That host config controls:
 - central upload root and optional explicit catalog path
 - persistent log path
 - health-check route
+- workstation heartbeat timeout before LAN presence flips to offline
 
 Then bring up the first LAN browse layer with:
 
 ```powershell
 powershell -NoProfile -File C:\QC\cameras\start-central-replay-server.ps1 `
   -UploadRoot \\server\camera-replay `
+  -WorkstationHeartbeatTimeoutSec 30 `
   -Background `
   -OpenBrowser
 ```

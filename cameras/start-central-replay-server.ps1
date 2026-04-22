@@ -20,6 +20,7 @@ param(
     [string]$ServerLog = "",
     [string]$SiteName = "",
     [string]$HealthPath = "",
+    [Nullable[double]]$WorkstationHeartbeatTimeoutSec = $null,
     [switch]$Background,
     [switch]$OpenBrowser,
     [int]$WaitSec = 15
@@ -82,6 +83,9 @@ if ($SiteName) {
 if ($HealthPath) {
     $inspectArgs += @("--health-path", $HealthPath)
 }
+if ($WorkstationHeartbeatTimeoutSec -ne $null) {
+    $inspectArgs += @("--workstation-heartbeat-timeout-sec", $WorkstationHeartbeatTimeoutSec)
+}
 
 $configJson = & python @inspectArgs
 if ($LASTEXITCODE -ne 0) {
@@ -130,6 +134,9 @@ if ($SiteName) {
 }
 if ($HealthPath) {
     $argsList += @("--health-path", $HealthPath)
+}
+if ($WorkstationHeartbeatTimeoutSec -ne $null) {
+    $argsList += @("--workstation-heartbeat-timeout-sec", $WorkstationHeartbeatTimeoutSec)
 }
 
 function Get-ServerBaseUrl {
