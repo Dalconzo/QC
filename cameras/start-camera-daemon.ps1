@@ -29,6 +29,7 @@ param(
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
+. (Join-Path $scriptDir "camera-env.ps1")
 
 if (-not $Config) {
   $Config = Join-Path $repoRoot "config\camera-recorder.json"
@@ -38,17 +39,23 @@ if (-not $LocalConfig) {
   $LocalConfig = Join-Path $repoRoot "config\camera-recorder.local.json"
 }
 
-$python = Get-Command python -ErrorAction SilentlyContinue
-if (-not $python) {
-  throw "Python is not available in PATH."
-}
-
 $inspectScript = Join-Path $scriptDir "inspect-camera-config.py"
-if (-not (Test-Path -LiteralPath $inspectScript)) {
+if ((-not (Test-Path -LiteralPath $inspectScript)) -and (-not (Test-Path -LiteralPath (Get-CameraPackagedToolPath -RepoRoot $repoRoot -ToolName "inspect-camera-config")))) {
   throw "Config inspection script not found: $inspectScript"
 }
 
-$configJson = & python $inspectScript --config ([System.IO.Path]::GetFullPath($Config)) --local-config ([System.IO.Path]::GetFullPath($LocalConfig)) --json
+$inspectCommand = Resolve-CameraToolCommand `
+  -RepoRoot $repoRoot `
+  -ToolName "inspect-camera-config" `
+  -ScriptPath $inspectScript `
+  -ConfigPath ([System.IO.Path]::GetFullPath($Config)) `
+  -LocalConfigPath ([System.IO.Path]::GetFullPath($LocalConfig))
+
+$configJson = Invoke-CameraTool -CommandInfo $inspectCommand -Arguments @(
+  "--config", ([System.IO.Path]::GetFullPath($Config)),
+  "--local-config", ([System.IO.Path]::GetFullPath($LocalConfig)),
+  "--json"
+)
 if ($LASTEXITCODE -ne 0) {
   throw "Failed to read effective camera config."
 }
@@ -71,12 +78,18 @@ Remove-Item -LiteralPath $effectiveDaemonStopFile -Force -ErrorAction SilentlyCo
 Remove-Item -LiteralPath $effectiveRecorderStopFile -Force -ErrorAction SilentlyContinue
 
 $daemonScript = Join-Path $scriptDir "camera-daemon.py"
-if (-not (Test-Path -LiteralPath $daemonScript)) {
+if ((-not (Test-Path -LiteralPath $daemonScript)) -and (-not (Test-Path -LiteralPath (Get-CameraPackagedToolPath -RepoRoot $repoRoot -ToolName "camera-daemon")))) {
   throw "Camera daemon script not found: $daemonScript"
 }
 
+$daemonCommand = Resolve-CameraToolCommand `
+  -RepoRoot $repoRoot `
+  -ToolName "camera-daemon" `
+  -ScriptPath $daemonScript `
+  -ConfigPath ([System.IO.Path]::GetFullPath($Config)) `
+  -LocalConfigPath ([System.IO.Path]::GetFullPath($LocalConfig))
+
 $argsList = @(
-  $daemonScript,
   "--config", ([System.IO.Path]::GetFullPath($Config)),
   "--local-config", ([System.IO.Path]::GetFullPath($LocalConfig))
 )
@@ -148,10 +161,10 @@ if ($IdleTimeoutSec -ne $null) {
 
 if ($Foreground) {
   Write-Host "Starting camera daemon in foreground ..." -ForegroundColor Cyan
-  & python @argsList
+  Invoke-CameraTool -CommandInfo $daemonCommand -Arguments $argsList
   exit $LASTEXITCODE
 }
 
 Write-Host "Starting camera daemon in background ..." -ForegroundColor Cyan
-$proc = Start-Process -FilePath $python.Source -ArgumentList $argsList -WindowStyle Hidden -PassThru
+$proc = Start-Process -FilePath $daemonCommand.file_path -ArgumentList (@($daemonCommand.prefix_arguments) + $argsList) -WindowStyle Hidden -PassThru
 Write-Host ("Camera daemon process started with PID {0}" -f $proc.Id) -ForegroundColor Green

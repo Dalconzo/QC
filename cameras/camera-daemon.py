@@ -36,6 +36,43 @@ from upload_central_replay import upload_staged_runs
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def runtime_base_dir() -> Path:
+    """Return the directory that contains packaged sibling tools when frozen."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def default_recorder_entry() -> Path:
+    """Pick the recorder executable/script that matches the current runtime."""
+    base_dir = runtime_base_dir()
+    if getattr(sys, "frozen", False):
+        packaged = base_dir / "camera-recorder.exe"
+        if packaged.exists():
+            return packaged
+    return base_dir / "camera-recorder.py"
+
+
+EXIT_CONTRACT_FINALIZED_RUN = 0
+EXIT_CONTRACT_REARM_SEGMENT = 20
+EXIT_CONTRACT_DISCARD_SPECULATIVE_SEGMENT = 21
+REARM_EXIT_CODES = {
+    EXIT_CONTRACT_REARM_SEGMENT,
+    EXIT_CONTRACT_DISCARD_SPECULATIVE_SEGMENT,
+}
+
+
+def classify_exit_contract(return_code: int) -> str:
+    """Map recorder exit codes onto the daemon's session-management contract."""
+    if return_code == EXIT_CONTRACT_FINALIZED_RUN:
+        return "finalized_run"
+    if return_code == EXIT_CONTRACT_REARM_SEGMENT:
+        return "rearm_segment"
+    if return_code == EXIT_CONTRACT_DISCARD_SPECULATIVE_SEGMENT:
+        return "discard_speculative_segment"
+    return "error"
+
+
 def emit_log(message: str, *, log_path: Path | None = None, is_error: bool = False) -> None:
     """Mirror daemon diagnostics to the console and an optional log file."""
     stream = sys.stderr if is_error else sys.stdout
@@ -238,20 +275,35 @@ def build_recorder_command(
     label: str,
 ) -> list[str]:
     """Construct one child recorder invocation for a single Hamilton run."""
-    command = [
-        sys.executable,
-        str(recorder_script),
-        "--config",
-        str(config_path),
-        "--local-config",
-        str(local_config_path),
-        "--profile",
-        profile_id,
-        "--start-when-exe",
-        process_name,
-        "--stop-when-exe",
-        process_name,
-    ]
+    if recorder_script.suffix.lower() == ".exe":
+        command = [
+            str(recorder_script),
+            "--config",
+            str(config_path),
+            "--local-config",
+            str(local_config_path),
+            "--profile",
+            profile_id,
+            "--start-when-exe",
+            process_name,
+            "--stop-when-exe",
+            process_name,
+        ]
+    else:
+        command = [
+            sys.executable,
+            str(recorder_script),
+            "--config",
+            str(config_path),
+            "--local-config",
+            str(local_config_path),
+            "--profile",
+            profile_id,
+            "--start-when-exe",
+            process_name,
+            "--stop-when-exe",
+            process_name,
+        ]
 
     if source:
         command += ["--source", source]
@@ -490,17 +542,18 @@ def run_supervisor(
 
                 cycle_count += 1
                 recorder_finished_at = dt.datetime.now()
+                exit_contract = classify_exit_contract(return_code)
                 emit_log(
-                    f"[daemon] Recorder child exited with code {return_code}",
+                    f"[daemon] Recorder child exited with code {return_code} ({exit_contract})",
                     log_path=daemon_log_path,
-                    is_error=(return_code != 0),
+                    is_error=(return_code not in (EXIT_CONTRACT_FINALIZED_RUN, *REARM_EXIT_CODES)),
                 )
                 ingest_payload = None
-                if return_code == 0:
+                if return_code == EXIT_CONTRACT_FINALIZED_RUN:
                     current_run_payload = find_recent_run_payload(runs_root, not_before=recorder_finished_at - dt.timedelta(minutes=30))
                     if current_run_payload:
                         publish_run_status("pending_upload", current_run_payload)
-                if return_code == 0 and post_run_ingest_fn is not None:
+                if return_code == EXIT_CONTRACT_FINALIZED_RUN and post_run_ingest_fn is not None:
                     try:
                         if current_run_payload:
                             publish_run_status("uploading", current_run_payload, extra={"upload_phase": "staging"})
@@ -521,14 +574,17 @@ def run_supervisor(
                         update_status(
                             "idle",
                             last_exit_code=return_code,
+                            last_exit_contract=exit_contract,
                             last_cycle_completed_at=dt.datetime.now().isoformat(),
                             last_upload_error=str(exc),
+                            waiting_for_process_exit=False,
                         )
                     else:
                         if ingest_payload:
                             update_status(
                                 "idle",
                                 last_exit_code=return_code,
+                                last_exit_contract=exit_contract,
                                 last_cycle_completed_at=dt.datetime.now().isoformat(),
                                 last_stage_batch_id=ingest_payload["stage"]["batch_id"],
                                 last_stage_staged_run_count=ingest_payload["stage"]["staged_run_count"],
@@ -536,6 +592,7 @@ def run_supervisor(
                                 last_upload_batch_id=ingest_payload["upload"]["ingest_batch_id"],
                                 last_uploaded_run_count=ingest_payload["upload"]["uploaded_run_count"],
                                 last_failed_upload_run_count=ingest_payload["upload"]["failed_run_count"],
+                                waiting_for_process_exit=False,
                             )
                             if current_run_payload:
                                 matching_item = next(
@@ -555,18 +612,48 @@ def run_supervisor(
                                 elif ingest_payload["upload"].get("failed_run_count", 0) > 0:
                                     publish_run_status("failed", current_run_payload, extra={"last_error": "auto_upload_failed"})
                         else:
-                            update_status("idle", last_exit_code=return_code, last_cycle_completed_at=dt.datetime.now().isoformat())
+                            update_status(
+                                "idle",
+                                last_exit_code=return_code,
+                                last_exit_contract=exit_contract,
+                                last_cycle_completed_at=dt.datetime.now().isoformat(),
+                                waiting_for_process_exit=False,
+                            )
                 else:
-                    update_status("idle", last_exit_code=return_code, last_cycle_completed_at=dt.datetime.now().isoformat())
+                    update_status(
+                        "idle",
+                        last_exit_code=return_code,
+                        last_exit_contract=exit_contract,
+                        last_cycle_completed_at=dt.datetime.now().isoformat(),
+                        waiting_for_process_exit=False,
+                    )
                 child_proc = None
                 child_started_at = 0.0
                 last_heartbeat = 0.0
-                run_session_active = True
+                run_session_active = return_code not in REARM_EXIT_CODES
                 current_run_payload = None
 
-                if run_once or (max_cycles > 0 and cycle_count >= max_cycles):
+                if return_code in REARM_EXIT_CODES:
+                    update_status("idle", waiting_for_process_exit=False)
+                    if return_code == EXIT_CONTRACT_REARM_SEGMENT:
+                        emit_log(
+                            f"[daemon] Recorder requested immediate rearm while {process_name} remains active",
+                            log_path=daemon_log_path,
+                        )
+                    else:
+                        emit_log(
+                            f"[daemon] Recorder discarded a speculative segment and requested immediate rearm",
+                            log_path=daemon_log_path,
+                        )
+
+                if run_session_active and (run_once or (max_cycles > 0 and cycle_count >= max_cycles)):
                     emit_log("[daemon] Run limit reached. Exiting.", log_path=daemon_log_path)
-                    update_status("stopped", reason="run_limit", last_exit_code=return_code)
+                    update_status(
+                        "stopped",
+                        reason="run_limit",
+                        last_exit_code=return_code,
+                        last_exit_contract=exit_contract,
+                    )
                     break
 
                 if relaunch_delay_sec > 0:
@@ -583,7 +670,7 @@ def run_supervisor(
                 now = time.monotonic()
                 if (now - last_heartbeat) >= heartbeat_sec:
                     emit_log(f"[daemon] Waiting for process start: {process_name}", log_path=daemon_log_path)
-                    update_status("idle")
+                    update_status("idle", waiting_for_process_exit=False)
                     last_heartbeat = now
                 time.sleep(max(0.25, idle_poll_sec))
                 continue
@@ -685,7 +772,7 @@ def main() -> int:
         recorder_log_dir = str(config.get("storage", {}).get("recorder_log_dir") or "")
         if recorder_log_dir:
             recorder_log_path = Path(recorder_log_dir) / "camera-recorder-daemon.log"
-    recorder_script = Path(args.recorder_script or (Path(__file__).parent / "camera-recorder.py"))
+    recorder_script = Path(args.recorder_script or default_recorder_entry())
     idle_poll_sec = args.idle_poll_sec if args.idle_poll_sec is not None else float(daemon_config.get("idle_poll_sec", 1.0))
     heartbeat_sec = args.heartbeat_sec if args.heartbeat_sec is not None else float(daemon_config.get("heartbeat_sec", 10.0))
     relaunch_delay_sec = args.relaunch_delay_sec if args.relaunch_delay_sec is not None else float(daemon_config.get("relaunch_delay_sec", 2.0))

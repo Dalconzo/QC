@@ -60,6 +60,7 @@ $bootstrap = Join-Path $scriptDir "install-camera-workstation.ps1"
     -Config $configPath `
     -LocalConfig $localPath `
     -ProfileId workstation `
+    -MachineAlias H7 `
     -CameraSource 'Smoke Camera' `
     -CameraLabel 'Smoke Camera' `
     -HamiltonLogDir $hamiltonDir `
@@ -90,8 +91,26 @@ if ($localConfig.recorder.default_profile -ne "workstation") {
     throw "Unexpected default profile in local override."
 }
 
+if ($localConfig.workstation.machine_alias -ne "H7") {
+    throw "Unexpected machine alias in local override."
+}
+
+if ($localConfig.workstation.compatibility_mode -ne "modern") {
+    throw "Unexpected compatibility mode in local override."
+}
+
 if ($localConfig.profiles[0].source -ne 'Smoke Camera') {
     throw "Unexpected camera source in local override."
+}
+
+$inspect = Join-Path $scriptDir "show-camera-config.ps1"
+$effectiveJson = & powershell -NoProfile -ExecutionPolicy Bypass -File $inspect -Config $configPath -LocalConfig $localPath -AsJson
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to inspect merged config after bootstrap."
+}
+$effectiveConfig = $effectiveJson | ConvertFrom-Json
+if ($effectiveConfig.config.workstation.machine_alias -ne "H7") {
+    throw "Merged config did not preserve machine alias."
 }
 
 $validate = Join-Path $scriptDir "show-camera-config.ps1"
@@ -130,3 +149,29 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 Write-Host "camera workstation bootstrap numeric-source guard passed" -ForegroundColor Green
+
+$legacyLocalPath = Join-Path $tmpRoot "legacy-camera-recorder.local.json"
+& powershell -NoProfile -ExecutionPolicy Bypass -File $bootstrap `
+    -Config $configPath `
+    -LocalConfig $legacyLocalPath `
+    -ProfileId legacy `
+    -MachineAlias H13 `
+    -CompatibilityMode legacy-windows `
+    -CameraSource 'Legacy Camera' `
+    -CameraLabel 'Legacy Camera' `
+    -HamiltonLogDir $hamiltonDir `
+    -RunsRoot $runsRoot `
+    -RecorderLogDir $logDir `
+    -FfmpegPath (Join-Path $scriptDir "dist\ffmpeg.exe") `
+    -SkipShortcuts
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Legacy bootstrap script returned exit code $LASTEXITCODE"
+}
+
+$legacyLocalConfig = Get-Content -LiteralPath $legacyLocalPath | ConvertFrom-Json
+if ($legacyLocalConfig.workstation.compatibility_mode -ne "legacy-windows") {
+    throw "Legacy bootstrap did not persist compatibility mode."
+}
+
+Write-Host "camera workstation bootstrap legacy mode passed" -ForegroundColor Green

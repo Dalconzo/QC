@@ -21,6 +21,7 @@ param(
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
+. (Join-Path $scriptDir "camera-env.ps1")
 
 if (-not $Config) {
   $Config = Join-Path $repoRoot "config\camera-recorder.json"
@@ -30,18 +31,19 @@ if (-not $LocalConfig) {
   $LocalConfig = Join-Path $repoRoot "config\camera-recorder.local.json"
 }
 
-$python = Get-Command python -ErrorAction SilentlyContinue
-if (-not $python) {
-  throw "Python is not available in PATH."
-}
-
 $scriptPath = Join-Path $scriptDir "inspect-camera-config.py"
-if (-not (Test-Path -LiteralPath $scriptPath)) {
+if ((-not (Test-Path -LiteralPath $scriptPath)) -and (-not (Test-Path -LiteralPath (Get-CameraPackagedToolPath -RepoRoot $repoRoot -ToolName "inspect-camera-config")))) {
   throw "Camera config inspector not found: $scriptPath"
 }
 
+$commandInfo = Resolve-CameraToolCommand `
+  -RepoRoot $repoRoot `
+  -ToolName "inspect-camera-config" `
+  -ScriptPath $scriptPath `
+  -ConfigPath ([System.IO.Path]::GetFullPath($Config)) `
+  -LocalConfigPath ([System.IO.Path]::GetFullPath($LocalConfig))
+
 $argsList = @(
-  $scriptPath,
   "--config", ([System.IO.Path]::GetFullPath($Config)),
   "--local-config", ([System.IO.Path]::GetFullPath($LocalConfig))
 )
@@ -63,5 +65,5 @@ if ($AsJson) {
   $argsList += "--json"
 }
 
-& python @argsList
+Invoke-CameraTool -CommandInfo $commandInfo -Arguments $argsList
 exit $LASTEXITCODE
