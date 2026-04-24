@@ -26,6 +26,7 @@ param(
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
+. (Join-Path $scriptDir "camera-env.ps1")
 
 if (-not $Config) {
     $Config = Join-Path $repoRoot "config\camera-recorder.json"
@@ -35,20 +36,23 @@ if (-not $LocalConfig) {
     $LocalConfig = Join-Path $repoRoot "config\camera-recorder.local.json"
 }
 
-$python = Get-Command python -ErrorAction SilentlyContinue
-if (-not $python) {
-    throw "Python is not available in PATH."
-}
-
-function Invoke-PythonJson {
+function Invoke-CameraJsonTool {
     param(
+        [string]$ToolName,
         [string]$ScriptPath,
         [string[]]$Arguments
     )
 
-    $raw = & $python.Source $ScriptPath @Arguments
+    $commandInfo = Resolve-CameraToolCommand `
+        -RepoRoot $repoRoot `
+        -ToolName $ToolName `
+        -ScriptPath $ScriptPath `
+        -ConfigPath ([System.IO.Path]::GetFullPath($Config)) `
+        -LocalConfigPath ([System.IO.Path]::GetFullPath($LocalConfig))
+
+    $raw = Invoke-CameraTool -CommandInfo $commandInfo -Arguments $Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: python $ScriptPath $($Arguments -join ' ')"
+        throw "Command failed: $ToolName $($Arguments -join ' ')"
     }
     return $raw | ConvertFrom-Json
 }
@@ -63,7 +67,7 @@ if ($ProfileId) {
     $inspectArgs += "--profile"
     $inspectArgs += $ProfileId
 }
-$effective = Invoke-PythonJson -ScriptPath $inspectScript -Arguments $inspectArgs
+$effective = Invoke-CameraJsonTool -ToolName "inspect-camera-config" -ScriptPath $inspectScript -Arguments $inspectArgs
 $configRoot = if ($effective.config) { $effective.config } else { $effective }
 $selectedProfile = if ($effective.selected_profile) { $effective.selected_profile } else { $null }
 
@@ -89,7 +93,7 @@ try {
 }
 
 $manifestScript = Join-Path $scriptDir "inspect-run-manifests.py"
-$manifestPayload = Invoke-PythonJson -ScriptPath $manifestScript -Arguments @(
+$manifestPayload = Invoke-CameraJsonTool -ToolName "inspect-run-manifests" -ScriptPath $manifestScript -Arguments @(
     "--config", ([System.IO.Path]::GetFullPath($Config)),
     "--local-config", ([System.IO.Path]::GetFullPath($LocalConfig)),
     "--runs-root", $resolvedRunsRoot,
@@ -113,7 +117,7 @@ if ($ProbeCamera) {
         $probeArgs += ([System.IO.Path]::GetFullPath($ProbeOutput))
     }
     try {
-        $cameraProbePayload = Invoke-PythonJson -ScriptPath $probeScript -Arguments $probeArgs
+        $cameraProbePayload = Invoke-CameraJsonTool -ToolName "test-camera-source" -ScriptPath $probeScript -Arguments $probeArgs
     } catch {
         $cameraProbePayload = @{
             ok = $false
@@ -152,13 +156,39 @@ if ($StartReplay) {
 $daemonTaskStatus = @{
     task_name = [string]$configRoot.daemon.task_name
     installed = $false
+    supported = $true
+    backend = (Get-CameraTaskSchedulerBackend -CompatibilityMode ([string]$configRoot.workstation.compatibility_mode))
+    runtime_mode = "python"
 }
-try {
-    $task = Get-ScheduledTask -TaskName $configRoot.daemon.task_name -ErrorAction Stop
-    $daemonTaskStatus.installed = $true
-    $daemonTaskStatus.state = [string]$task.State
-} catch {
-    $daemonTaskStatus.installed = $false
+$legacyDaemonPath = Get-CameraPackagedToolPath -RepoRoot $repoRoot -ToolName "camera-daemon"
+if ([string]$configRoot.workstation.compatibility_mode -eq "legacy-windows" -and (Test-Path -LiteralPath $legacyDaemonPath)) {
+    $daemonTaskStatus.runtime_mode = "packaged"
+}
+$getScheduledTask = Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue
+if ($daemonTaskStatus.backend -eq "schtasks") {
+    $daemonTaskStatus.supported = $false
+    & schtasks.exe /Query /TN $configRoot.daemon.task_name 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        $daemonTaskStatus.installed = $true
+    }
+} elseif (-not $getScheduledTask) {
+    $daemonTaskStatus.supported = $false
+} else {
+    try {
+        $task = Get-ScheduledTask -TaskName $configRoot.daemon.task_name -ErrorAction Stop
+        $daemonTaskStatus.installed = $true
+        $daemonTaskStatus.state = [string]$task.State
+    } catch {
+        $daemonTaskStatus.installed = $false
+    }
+}
+
+if ([string]$configRoot.workstation.compatibility_mode -eq "legacy-windows") {
+    if ($daemonTaskStatus.supported) {
+        $daemonTaskStatus.note = "legacy-windows mode is using the legacy runtime/task path."
+    } else {
+        $daemonTaskStatus.note = "Scheduled Task cmdlets are unavailable on this workstation, which matches the schtasks.exe legacy deployment path."
+    }
 }
 
 $payload = [ordered]@{
@@ -166,6 +196,7 @@ $payload = [ordered]@{
         base = [string]$effective.config_path
         local = [string]$effective.local_override_path
         local_override_exists = [bool]$effective.local_override_exists
+        compatibility_mode = [string]$configRoot.workstation.compatibility_mode
     }
     validation = $effective.validation
     selected_profile = $selectedProfile
@@ -192,12 +223,19 @@ if ($AsJson) {
 Write-Host "Camera workstation preflight" -ForegroundColor Cyan
 Write-Host "Base config: $($payload.config.base)"
 Write-Host "Local override: $($payload.config.local) (exists=$($payload.config.local_override_exists))"
+Write-Host "Compatibility mode: $($payload.config.compatibility_mode)"
 Write-Host "Runs root: $($payload.runs_root.path)"
 Write-Host "Runs root writable: $($payload.runs_root.writable)"
 Write-Host "Manifest summary: ready=$($payload.manifests.ready_count) stale=$($payload.manifests.stale_count)"
 Write-Host "Daemon task installed: $($payload.daemon_task.installed)"
+Write-Host "Daemon task supported: $($payload.daemon_task.supported)"
+Write-Host "Daemon task backend: $($payload.daemon_task.backend)"
+Write-Host "Daemon runtime mode: $($payload.daemon_task.runtime_mode)"
 if ($payload.daemon_task.state) {
     Write-Host "Daemon task state: $($payload.daemon_task.state)"
+}
+if ($payload.daemon_task.note) {
+    Write-Host "Daemon task note: $($payload.daemon_task.note)"
 }
 if ($selectedProfile) {
     Write-Host "Selected profile: $($selectedProfile.id) [$($selectedProfile.label)] -> $($selectedProfile.source)"

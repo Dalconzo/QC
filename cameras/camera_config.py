@@ -14,6 +14,9 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import re
+import socket
 from pathlib import Path
 
 
@@ -22,6 +25,13 @@ DEFAULT_CONFIG_PATH = REPO_ROOT / "config" / "camera-recorder.json"
 DEFAULT_LOCAL_OVERRIDE_PATH = REPO_ROOT / "config" / "camera-recorder.local.json"
 
 DEFAULT_CONFIG = {
+    "workstation": {
+        "hostname": "",
+        "machine_alias": "",
+        "instrument_name": "",
+        "site_name": "",
+        "compatibility_mode": "modern",
+    },
     "hamilton": {
         "log_dir": r"C:\Program Files (x86)\HAMILTON\LogFiles",
         "log_glob": "*.trc",
@@ -177,7 +187,7 @@ def _legacy_to_nested(raw: dict) -> dict:
 def _extract_nested(raw: dict) -> dict:
     """Keep only the top-level keys used by the modern camera config schema."""
     partial: dict = {}
-    for key in ("hamilton", "storage", "recorder", "replay", "live", "central_ingest", "daemon", "profiles"):
+    for key in ("workstation", "hamilton", "storage", "recorder", "replay", "live", "central_ingest", "daemon", "profiles"):
         value = raw.get(key)
         if value is not None:
             partial[key] = copy.deepcopy(value)
@@ -216,6 +226,47 @@ def _normalize_profiles(config: dict) -> dict:
     return normalized
 
 
+def _normalize_workstation(config: dict) -> dict:
+    """Fill workstation identity defaults from the local host when needed."""
+    normalized = copy.deepcopy(config)
+    raw = normalized.get("workstation") or {}
+    hostname = str(raw.get("hostname") or os.environ.get("COMPUTERNAME") or socket.gethostname() or "").strip()
+    normalized["workstation"] = {
+        "hostname": hostname,
+        "machine_alias": str(raw.get("machine_alias") or "").strip(),
+        "instrument_name": str(raw.get("instrument_name") or "").strip(),
+        "site_name": str(raw.get("site_name") or "").strip(),
+        "compatibility_mode": str(raw.get("compatibility_mode") or "modern").strip().lower() or "modern",
+    }
+    return normalized
+
+
+def slugify_machine_name(value: str, *, default: str = "unknown-machine") -> str:
+    """Normalize a machine identifier for folder and filename usage."""
+    text = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "").strip())
+    text = text.strip("._-")
+    return text or default
+
+
+def get_workstation_identity(config: dict) -> dict:
+    """Return the normalized workstation identity used across recorder and replay."""
+    workstation = config.get("workstation") or {}
+    hostname = str(workstation.get("hostname") or os.environ.get("COMPUTERNAME") or socket.gethostname() or "").strip()
+    machine_alias = str(workstation.get("machine_alias") or "").strip()
+    instrument_name = str(workstation.get("instrument_name") or "").strip()
+    machine_display = machine_alias or instrument_name or hostname or "Unknown machine"
+    machine_storage_name = slugify_machine_name(machine_alias or instrument_name or hostname)
+    return {
+        "hostname": hostname,
+        "machine_alias": machine_alias,
+        "instrument_name": instrument_name,
+        "site_name": str(workstation.get("site_name") or "").strip(),
+        "compatibility_mode": str(workstation.get("compatibility_mode") or "modern").strip().lower() or "modern",
+        "machine_display": machine_display,
+        "machine_storage_name": machine_storage_name,
+    }
+
+
 def load_effective_config(
     *,
     config_path: Path | None = None,
@@ -230,6 +281,7 @@ def load_effective_config(
 
     effective = _deep_merge(DEFAULT_CONFIG, base_partial)
     effective = _deep_merge(effective, local_partial)
+    effective = _normalize_workstation(effective)
     effective = _normalize_profiles(effective)
 
     effective["config_path"] = str(base_path.resolve())
@@ -252,6 +304,7 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     errors: list[str] = []
     warnings: list[str] = []
 
+    workstation = config.get("workstation", {})
     hamilton = config.get("hamilton", {})
     storage = config.get("storage", {})
     recorder = config.get("recorder", {})
@@ -271,6 +324,13 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
 
     if not hamilton.get("process_name"):
         errors.append("hamilton.process_name is required.")
+
+    if not str(workstation.get("hostname") or "").strip():
+        errors.append("workstation.hostname is required.")
+
+    compatibility_mode = str(workstation.get("compatibility_mode") or "modern").strip().lower()
+    if compatibility_mode not in {"modern", "legacy-windows"}:
+        errors.append("workstation.compatibility_mode must be 'modern' or 'legacy-windows'.")
 
     if recorder.get("poll_sec") is None or float(recorder.get("poll_sec", 0)) <= 0:
         errors.append("recorder.poll_sec must be greater than 0.")

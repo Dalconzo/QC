@@ -18,6 +18,9 @@ param(
     [string]$Config = "",
     [string]$LocalConfig = "",
     [string]$ProfileId = "default",
+    [string]$MachineAlias = "",
+    [ValidateSet("modern", "legacy-windows")]
+    [string]$CompatibilityMode = "",
     [string]$CameraSource = "",
     [string]$CameraLabel = "",
     [string]$HamiltonLogDir = "",
@@ -34,12 +37,14 @@ param(
     [switch]$SkipShortcuts,
     [switch]$DesktopOnly,
     [switch]$SkipDaemonTask,
-    [switch]$RunDaemonNow
+    [switch]$RunDaemonNow,
+    [switch]$LegacyWindows
 )
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
+. (Join-Path $scriptDir "camera-env.ps1")
 $installWarnings = New-Object System.Collections.Generic.List[string]
 
 function Resolve-DefaultPath {
@@ -119,14 +124,6 @@ function Normalize-CameraSource {
     return $trimmed
 }
 
-function Get-PythonCommand {
-    $python = Get-Command python -ErrorAction SilentlyContinue
-    if (-not $python) {
-        throw "Python is not available in PATH."
-    }
-    return $python
-}
-
 function Get-WingetCommand {
     return Get-Command winget -ErrorAction SilentlyContinue
 }
@@ -203,7 +200,6 @@ function Get-EffectiveConfig {
 
     $inspectScript = Join-Path $scriptDir "inspect-camera-config.py"
     $argsList = @(
-        $inspectScript,
         "--config", $BaseConfig,
         "--local-config", $OverrideConfig,
         "--json"
@@ -214,7 +210,14 @@ function Get-EffectiveConfig {
         $argsList += $SelectedProfile
     }
 
-    $configJson = & python @argsList
+    $commandInfo = Resolve-CameraToolCommand `
+        -RepoRoot $repoRoot `
+        -ToolName "inspect-camera-config" `
+        -ScriptPath $inspectScript `
+        -ConfigPath $BaseConfig `
+        -LocalConfigPath $OverrideConfig
+
+    $configJson = Invoke-CameraTool -CommandInfo $commandInfo -Arguments $argsList
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to read effective camera config."
     }
@@ -249,13 +252,42 @@ if (-not $LocalConfig) {
     $LocalConfig = [System.IO.Path]::GetFullPath($LocalConfig)
 }
 
-$python = Get-PythonCommand
-$ffmpegResolved = Ensure-FfmpegPath -ExplicitPath $FfmpegPath -AllowInstall:$InstallFfmpeg
+$effective = Get-EffectiveConfig -BaseConfig $Config -OverrideConfig $LocalConfig -SelectedProfile $ProfileId
+$selectedProfile = if ($effective.selected_profile) { $effective.selected_profile } else { $null }
+
+$requestedCompatibilityMode = [string]$CompatibilityMode
+if ($LegacyWindows) {
+    $requestedCompatibilityMode = "legacy-windows"
+}
+if (-not $requestedCompatibilityMode -and $effective.config.workstation -and $effective.config.workstation.compatibility_mode) {
+    $requestedCompatibilityMode = [string]$effective.config.workstation.compatibility_mode
+}
+if (-not $requestedCompatibilityMode) {
+    $requestedCompatibilityMode = Get-DetectedCompatibilityMode
+    if ($requestedCompatibilityMode -eq "legacy-windows") {
+        $installWarnings.Add("Detected older Windows version. Bootstrap is switching this workstation to legacy-windows compatibility mode automatically.")
+    }
+}
+$requestedCompatibilityMode = $requestedCompatibilityMode.Trim().ToLowerInvariant()
+if (-not $requestedCompatibilityMode) {
+    $requestedCompatibilityMode = "modern"
+}
+
+$allowFfmpegInstall = $InstallFfmpeg
+if ($requestedCompatibilityMode -eq "legacy-windows") {
+    $allowFfmpegInstall = $false
+}
+$ffmpegResolved = Ensure-FfmpegPath -ExplicitPath $FfmpegPath -AllowInstall:$allowFfmpegInstall
 
 if ($ListDevices) {
     $recorderScript = Join-Path $scriptDir "camera-recorder.py"
+    $recorderCommand = Resolve-CameraToolCommand `
+        -RepoRoot $repoRoot `
+        -ToolName "camera-recorder" `
+        -ScriptPath $recorderScript `
+        -ConfigPath $Config `
+        -LocalConfigPath $LocalConfig
     $argsList = @(
-        $recorderScript,
         "--config", $Config,
         "--local-config", $LocalConfig
     )
@@ -264,12 +296,9 @@ if ($ListDevices) {
         $argsList += $ffmpegResolved
     }
     $argsList += "--list-devices"
-    & python @argsList
+    Invoke-CameraTool -CommandInfo $recorderCommand -Arguments $argsList
     exit $LASTEXITCODE
 }
-
-$effective = Get-EffectiveConfig -BaseConfig $Config -OverrideConfig $LocalConfig -SelectedProfile $ProfileId
-$selectedProfile = if ($effective.selected_profile) { $effective.selected_profile } else { $null }
 
 $effectiveCameraSource = $CameraSource
 if (-not $effectiveCameraSource) {
@@ -296,6 +325,30 @@ if (-not $effectiveCameraLabel) {
     }
 }
 
+$effectiveMachineAlias = [string]$MachineAlias
+if (-not $effectiveMachineAlias) {
+    if ($effective.config.workstation -and $effective.config.workstation.machine_alias) {
+        $effectiveMachineAlias = [string]$effective.config.workstation.machine_alias
+    }
+}
+$effectiveMachineAlias = $effectiveMachineAlias.Trim()
+
+$effectiveCompatibilityMode = [string]$CompatibilityMode
+if ($LegacyWindows) {
+    $effectiveCompatibilityMode = "legacy-windows"
+}
+if (-not $effectiveCompatibilityMode) {
+    if ($effective.config.workstation -and $effective.config.workstation.compatibility_mode) {
+        $effectiveCompatibilityMode = [string]$effective.config.workstation.compatibility_mode
+    } else {
+        $effectiveCompatibilityMode = "modern"
+    }
+}
+$effectiveCompatibilityMode = $effectiveCompatibilityMode.Trim().ToLowerInvariant()
+if (-not $effectiveCompatibilityMode) {
+    $effectiveCompatibilityMode = "modern"
+}
+
 $effectiveHamiltonLogDir = if ($HamiltonLogDir) {
     [System.IO.Path]::GetFullPath($HamiltonLogDir)
 } elseif ($effective.config.hamilton.log_dir) {
@@ -315,6 +368,10 @@ $effectiveRecorderStopPath = [System.IO.Path]::GetFullPath((Join-Path $scriptDir
 $effectiveReplayLogPath = [System.IO.Path]::GetFullPath((Join-Path $effectiveRecorderLogDir "camera-replay.log"))
 
 $override = @{
+    workstation = @{
+        machine_alias = $effectiveMachineAlias
+        compatibility_mode = $effectiveCompatibilityMode
+    }
     hamilton = @{
         log_dir = $effectiveHamiltonLogDir
     }
@@ -400,7 +457,24 @@ if (-not $SkipShortcuts) {
     }
 }
 
-if (-not $SkipDaemonTask) {
+$daemonTaskAllowed = $true
+if ($effectiveCompatibilityMode -eq "legacy-windows") {
+    if ($InstallFfmpeg) {
+        $installWarnings.Add("legacy-windows mode ignores -InstallFfmpeg. Use the bundled cameras\\dist\\ffmpeg.exe or pass -FfmpegPath explicitly.")
+    }
+    $installWarnings.Add("legacy-windows mode will use schtasks.exe for daemon auto-start instead of the newer ScheduledTasks PowerShell cmdlets.")
+    $requiredLegacyTools = @(
+        (Get-CameraPackagedToolPath -RepoRoot $repoRoot -ToolName "inspect-camera-config"),
+        (Get-CameraPackagedToolPath -RepoRoot $repoRoot -ToolName "camera-recorder"),
+        (Get-CameraPackagedToolPath -RepoRoot $repoRoot -ToolName "camera-daemon")
+    )
+    $missingLegacyTools = @($requiredLegacyTools | Where-Object { -not (Test-Path -LiteralPath $_) })
+    if ($missingLegacyTools.Count -gt 0) {
+        $installWarnings.Add("legacy-windows mode expects packaged runtime tools under cameras\\dist\\legacy-runtime. Missing: $($missingLegacyTools -join ', ')")
+    }
+}
+
+if (-not $SkipDaemonTask -and $daemonTaskAllowed) {
     $taskScript = Join-Path $scriptDir "install-camera-daemon-task.ps1"
     Write-Host "Installing camera daemon Scheduled Task ..." -ForegroundColor Cyan
     $taskArgs = @(
@@ -459,6 +533,10 @@ Write-Host "Local override: $LocalConfig"
 Write-Host ("Deployment branch: {0}" -f $summary.deployment.git_branch)
 Write-Host ("Deployment commit: {0}" -f $summary.deployment.git_commit_short)
 Write-Host ("Recorder contract: {0}" -f $summary.contract_status.replay_manifest_version)
+if ($effectiveMachineAlias) {
+    Write-Host "Machine alias: $effectiveMachineAlias"
+}
+Write-Host "Compatibility mode: $effectiveCompatibilityMode"
 Write-Host "Camera source: $effectiveCameraSource"
 Write-Host "Runs root: $effectiveRunsRoot"
 Write-Host "Recorder logs: $effectiveRecorderLogDir"

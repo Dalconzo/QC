@@ -5,6 +5,13 @@
   "default_poll_sec": 1.0,
   "default_max_record_sec": 0,
   "manifest_dir": "",
+  "workstation": {
+    "hostname": "",
+    "machine_alias": "",
+    "instrument_name": "",
+    "site_name": "",
+    "compatibility_mode": "modern"
+  },
   "hamilton": {
     "log_dir": "C:\\Program Files (x86)\\HAMILTON\\LogFiles",
     "log_glob": "*.trc",
