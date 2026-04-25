@@ -30,7 +30,13 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config, validate_config
 from camera_live import capture_live_frame as capture_live_frame_once, summarize_profile
-from replay_manifest import DEFAULT_REPLAY_MODE, DEFAULT_STORAGE_TIER, normalize_replay_manifest_payload
+from replay_manifest import (
+    DEFAULT_REPLAY_MODE,
+    DEFAULT_STORAGE_TIER,
+    normalize_replay_manifest_payload,
+    resolve_segment_playback,
+    summarize_playback_availability,
+)
 from trace_replay import TRACE_LINE_RE, parse_trace_lines
 
 
@@ -145,15 +151,17 @@ def iter_manifest_paths(runs_root: Path) -> list[Path]:
 
 def determine_replay_status(payload: dict) -> str:
     """Flag whether the catalog entry is immediately replayable."""
-    has_video = bool(payload.get("video_path") and Path(payload["video_path"]).exists())
-    has_trace = bool(payload.get("trace_path") and Path(payload["trace_path"]).exists())
-    if has_video and has_trace:
+    playback = summarize_playback_availability(payload)
+    if playback["status"] == "ready_full_run":
         return "ready"
-    if has_video:
-        return "missing_trace"
-    if has_trace:
-        return "missing_video"
-    return "missing_video_and_trace"
+    if playback["status"] == "ready_segments_only":
+        return "ready_segments_only"
+    if playback["status"] == "lan_only":
+        return "lan_only"
+    if playback["status"] == "missing_trace":
+        has_video = bool(payload.get("video_path") and Path(payload["video_path"]).exists())
+        return "missing_trace" if has_video else "missing_video_and_trace"
+    return "missing_video"
 
 
 def refresh_catalog(runs_root: Path) -> dict:
@@ -327,7 +335,7 @@ def get_latest_ready_run(runs_root: Path) -> dict | None:
             """
             SELECT *
             FROM runs
-            WHERE replay_status = 'ready'
+            WHERE replay_status IN ('ready', 'ready_segments_only')
             ORDER BY COALESCE(started_at_local, '') DESC, manifest_mtime_ns DESC
             LIMIT 1
             """
@@ -354,6 +362,7 @@ def summarize_run(run: dict) -> dict:
     """Return lightweight metadata for the run picker."""
     trace_path = Path(run["trace_path"]) if run.get("trace_path") else None
     video_path = Path(run["video_path"]) if run.get("video_path") else None
+    playback = summarize_playback_availability(run)
     return {
         "run_id": run["run_id"],
         "label": run.get("label") or "run",
@@ -372,6 +381,10 @@ def summarize_run(run: dict) -> dict:
         "idle_segment_count": int(run.get("idle_segment_count") or 0),
         "storage_tier": run.get("storage_tier") or DEFAULT_STORAGE_TIER,
         "replay_default_mode": run.get("replay_default_mode") or DEFAULT_REPLAY_MODE,
+        "playback_status": playback["status"],
+        "local_segment_count": playback["local_segment_count"],
+        "local_derived_segment_count": playback["local_derived_segment_count"],
+        "lan_available": playback["lan_available"],
     }
 
 
@@ -386,6 +399,21 @@ def get_run_detail(runs_root: Path, run_id: str) -> dict:
     run = get_run_by_id(runs_root, run_id)
     trace_path = Path(run["trace_path"]) if run.get("trace_path") else None
     events = parse_trace_events(trace_path) if trace_path and trace_path.exists() else []
+    playback = summarize_playback_availability(run)
+    segments: list[dict] = []
+    for item in run.get("segments") or []:
+        segment = dict(item)
+        resolved = resolve_segment_playback(segment, manifest_payload=run)
+        segment["playback_source_kind"] = resolved["source_kind"]
+        segment["resolved_video_path"] = resolved["video_path"]
+        segment["resolved_video_filename"] = resolved["video_filename"]
+        segment["resolved_video_encoding_profile"] = resolved["video_encoding_profile"]
+        segment["has_local_video"] = bool(resolved["is_local"] and resolved["is_available"])
+        if resolved["is_available"]:
+            segment["video_url"] = f"/api/runs/{run_id}/segments/{segment['segment_id']}/video"
+        else:
+            segment["video_url"] = ""
+        segments.append(segment)
     return {
         "run": summarize_run(run),
         "manifest": {
@@ -401,9 +429,12 @@ def get_run_detail(runs_root: Path, run_id: str) -> dict:
             "replay_default_mode": run.get("replay_default_mode"),
             "full_detail_retained_until_local": run.get("full_detail_retained_until_local"),
             "trace_duration_sec": run.get("trace_duration_sec"),
+            "local_retention": run.get("local_retention") or {},
+            "local_compaction": run.get("local_compaction") or {},
         },
+        "playback": playback,
         "chapters": run.get("chapters") or [],
-        "segments": run.get("segments") or [],
+        "segments": segments,
         "events": [asdict(event) for event in events],
     }
 
@@ -495,6 +526,16 @@ def make_handler(runs_root: Path, config: dict):
             self.end_headers()
             self.wfile.write(body)
 
+        def _resolve_segment_request_path(self, run: dict, segment_id: str) -> Path | None:
+            for segment in run.get("segments") or []:
+                if str(segment.get("segment_id") or "") != segment_id:
+                    continue
+                resolved = resolve_segment_playback(segment, manifest_payload=run)
+                if resolved["is_local"] and resolved["is_available"] and resolved["video_path"]:
+                    return Path(resolved["video_path"])
+                return None
+            return None
+
         def do_GET(self) -> None:  # noqa: N802 - stdlib handler name
             parsed = urlparse(self.path)
             route = unquote(parsed.path)
@@ -571,6 +612,15 @@ def make_handler(runs_root: Path, config: dict):
                         return self._send_text("Run video is missing", HTTPStatus.NOT_FOUND)
                     try:
                         return self._send_file(video_path)
+                    except ValueError:
+                        return self._send_text("Invalid Range header", HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+
+                if len(parts) == 6 and parts[3] == "segments" and parts[5] == "video":
+                    segment_path = self._resolve_segment_request_path(run, parts[4])
+                    if segment_path is None:
+                        return self._send_text("Segment video is missing", HTTPStatus.NOT_FOUND)
+                    try:
+                        return self._send_file(segment_path)
                     except ValueError:
                         return self._send_text("Invalid Range header", HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
 

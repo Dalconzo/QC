@@ -264,6 +264,37 @@ def run_post_run_central_ingest(
     }
 
 
+def run_post_run_local_cleanup(
+    *,
+    config_path: Path,
+    local_config_path: Path,
+    daemon_log_path: Path | None,
+) -> dict | None:
+    """Apply workstation-local retention cleanup after a completed recorder session."""
+    config = load_effective_config(config_path=config_path, local_override_path=local_config_path)
+    retention = config.get("storage", {}).get("retention", {})
+    if not bool(retention.get("cleanup_on_run_complete", False)):
+        return None
+
+    runs_root = Path(config["storage"]["runs_root"]).resolve()
+    emit_log("[daemon] Running local retention cleanup", log_path=daemon_log_path)
+    cleanup_payload = cleanup_runs(
+        runs_root=runs_root,
+        delete=True,
+        limit=0,
+        emergency_config=retention.get("emergency") or {},
+    )
+    emit_log(
+        "[daemon] Local cleanup complete: "
+        f"deleted={cleanup_payload['deleted_run_count']} "
+        f"eligible={cleanup_payload['eligible_run_count']} "
+        f"emergency_deleted={cleanup_payload['emergency_deleted_run_count']} "
+        f"critical={cleanup_payload['critical_pressure_remaining']}",
+        log_path=daemon_log_path,
+    )
+    return cleanup_payload
+
+
 def run_supervisor(
     *,
     config_path: Path,
@@ -286,6 +317,7 @@ def run_supervisor(
     recorder_script: Path,
     is_process_running_fn=is_any_proc_running,
     post_run_ingest_fn=run_post_run_central_ingest,
+    post_run_cleanup_fn=run_post_run_local_cleanup,
 ) -> int:
     """Run the idle->record->idle loop until explicitly stopped."""
     config = load_effective_config(config_path=config_path, local_override_path=local_config_path)
@@ -380,7 +412,6 @@ def run_supervisor(
                     time.sleep(max(0.25, idle_poll_sec))
                     continue
 
-                cycle_count += 1
                 emit_log(
                     f"[daemon] Recorder child exited with code {return_code}",
                     log_path=daemon_log_path,
@@ -428,6 +459,29 @@ def run_supervisor(
                             update_status("idle", last_exit_code=return_code, last_cycle_completed_at=dt.datetime.now().isoformat())
                 else:
                     update_status("idle", last_exit_code=return_code, last_cycle_completed_at=dt.datetime.now().isoformat())
+                cleanup_payload = None
+                if return_code == 0 and post_run_cleanup_fn is not None:
+                    try:
+                        cleanup_payload = post_run_cleanup_fn(
+                            config_path=config_path,
+                            local_config_path=local_config_path,
+                            daemon_log_path=daemon_log_path,
+                        )
+                    except Exception as exc:
+                        emit_log(
+                            f"[daemon] Local cleanup failed: {exc}",
+                            log_path=daemon_log_path,
+                            is_error=True,
+                        )
+                        update_status("idle", last_cleanup_error=str(exc))
+                    else:
+                        if cleanup_payload:
+                            update_status(
+                                "idle",
+                                last_cleanup_deleted_run_count=int(cleanup_payload.get("deleted_run_count", 0) or 0),
+                                last_cleanup_deleted_bytes=int(cleanup_payload.get("deleted_bytes", 0) or 0),
+                                last_cleanup_eligible_run_count=int(cleanup_payload.get("eligible_run_count", 0) or 0),
+                            )
                 child_proc = None
                 child_started_at = 0.0
                 last_heartbeat = 0.0
@@ -436,10 +490,11 @@ def run_supervisor(
                     run_session_active = False
                     next_launch_speculative = True
                 else:
+                    cycle_count += 1
                     run_session_active = True
                     next_launch_speculative = False
 
-                if run_once or (max_cycles > 0 and cycle_count >= max_cycles):
+                if return_code != RECORDER_REARM_EXIT_CODE and (run_once or (max_cycles > 0 and cycle_count >= max_cycles)):
                     emit_log("[daemon] Run limit reached. Exiting.", log_path=daemon_log_path)
                     update_status("stopped", reason="run_limit", last_exit_code=return_code)
                     break

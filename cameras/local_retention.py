@@ -183,7 +183,7 @@ def evaluate_emergency_cleanup(manifest_payload: dict) -> tuple[str, str]:
     if not video_path.exists():
         return ("missing_original", "original_missing")
 
-    if str(retention.get("upload_status") or "") != "acknowledged":
+    if bool(retention.get("require_upload_ack", True)) and str(retention.get("upload_status") or "") != "acknowledged":
         return ("blocked", "upload_not_acknowledged")
 
     if bool(retention.get("require_local_compaction", False)):

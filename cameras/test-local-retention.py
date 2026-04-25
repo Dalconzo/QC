@@ -187,6 +187,41 @@ class LocalRetentionTests(unittest.TestCase):
             self.assertTrue(payload["critical_pressure_remaining"])
             self.assertTrue((root / "run.mp4").exists())
 
+    def test_emergency_cleanup_honors_local_only_retention(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = self.write_manifest(root, stopped_at="2026-04-10T10:01:00")
+            payload = RETENTION.load_manifest(manifest_path)
+            payload = RETENTION.initialize_local_retention(
+                payload,
+                enabled=True,
+                retention_days=7,
+                require_upload_ack=False,
+                require_local_compaction=False,
+            )
+            manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+            def fake_disk_usage(_path: Path):
+                free_value = 35 * (1024**3) if not (root / "run.mp4").exists() else 4 * (1024**3)
+                return shutil._ntuple_diskusage(100 * (1024**3), 100 * (1024**3) - free_value, free_value)
+
+            result = RETENTION.cleanup_runs(
+                runs_root=root,
+                now_local=dt.datetime(2026, 4, 11, 9, 0, 0),
+                delete=True,
+                emergency_config={
+                    "enabled": True,
+                    "min_free_gb": 20,
+                    "target_free_gb": 30,
+                    "block_new_recording_free_gb": 8,
+                },
+                run_normal_cleanup=False,
+                disk_usage_fn=fake_disk_usage,
+            )
+
+            self.assertEqual(result["emergency_deleted_run_count"], 1)
+            self.assertFalse((root / "run.mp4").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

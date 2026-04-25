@@ -354,6 +354,169 @@ class ReplayAppTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=5)
 
+    def test_run_detail_reports_segment_only_playback_after_original_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            original_video_path = root / "demo.mp4"
+            trace_path = root / "demo.trc"
+            derived_root = root / "demo.derived"
+            derived_root.mkdir()
+            derived_path = derived_root / "idle-001_idle.mp4"
+            manifest_path = root / "demo.run.json"
+
+            original_video_path.write_bytes(b"original-source")
+            derived_path.write_bytes(b"derived-segment")
+            sample_trace = Path(__file__).resolve().parents[1] / "data" / "samples"
+            trace_path.write_bytes(next(sample_trace.glob("*.trc")).read_bytes())
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "label": "demo-derived",
+                        "source": "0",
+                        "replay_manifest_version": "hybrid-replay.v1",
+                        "replay_capabilities": ["trace_chapters", "trace_segments", "idle_skip_default"],
+                        "video_path": str(original_video_path),
+                        "trace_path": str(trace_path),
+                        "started_at_local": "2026-03-24T14:00:00",
+                        "stopped_at_local": "2026-03-24T14:05:00",
+                        "duration_sec": 300,
+                        "stop_reason": "process_exit",
+                        "process_gate": "HxRun.exe",
+                        "chapters": [
+                            {
+                                "chapter_id": "chapter-001",
+                                "start_offset_sec": 10.0,
+                                "label": "Incubation",
+                                "kind": "span",
+                                "phase_source": "trace",
+                                "is_idle": True,
+                            }
+                        ],
+                        "local_retention": {
+                            "enabled": True,
+                            "retention_days": 7,
+                            "require_upload_ack": True,
+                            "require_local_compaction": False,
+                            "upload_status": "acknowledged",
+                            "central_run_id": "central-run-1",
+                            "lan_available": True,
+                            "original_deleted_at_local": "2026-03-31T12:00:00",
+                        },
+                        "segments": [
+                            {
+                                "segment_id": "idle-001",
+                                "kind": "idle",
+                                "start_offset_sec": 10.0,
+                                "stop_offset_sec": 20.0,
+                                "duration_sec": 10.0,
+                                "phase_label": "Incubation",
+                                "phase_source": "trace",
+                                "video_path": str(original_video_path),
+                                "video_encoding_profile": "source_full_run",
+                                "is_skipped_by_default": True,
+                                "derived_video_path": str(derived_path),
+                                "derived_video_filename": derived_path.name,
+                                "derived_video_encoding_profile": "derived_idle_h264_2fps",
+                            }
+                        ],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            original_video_path.unlink()
+
+            MODULE.refresh_catalog(root)
+            run_id = MODULE.list_catalog_runs(root)[0]["run_id"]
+            detail = MODULE.get_run_detail(root, run_id)
+            self.assertEqual(detail["run"]["playback_status"], "ready_segments_only")
+            self.assertEqual(detail["playback"]["status"], "ready_segments_only")
+            self.assertEqual(detail["segments"][0]["playback_source_kind"], "local_derived")
+            self.assertTrue(detail["segments"][0]["has_local_video"])
+            self.assertTrue(detail["segments"][0]["video_url"].endswith("/segments/idle-001/video"))
+
+    def test_http_segment_video_endpoint_serves_derived_segment_when_source_deleted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            original_video_path = root / "demo.mp4"
+            trace_path = root / "demo.trc"
+            derived_root = root / "demo.derived"
+            derived_root.mkdir()
+            derived_path = derived_root / "idle-001_idle.mp4"
+            manifest_path = root / "demo.run.json"
+
+            original_video_path.write_bytes(b"original-source")
+            derived_path.write_bytes(b"0123456789")
+            sample_trace = Path(__file__).resolve().parents[1] / "data" / "samples"
+            trace_path.write_bytes(next(sample_trace.glob("*.trc")).read_bytes())
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "label": "demo-segment-video",
+                        "source": "0",
+                        "replay_manifest_version": "hybrid-replay.v1",
+                        "replay_capabilities": ["trace_chapters", "trace_segments", "idle_skip_default"],
+                        "video_path": str(original_video_path),
+                        "trace_path": str(trace_path),
+                        "started_at_local": "2026-03-24T14:00:00",
+                        "stopped_at_local": "2026-03-24T14:05:00",
+                        "duration_sec": 300,
+                        "stop_reason": "process_exit",
+                        "process_gate": "HxRun.exe",
+                        "chapters": [
+                            {
+                                "chapter_id": "chapter-001",
+                                "start_offset_sec": 10.0,
+                                "label": "Incubation",
+                                "kind": "span",
+                                "phase_source": "trace",
+                                "is_idle": True,
+                            }
+                        ],
+                        "segments": [
+                            {
+                                "segment_id": "idle-001",
+                                "kind": "idle",
+                                "start_offset_sec": 10.0,
+                                "stop_offset_sec": 20.0,
+                                "duration_sec": 10.0,
+                                "phase_label": "Incubation",
+                                "phase_source": "trace",
+                                "video_path": str(original_video_path),
+                                "video_encoding_profile": "source_full_run",
+                                "is_skipped_by_default": True,
+                                "derived_video_path": str(derived_path),
+                                "derived_video_filename": derived_path.name,
+                                "derived_video_encoding_profile": "derived_idle_h264_2fps",
+                            }
+                        ],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            original_video_path.unlink()
+
+            MODULE.refresh_catalog(root)
+            run_id = MODULE.list_catalog_runs(root)[0]["run_id"]
+            handler = MODULE.make_handler(root, self.make_test_config())
+            from http.server import ThreadingHTTPServer
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                url = f"http://127.0.0.1:{server.server_port}/api/runs/{run_id}/segments/idle-001/video"
+                request = urllib.request.Request(url, headers={"Range": "bytes=2-5"})
+                with urllib.request.urlopen(request) as response:
+                    self.assertEqual(response.status, 206)
+                    self.assertEqual(response.headers.get("Content-Range"), "bytes 2-5/10")
+                    self.assertEqual(response.read(), b"2345")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
     def test_http_live_profiles_returns_configured_cameras(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

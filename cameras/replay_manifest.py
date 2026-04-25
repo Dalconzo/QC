@@ -57,6 +57,99 @@ DEFAULT_LOCAL_RETENTION = {
 }
 
 
+def resolve_segment_playback(segment: dict, *, manifest_payload: dict) -> dict:
+    """Return the preferred playback source for one segment."""
+    derived_path_text = str(segment.get("derived_video_path") or "")
+    original_path_text = str(segment.get("video_path") or manifest_payload.get("video_path") or "")
+    derived_path = Path(derived_path_text) if derived_path_text else None
+    original_path = Path(original_path_text) if original_path_text else None
+    retention = manifest_payload.get("local_retention") or {}
+
+    if derived_path is not None and derived_path.exists():
+        return {
+            "source_kind": "local_derived",
+            "video_path": str(derived_path.resolve()),
+            "video_filename": derived_path.name,
+            "video_encoding_profile": str(
+                segment.get("derived_video_encoding_profile") or segment.get("video_encoding_profile") or ""
+            ),
+            "is_local": True,
+            "is_available": True,
+        }
+
+    if original_path is not None and original_path.exists():
+        return {
+            "source_kind": "local_original",
+            "video_path": str(original_path.resolve()),
+            "video_filename": original_path.name,
+            "video_encoding_profile": str(segment.get("video_encoding_profile") or "source_full_run"),
+            "is_local": True,
+            "is_available": True,
+        }
+
+    if bool(retention.get("lan_available")) and str(retention.get("central_run_id") or ""):
+        return {
+            "source_kind": "lan_artifact",
+            "video_path": "",
+            "video_filename": "",
+            "video_encoding_profile": str(segment.get("derived_video_encoding_profile") or segment.get("video_encoding_profile") or ""),
+            "is_local": False,
+            "is_available": True,
+        }
+
+    return {
+        "source_kind": "missing",
+        "video_path": "",
+        "video_filename": "",
+        "video_encoding_profile": "",
+        "is_local": False,
+        "is_available": False,
+    }
+
+
+def summarize_playback_availability(manifest_payload: dict) -> dict:
+    """Describe which local or LAN-backed playback paths still exist."""
+    trace_path = Path(str(manifest_payload.get("trace_path") or ""))
+    original_path = Path(str(manifest_payload.get("video_path") or ""))
+    retention = manifest_payload.get("local_retention") or {}
+    segments = manifest_payload.get("segments") or []
+
+    trace_available = bool(str(trace_path) and trace_path.exists())
+    original_available = bool(str(original_path) and original_path.exists())
+    lan_available = bool(retention.get("lan_available")) and bool(str(retention.get("central_run_id") or ""))
+
+    local_segment_count = 0
+    local_derived_segment_count = 0
+    for segment in segments:
+        resolved = resolve_segment_playback(segment, manifest_payload=manifest_payload)
+        if resolved["is_local"] and resolved["is_available"]:
+            local_segment_count += 1
+        if resolved["source_kind"] == "local_derived":
+            local_derived_segment_count += 1
+
+    if not trace_available:
+        status = "missing_trace"
+    elif original_available:
+        status = "ready_full_run"
+    elif local_segment_count > 0:
+        status = "ready_segments_only"
+    elif lan_available:
+        status = "lan_only"
+    else:
+        status = "missing_video"
+
+    return {
+        "status": status,
+        "trace_available": trace_available,
+        "full_source_available": original_available,
+        "local_segment_count": local_segment_count,
+        "local_derived_segment_count": local_derived_segment_count,
+        "lan_available": lan_available,
+        "central_run_id": str(retention.get("central_run_id") or ""),
+        "original_deleted_at_local": str(retention.get("original_deleted_at_local") or ""),
+    }
+
+
 def compute_run_id(manifest_path: Path, payload: dict) -> str:
     """Build a stable run identifier from the manifest identity and timing."""
     import hashlib

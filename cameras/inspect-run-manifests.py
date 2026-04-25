@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config
-from replay_manifest import normalize_replay_manifest_payload
+from replay_manifest import normalize_replay_manifest_payload, summarize_playback_availability
 
 
 def load_run_manifest(manifest_path: Path) -> dict:
@@ -51,6 +51,8 @@ def describe_manifest(manifest_path: Path) -> dict:
     has_video = bool(video_path and video_path.exists())
     has_trace = bool(trace_path and trace_path.exists())
     status = determine_replay_status(payload)
+    playback = summarize_playback_availability(payload)
+    retention = payload.get("local_retention") or {}
     problems: list[str] = []
 
     if not payload.get("video_path"):
@@ -73,6 +75,15 @@ def describe_manifest(manifest_path: Path) -> dict:
         "has_video": has_video,
         "has_trace": has_trace,
         "replay_status": status,
+        "playback_status": playback["status"],
+        "local_segment_count": playback["local_segment_count"],
+        "local_derived_segment_count": playback["local_derived_segment_count"],
+        "lan_available": playback["lan_available"],
+        "original_deleted_at_local": playback["original_deleted_at_local"],
+        "retain_until_local": str(retention.get("retain_until_local") or ""),
+        "original_delete_eligible_at_local": str(retention.get("original_delete_eligible_at_local") or ""),
+        "last_cleanup_action": str(retention.get("last_cleanup_action") or ""),
+        "last_cleanup_reason": str(retention.get("last_cleanup_reason") or ""),
         "problems": problems,
     }
 
