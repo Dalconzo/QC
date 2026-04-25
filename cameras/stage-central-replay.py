@@ -456,6 +456,7 @@ def stage_runs(
     staging_root: Path | None,
     limit: int,
     restage: bool,
+    recent_days: float = 0,
 ) -> dict:
     """Stage replayable runs into one local batch and update the SQLite ledger."""
     config = load_effective_config(config_path=config_path, local_override_path=local_config_path)
@@ -469,7 +470,10 @@ def stage_runs(
     batch_dir = effective_staging_root / "batches" / batch_id
     batch_dir.mkdir(parents=True, exist_ok=True)
 
-    items = [INSPECT_MODULE.describe_manifest(path) for path in INSPECT_MODULE.iter_manifest_paths(effective_runs_root)]
+    items = [
+        INSPECT_MODULE.describe_manifest(path)
+        for path in INSPECT_MODULE.iter_manifest_paths(effective_runs_root, recent_days=max(0.0, recent_days))
+    ]
     if limit > 0:
         items = items[:limit]
 
@@ -546,6 +550,7 @@ def stage_runs(
         "completed_at_utc": completed_at_utc,
         "runs_root": str(effective_runs_root),
         "staging_root": str(effective_staging_root),
+        "recent_days": max(0.0, recent_days),
         "catalog_path": str(catalog_path.resolve()),
         "batch_dir": str(batch_dir.resolve()),
         "staged_run_count": staged_count,
@@ -563,6 +568,7 @@ def main() -> int:
     parser.add_argument("--runs-root", default="", help="Directory that contains .run.json replay manifests")
     parser.add_argument("--staging-root", default="", help="Directory that should hold central ingest staging batches")
     parser.add_argument("--limit", type=int, default=0, help="Optional maximum number of manifests to inspect")
+    parser.add_argument("--recent-days", type=float, default=0, help="Only inspect manifests modified within this many days. 0 scans all history.")
     parser.add_argument("--restage", action="store_true", help="Stage runs even if the same artifact set was already staged")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     args = parser.parse_args()
@@ -574,6 +580,7 @@ def main() -> int:
         staging_root=Path(args.staging_root).resolve() if args.staging_root else None,
         limit=args.limit,
         restage=args.restage,
+        recent_days=max(0.0, args.recent_days),
     )
 
     if args.json:

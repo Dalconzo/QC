@@ -10,6 +10,7 @@ This only touches `.run.json` files. It does not delete videos or traces.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import shutil
 from pathlib import Path
@@ -38,9 +39,23 @@ def determine_replay_status(payload: dict) -> str:
     return "missing_video_and_trace"
 
 
-def iter_manifest_paths(runs_root: Path) -> list[Path]:
-    """Return replay manifests in newest-first order."""
-    return sorted(runs_root.rglob("*.run.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+def iter_manifest_paths(runs_root: Path, *, recent_days: float = 0) -> list[Path]:
+    """Return replay manifests in newest-first order, optionally filtered by recency."""
+    cutoff_timestamp = None
+    if recent_days > 0:
+        cutoff_timestamp = (dt.datetime.now() - dt.timedelta(days=recent_days)).timestamp()
+
+    manifests: list[Path] = []
+    for path in runs_root.rglob("*.run.json"):
+        try:
+            stat_result = path.stat()
+        except OSError:
+            continue
+        if cutoff_timestamp is not None and stat_result.st_mtime < cutoff_timestamp:
+            continue
+        manifests.append(path)
+    manifests.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    return manifests
 
 
 def describe_manifest(manifest_path: Path) -> dict:
@@ -116,6 +131,7 @@ def main() -> int:
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH), help="Path to the base camera config JSON")
     parser.add_argument("--local-config", default=str(DEFAULT_LOCAL_OVERRIDE_PATH), help="Path to the optional workstation-local override JSON")
     parser.add_argument("--runs-root", default="", help="Directory that contains .run.json replay manifests")
+    parser.add_argument("--recent-days", type=float, default=0, help="Only inspect manifests modified within this many days. 0 scans all history.")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     parser.add_argument(
         "--cleanup",
@@ -130,11 +146,12 @@ def main() -> int:
     config_path = Path(args.config).resolve()
     local_config_path = Path(args.local_config).resolve()
     runs_root = load_runs_root(config_path, local_config_path, args.runs_root)
-    manifests = iter_manifest_paths(runs_root)
+    manifests = iter_manifest_paths(runs_root, recent_days=max(0.0, args.recent_days))
     items = [describe_manifest(path) for path in manifests]
 
     summary = {
         "runs_root": str(runs_root),
+        "recent_days": max(0.0, args.recent_days),
         "manifest_count": len(items),
         "ready_count": sum(1 for item in items if item["replay_status"] == "ready"),
         "stale_count": sum(1 for item in items if item["replay_status"] != "ready"),

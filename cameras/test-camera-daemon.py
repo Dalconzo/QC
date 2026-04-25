@@ -587,6 +587,95 @@ class CameraDaemonTests(unittest.TestCase):
             self.assertEqual(run_status_calls[-1]["run"]["replay_status"], "available")
             self.assertEqual(run_status_calls[-1]["run"]["central_run_id"], "central-run-123")
 
+    def test_run_post_run_central_ingest_uses_recent_days_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            upload_root = root / "upload"
+            config_path = root / "camera-recorder.json"
+            local_path = root / "camera-recorder.local.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {
+                            "log_dir": str(log_dir),
+                            "process_name": "HxRun.exe",
+                        },
+                        "storage": {
+                            "runs_root": str(runs_root),
+                            "recorder_log_dir": str(root / "logs"),
+                        },
+                        "central_ingest": {
+                            "staging_root": str(staging_root),
+                            "upload_root": str(upload_root),
+                            "transport": "filesystem",
+                            "auto_upload_on_run_complete": True,
+                        },
+                        "recorder": {
+                            "stop_file": str(root / "recorder.stop"),
+                        },
+                        "daemon": {
+                            "stop_file": str(root / "daemon.stop"),
+                            "pid_file": str(root / "daemon.pid"),
+                            "status_path": str(root / "daemon-status.json"),
+                            "log_path": str(root / "daemon.log"),
+                            "idle_poll_sec": 0.05,
+                            "heartbeat_sec": 0.05,
+                            "relaunch_delay_sec": 0.0,
+                        },
+                        "profiles": [
+                            {
+                                "id": "default",
+                                "label": "BenchCam",
+                                "source": 'dshow:video="Bench Cam"',
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            stage_calls: list[dict] = []
+            upload_calls: list[dict] = []
+            original_stage_runs = DAEMON.stage_runs
+            original_upload_staged_runs = DAEMON.upload_staged_runs
+            try:
+                def fake_stage_runs(**kwargs):
+                    stage_calls.append(kwargs)
+                    return {
+                        "batch_id": "batch-auto-1",
+                        "staged_run_count": 1,
+                        "skipped_run_count": 0,
+                    }
+
+                def fake_upload_staged_runs(**kwargs):
+                    upload_calls.append(kwargs)
+                    return {
+                        "ingest_batch_id": "ingest-auto-1",
+                        "uploaded_run_count": 1,
+                        "failed_run_count": 0,
+                    }
+
+                DAEMON.stage_runs = fake_stage_runs
+                DAEMON.upload_staged_runs = fake_upload_staged_runs
+
+                payload = DAEMON.run_post_run_central_ingest(
+                    config_path=config_path,
+                    local_config_path=local_path,
+                    daemon_log_path=None,
+                )
+            finally:
+                DAEMON.stage_runs = original_stage_runs
+                DAEMON.upload_staged_runs = original_upload_staged_runs
+
+            self.assertIsNotNone(payload)
+            self.assertEqual(len(stage_calls), 1)
+            self.assertEqual(stage_calls[0]["recent_days"], 2.0)
+            self.assertEqual(len(upload_calls), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

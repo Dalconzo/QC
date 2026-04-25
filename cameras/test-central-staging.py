@@ -2,7 +2,9 @@
 """Smoke tests for local central replay staging."""
 from __future__ import annotations
 
+import datetime as dt
 import json
+import os
 import sqlite3
 import sys
 import tempfile
@@ -69,15 +71,24 @@ class CentralStagingTests(unittest.TestCase):
         )
         return config_path, local_path
 
-    def write_ready_run(self, root: Path) -> tuple[Path, Path, Path]:
-        runs_dir = root / "H7" / "2026-04-10"
+    def write_ready_run(
+        self,
+        root: Path,
+        *,
+        folder_date: str = "2026-04-10",
+        started_at_local: str = "2026-04-10T10:00:00",
+        stopped_at_local: str = "2026-04-10T10:01:00",
+        manifest_age_days: float = 0,
+        stem: str = "demo",
+    ) -> tuple[Path, Path, Path]:
+        runs_dir = root / "H7" / folder_date
         runs_dir.mkdir(parents=True)
         sample_trace = next((Path(__file__).resolve().parents[1] / "data" / "samples").glob("*.trc"))
-        trace_path = runs_dir / "demo.trc"
+        trace_path = runs_dir / f"{stem}.trc"
         trace_path.write_bytes(sample_trace.read_bytes())
-        video_path = runs_dir / "demo.mp4"
+        video_path = runs_dir / f"{stem}.mp4"
         video_path.write_bytes(b"\x00\x00\x00\x20ftypisomdemo-video")
-        manifest_path = runs_dir / "demo.run.json"
+        manifest_path = runs_dir / f"{stem}.run.json"
         manifest_path.write_text(
             json.dumps(
                 {
@@ -85,8 +96,8 @@ class CentralStagingTests(unittest.TestCase):
                     "source": "Arducam USB Camera",
                     "video_path": str(video_path),
                     "video_filename": video_path.name,
-                    "started_at_local": "2026-04-10T10:00:00",
-                    "stopped_at_local": "2026-04-10T10:01:00",
+                    "started_at_local": started_at_local,
+                    "stopped_at_local": stopped_at_local,
                     "duration_sec": 60.0,
                     "stop_reason": "process_exit",
                     "process_gate": "HxRun.exe",
@@ -99,6 +110,9 @@ class CentralStagingTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        if manifest_age_days > 0:
+            timestamp = (dt.datetime.now() - dt.timedelta(days=manifest_age_days)).timestamp()
+            os.utime(manifest_path, (timestamp, timestamp))
         return manifest_path, video_path, trace_path
 
     def test_stage_ready_run_creates_batch_payload_and_db_rows(self) -> None:
@@ -190,6 +204,41 @@ class CentralStagingTests(unittest.TestCase):
             self.assertEqual(result["skipped_run_count"], 1)
             self.assertFalse(any((Path(result["batch_dir"]) / "runs").glob("*/run-upload.json")))
             self.assertTrue(trace_path.exists())
+
+    def test_recent_days_filters_old_manifests_before_staging(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            config_path, local_path = self.write_config(root, runs_root, staging_root)
+            self.write_ready_run(runs_root, stem="recent")
+            self.write_ready_run(
+                runs_root,
+                folder_date="2026-04-01",
+                started_at_local="2026-04-01T08:00:00",
+                stopped_at_local="2026-04-01T08:01:00",
+                manifest_age_days=5,
+                stem="old",
+            )
+
+            result = MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=False,
+                recent_days=2,
+            )
+
+            self.assertEqual(result["recent_days"], 2)
+            self.assertEqual(result["staged_run_count"], 1)
+            self.assertEqual(result["skipped_run_count"], 0)
+            staged_runs_dir = Path(result["batch_dir"]) / "runs"
+            staged_payloads = list(staged_runs_dir.glob("*/run-upload.json"))
+            self.assertEqual(len(staged_payloads), 1)
+            payload = json.loads(staged_payloads[0].read_text(encoding="utf-8"))
+            self.assertEqual(payload["run"]["local_manifest_path"].split("\\")[-1], "recent.run.json")
 
 
 if __name__ == "__main__":

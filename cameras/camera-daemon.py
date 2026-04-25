@@ -34,6 +34,7 @@ from stage_central_replay import stage_runs
 from upload_central_replay import upload_staged_runs
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_AUTO_STAGE_RECENT_DAYS = 2.0
 
 
 def emit_log(message: str, *, log_path: Path | None = None, is_error: bool = False) -> None:
@@ -276,11 +277,19 @@ def run_post_run_central_ingest(
     central_ingest = config.get("central_ingest", {})
     if not bool(central_ingest.get("auto_upload_on_run_complete", False)):
         return None
+    auto_stage_recent_days = central_ingest.get("auto_stage_recent_days", DEFAULT_AUTO_STAGE_RECENT_DAYS)
+    try:
+        recent_days = max(0.0, float(auto_stage_recent_days))
+    except (TypeError, ValueError):
+        recent_days = DEFAULT_AUTO_STAGE_RECENT_DAYS
 
     if update_status_fn is not None:
-        update_status_fn("uploading", upload_phase="staging")
+        update_status_fn("uploading", upload_phase="staging", auto_stage_recent_days=recent_days)
 
-    emit_log("[daemon] Auto-staging completed runs for central replay ingest", log_path=daemon_log_path)
+    emit_log(
+        f"[daemon] Auto-staging completed runs for central replay ingest (recent_days={recent_days:g})",
+        log_path=daemon_log_path,
+    )
     stage_payload = stage_runs(
         config_path=config_path,
         local_config_path=local_config_path,
@@ -288,6 +297,7 @@ def run_post_run_central_ingest(
         staging_root=None,
         limit=0,
         restage=False,
+        recent_days=recent_days,
     )
     emit_log(
         f"[daemon] Auto-stage complete: staged={stage_payload['staged_run_count']} skipped={stage_payload['skipped_run_count']}",
@@ -298,6 +308,7 @@ def run_post_run_central_ingest(
         update_status_fn(
             "uploading",
             upload_phase="uploading",
+            auto_stage_recent_days=recent_days,
             last_stage_batch_id=stage_payload["batch_id"],
             last_stage_staged_run_count=stage_payload["staged_run_count"],
             last_stage_skipped_run_count=stage_payload["skipped_run_count"],
