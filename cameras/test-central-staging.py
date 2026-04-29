@@ -166,6 +166,45 @@ class CentralStagingTests(unittest.TestCase):
             self.assertEqual(second["staged_run_count"], 0)
             self.assertEqual(second["skipped_run_count"], 1)
 
+    def test_duplicate_run_reuses_cached_media_hashes_without_rehashing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            config_path, local_path = self.write_config(root, runs_root, staging_root)
+            self.write_ready_run(runs_root)
+
+            first = MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=False,
+            )
+            self.assertEqual(first["staged_run_count"], 1)
+
+            original_compute_sha256 = MODULE.compute_sha256
+
+            def fail_on_rehash(path: Path) -> str:
+                raise AssertionError(f"unexpected rehash of {path}")
+
+            MODULE.compute_sha256 = fail_on_rehash
+            try:
+                second = MODULE.stage_runs(
+                    config_path=config_path,
+                    local_config_path=local_path,
+                    runs_root=runs_root,
+                    staging_root=staging_root,
+                    limit=0,
+                    restage=False,
+                )
+            finally:
+                MODULE.compute_sha256 = original_compute_sha256
+
+            self.assertEqual(second["staged_run_count"], 0)
+            self.assertEqual(second["skipped_run_count"], 1)
+
     def test_non_ready_run_is_not_staged(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

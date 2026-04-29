@@ -73,6 +73,15 @@ def compute_text_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def source_file_fingerprint(path: Path) -> dict[str, int]:
+    """Capture cheap source-file metadata so unchanged files can reuse cached hashes."""
+    stat_result = path.stat()
+    return {
+        "size_bytes": int(stat_result.st_size),
+        "mtime_ns": int(stat_result.st_mtime_ns),
+    }
+
+
 def canonicalize_manifest_for_staging(payload: dict) -> dict:
     """Strip workstation-local upload/cleanup churn before hashing or copying."""
     canonical = copy.deepcopy(payload)
@@ -141,6 +150,7 @@ def infer_profile(config: dict, payload: dict) -> dict:
 def artifact_metadata(artifact_type: str, source_path: Path, staged_path: Path) -> dict:
     """Describe one artifact exactly as the future central service will need it."""
     mime_type, _encoding = mimetypes.guess_type(source_path.name)
+    source_fingerprint = source_file_fingerprint(source_path)
     return {
         "artifact_type": artifact_type,
         "original_filename": source_path.name,
@@ -148,6 +158,8 @@ def artifact_metadata(artifact_type: str, source_path: Path, staged_path: Path) 
         "staged_path": str(staged_path.resolve()),
         "staged_filename": staged_path.name,
         "mime_type": mime_type or "application/octet-stream",
+        "source_size_bytes": source_fingerprint["size_bytes"],
+        "source_mtime_ns": source_fingerprint["mtime_ns"],
         "size_bytes": staged_path.stat().st_size,
         "sha256": compute_sha256(staged_path),
     }
@@ -207,6 +219,8 @@ def init_catalog_db(conn: sqlite3.Connection) -> None:
             artifact_type TEXT NOT NULL,
             source_path TEXT NOT NULL,
             staged_path TEXT NOT NULL,
+            source_size_bytes INTEGER NOT NULL DEFAULT 0,
+            source_mtime_ns INTEGER NOT NULL DEFAULT 0,
             content_sha256 TEXT NOT NULL,
             size_bytes INTEGER NOT NULL,
             mime_type TEXT NOT NULL DEFAULT '',
@@ -243,6 +257,10 @@ def ensure_catalog_migrations(conn: sqlite3.Connection) -> None:
         "pruned_at_utc": "TEXT NOT NULL DEFAULT ''",
         "pruned_bytes": "INTEGER NOT NULL DEFAULT 0",
     }
+    expected_artifact_columns = {
+        "source_size_bytes": "INTEGER NOT NULL DEFAULT 0",
+        "source_mtime_ns": "INTEGER NOT NULL DEFAULT 0",
+    }
     existing_columns = {
         row["name"]
         for row in conn.execute("PRAGMA table_info(staged_runs)")
@@ -251,6 +269,14 @@ def ensure_catalog_migrations(conn: sqlite3.Connection) -> None:
         if column_name in existing_columns:
             continue
         conn.execute(f"ALTER TABLE staged_runs ADD COLUMN {column_name} {column_type}")
+    existing_artifact_columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(staged_artifacts)")
+    }
+    for column_name, column_type in expected_artifact_columns.items():
+        if column_name in existing_artifact_columns:
+            continue
+        conn.execute(f"ALTER TABLE staged_artifacts ADD COLUMN {column_name} {column_type}")
 
 
 def get_db_connection(catalog_path: Path) -> sqlite3.Connection:
@@ -267,6 +293,63 @@ def is_already_staged(conn: sqlite3.Connection, stage_signature: str) -> bool:
         (stage_signature,),
     ).fetchone()
     return row is not None
+
+
+def find_cached_artifact_hash(
+    conn: sqlite3.Connection,
+    *,
+    local_run_id: str,
+    artifact_type: str,
+    source_path: Path,
+    source_size_bytes: int,
+    source_mtime_ns: int,
+) -> str:
+    """Reuse a prior source hash when the same local file is unchanged on disk."""
+    row = conn.execute(
+        """
+        SELECT staged_artifacts.content_sha256
+        FROM staged_artifacts
+        JOIN staged_runs
+          ON staged_runs.stage_run_id = staged_artifacts.stage_run_id
+        WHERE staged_runs.local_run_id = ?
+          AND staged_artifacts.artifact_type = ?
+          AND staged_artifacts.source_path = ?
+          AND staged_artifacts.source_size_bytes = ?
+          AND staged_artifacts.source_mtime_ns = ?
+        ORDER BY staged_runs.staged_at_utc DESC
+        LIMIT 1
+        """,
+        (
+            local_run_id,
+            artifact_type,
+            str(source_path.resolve()),
+            int(source_size_bytes),
+            int(source_mtime_ns),
+        ),
+    ).fetchone()
+    return "" if row is None else str(row["content_sha256"] or "")
+
+
+def resolve_source_hash(
+    conn: sqlite3.Connection,
+    *,
+    local_run_id: str,
+    artifact_type: str,
+    source_path: Path,
+) -> tuple[str, dict[str, int]]:
+    """Return the source hash plus the stat fingerprint used for cache reuse."""
+    fingerprint = source_file_fingerprint(source_path)
+    cached_hash = find_cached_artifact_hash(
+        conn,
+        local_run_id=local_run_id,
+        artifact_type=artifact_type,
+        source_path=source_path,
+        source_size_bytes=fingerprint["size_bytes"],
+        source_mtime_ns=fingerprint["mtime_ns"],
+    )
+    if cached_hash:
+        return cached_hash, fingerprint
+    return compute_sha256(source_path), fingerprint
 
 
 def build_payload(
@@ -350,10 +433,22 @@ def stage_one_run(
 
     staging_manifest_payload = canonicalize_manifest_for_staging(payload)
     normalized_manifest_text = json.dumps(staging_manifest_payload, indent=2)
+    video_hash, _video_fingerprint = resolve_source_hash(
+        conn,
+        local_run_id=item["run_id"],
+        artifact_type="video_mp4",
+        source_path=video_path,
+    )
+    trace_hash, _trace_fingerprint = resolve_source_hash(
+        conn,
+        local_run_id=item["run_id"],
+        artifact_type="trace_trc",
+        source_path=trace_path,
+    )
     artifact_hashes = {
         "run_manifest_json": compute_text_sha256(normalized_manifest_text),
-        "video_mp4": compute_sha256(video_path),
-        "trace_trc": compute_sha256(trace_path),
+        "video_mp4": video_hash,
+        "trace_trc": trace_hash,
     }
     signature = compute_stage_signature(item, artifact_hashes)
     if (not restage) and is_already_staged(conn, signature):
@@ -456,11 +551,13 @@ def stage_one_run(
                 artifact_type,
                 source_path,
                 staged_path,
+                source_size_bytes,
+                source_mtime_ns,
                 content_sha256,
                 size_bytes,
                 mime_type,
                 created_at_utc
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 f"stage-artifact-{uuid.uuid4().hex}",
@@ -468,6 +565,8 @@ def stage_one_run(
                 artifact_row["artifact_type"],
                 artifact_row["source_path"],
                 artifact_row["staged_path"],
+                artifact_row["source_size_bytes"],
+                artifact_row["source_mtime_ns"],
                 artifact_row["sha256"],
                 artifact_row["size_bytes"],
                 artifact_row["mime_type"],

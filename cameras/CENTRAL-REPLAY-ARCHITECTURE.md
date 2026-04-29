@@ -20,6 +20,9 @@ we can verify the contract and dedup logic before introducing the LAN service.
 The next slice now also exists: a filesystem-backed uploader can ingest those
 staged runs into a shared root, assign `central_run_id` values, populate the
 central SQLite catalog, and write acknowledgements back to the workstation.
+The staging ledger also caches source-file hash results behind file stat
+fingerprints so repeated auto-upload scans do not keep re-reading unchanged
+video and trace files from the workstation disk.
 
 ## Goals
 
