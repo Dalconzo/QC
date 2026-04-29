@@ -80,6 +80,10 @@ DEFAULT_CONFIG = {
         "upload_root": str(REPO_ROOT / "cameras" / "central_replay_root"),
         "transport": "filesystem",
         "auto_upload_on_run_complete": False,
+        "staging_cleanup": {
+            "enabled": True,
+            "prune_after_ack": True,
+        },
     },
     "daemon": {
         "task_name": "HamiltonCameraRecorderDaemon",
@@ -310,6 +314,10 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     transport = str(central_ingest.get("transport") or "").strip().lower()
     if transport not in {"filesystem"}:
         errors.append("central_ingest.transport must currently be 'filesystem'.")
+
+    staging_cleanup = central_ingest.get("staging_cleanup", {})
+    if not isinstance(staging_cleanup, dict):
+        errors.append("central_ingest.staging_cleanup must be an object when provided.")
 
     default_live_profile = str(live.get("default_profile") or "").strip()
     if default_live_profile and default_live_profile not in {str(profile.get("id")) for profile in profiles}:

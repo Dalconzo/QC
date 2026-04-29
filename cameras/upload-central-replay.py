@@ -655,6 +655,7 @@ def upload_staged_runs(
 ) -> dict:
     """Upload pending staged runs into the shared central replay root."""
     config = load_effective_config(config_path=config_path, local_override_path=local_config_path)
+    staging_cleanup = (config.get("central_ingest") or {}).get("staging_cleanup") or {}
     effective_staging_root = (staging_root or Path(config["central_ingest"]["staging_root"])).resolve()
     effective_upload_root = (upload_root or Path(config["central_ingest"]["upload_root"])).resolve()
     effective_staging_root.mkdir(parents=True, exist_ok=True)
@@ -751,6 +752,17 @@ def upload_staged_runs(
                         central_run_id=ingest_result["central_run_id"],
                         ack_path=str(ack_path.resolve()),
                     )
+                    pruned = {
+                        "action": "skipped_disabled",
+                        "pruned_bytes": 0,
+                    }
+                    if bool(staging_cleanup.get("enabled", True)) and bool(staging_cleanup.get("prune_after_ack", True)):
+                        refreshed_row = stage_conn.execute(
+                            "SELECT * FROM staged_runs WHERE stage_run_id = ?",
+                            (stage_row["stage_run_id"],),
+                        ).fetchone()
+                        if refreshed_row is not None:
+                            pruned = STAGE_MODULE.prune_stage_run_bundle(stage_conn, refreshed_row)
                     uploaded_count += 1
                     items.append(
                         {
@@ -760,6 +772,8 @@ def upload_staged_runs(
                             "central_run_id": ingest_result["central_run_id"],
                             "created": ingest_result["created"],
                             "ack_path": str(ack_path.resolve()),
+                            "prune_action": pruned["action"],
+                            "pruned_bytes": int(pruned.get("pruned_bytes") or 0),
                         }
                     )
                 except Exception as exc:

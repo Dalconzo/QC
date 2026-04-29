@@ -222,6 +222,50 @@ class CentralUploadTests(unittest.TestCase):
             self.assertEqual(run_count, 1)
             self.assertEqual(artifact_count, 3)
 
+    def test_upload_prunes_acknowledged_staging_bundle_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            upload_root = root / "central"
+            config_path, local_path = self.write_config(root, runs_root, staging_root, upload_root)
+            self.write_ready_run(runs_root)
+            stage_result = STAGE_MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=False,
+            )
+
+            run_dir = next((Path(stage_result["batch_dir"]) / "runs").iterdir())
+            result = UPLOAD_MODULE.upload_staged_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                staging_root=staging_root,
+                upload_root=upload_root,
+                limit=0,
+                batch_id="",
+            )
+
+            self.assertEqual(result["items"][0]["prune_action"], "pruned")
+            self.assertGreater(result["items"][0]["pruned_bytes"], 0)
+            self.assertTrue((run_dir / STAGE_MODULE.RUN_UPLOAD_FILENAME).exists())
+            self.assertTrue((run_dir / UPLOAD_MODULE.ACK_FILENAME).exists())
+            self.assertFalse((run_dir / "video.mp4").exists())
+            self.assertFalse((run_dir / "trace.trc").exists())
+            self.assertFalse((run_dir / "run_manifest.json").exists())
+
+            staging_catalog = staging_root / STAGE_MODULE.CATALOG_FILENAME
+            with closing(STAGE_MODULE.get_db_connection(staging_catalog)) as conn:
+                row = conn.execute(
+                    "SELECT staged_bundle_status, pruned_at_utc, pruned_bytes FROM staged_runs"
+                ).fetchone()
+            self.assertEqual(row["staged_bundle_status"], "metadata_only")
+            self.assertTrue(row["pruned_at_utc"])
+            self.assertGreater(row["pruned_bytes"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

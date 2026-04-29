@@ -191,6 +191,66 @@ class CentralStagingTests(unittest.TestCase):
             self.assertFalse(any((Path(result["batch_dir"]) / "runs").glob("*/run-upload.json")))
             self.assertTrue(trace_path.exists())
 
+    def test_prune_acknowledged_stage_run_keeps_only_metadata_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            config_path, local_path = self.write_config(root, runs_root, staging_root)
+            manifest_path, video_path, trace_path = self.write_ready_run(runs_root)
+
+            result = MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=False,
+            )
+            run_id = MODULE.INSPECT_MODULE.describe_manifest(manifest_path)["run_id"]
+            run_dir = Path(result["batch_dir"]) / "runs" / run_id
+            ack_path = run_dir / MODULE.RUN_ACK_FILENAME
+            ack_path.write_text(json.dumps({"status": "acknowledged"}), encoding="utf-8")
+
+            catalog_path = Path(result["catalog_path"])
+            with closing(MODULE.get_db_connection(catalog_path)) as conn:
+                conn.execute(
+                    """
+                    UPDATE staged_runs
+                    SET upload_status = 'acknowledged',
+                        ack_path = ?,
+                        upload_completed_at_utc = '2026-04-29T12:00:00Z'
+                    WHERE local_run_id = ?
+                    """,
+                    (str(ack_path.resolve()), run_id),
+                )
+                conn.commit()
+
+            prune_result = MODULE.prune_acknowledged_stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                staging_root=staging_root,
+            )
+
+            self.assertEqual(prune_result["pruned_run_count"], 1)
+            self.assertGreater(prune_result["pruned_bytes"], 0)
+            self.assertTrue((run_dir / MODULE.RUN_UPLOAD_FILENAME).exists())
+            self.assertTrue((run_dir / MODULE.RUN_ACK_FILENAME).exists())
+            self.assertFalse((run_dir / "video.mp4").exists())
+            self.assertFalse((run_dir / "trace.trc").exists())
+            self.assertFalse((run_dir / "run_manifest.json").exists())
+            self.assertTrue(video_path.exists())
+            self.assertTrue(trace_path.exists())
+
+            with closing(sqlite3.connect(catalog_path)) as conn:
+                row = conn.execute(
+                    "SELECT staged_bundle_status, pruned_at_utc, pruned_bytes FROM staged_runs WHERE local_run_id = ?",
+                    (run_id,),
+                ).fetchone()
+            self.assertEqual(row[0], "metadata_only")
+            self.assertTrue(row[1])
+            self.assertGreater(row[2], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

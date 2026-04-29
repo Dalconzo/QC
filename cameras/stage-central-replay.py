@@ -37,6 +37,9 @@ from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load
 SCHEMA_VERSION = "central-replay-stage.v1"
 CATALOG_FILENAME = ".central_ingest_staging.sqlite3"
 INSPECT_MANIFESTS_PATH = Path(__file__).resolve().parent / "inspect-run-manifests.py"
+RUN_UPLOAD_FILENAME = "run-upload.json"
+RUN_ACK_FILENAME = "run-ack.json"
+STAGED_METADATA_FILENAMES = {RUN_UPLOAD_FILENAME, RUN_ACK_FILENAME}
 
 
 def load_inspect_module():
@@ -189,6 +192,9 @@ def init_catalog_db(conn: sqlite3.Connection) -> None:
             upload_completed_at_utc TEXT NOT NULL DEFAULT '',
             ack_path TEXT NOT NULL DEFAULT '',
             last_upload_error TEXT NOT NULL DEFAULT '',
+            staged_bundle_status TEXT NOT NULL DEFAULT 'full',
+            pruned_at_utc TEXT NOT NULL DEFAULT '',
+            pruned_bytes INTEGER NOT NULL DEFAULT 0,
             started_at_local TEXT NOT NULL DEFAULT '',
             stopped_at_local TEXT NOT NULL DEFAULT '',
             staged_at_utc TEXT NOT NULL,
@@ -233,6 +239,9 @@ def ensure_catalog_migrations(conn: sqlite3.Connection) -> None:
         "upload_completed_at_utc": "TEXT NOT NULL DEFAULT ''",
         "ack_path": "TEXT NOT NULL DEFAULT ''",
         "last_upload_error": "TEXT NOT NULL DEFAULT ''",
+        "staged_bundle_status": "TEXT NOT NULL DEFAULT 'full'",
+        "pruned_at_utc": "TEXT NOT NULL DEFAULT ''",
+        "pruned_bytes": "INTEGER NOT NULL DEFAULT 0",
     }
     existing_columns = {
         row["name"]
@@ -372,7 +381,7 @@ def stage_one_run(
 
     workstation_id = socket.gethostname().lower()
     machine_alias = detect_machine_alias(runs_root, manifest_path)
-    payload_path = run_dir / "run-upload.json"
+    payload_path = run_dir / RUN_UPLOAD_FILENAME
     upload_payload = build_payload(
         batch_id=batch_id,
         config=config,
@@ -405,10 +414,13 @@ def stage_one_run(
             run_dir,
             replay_status,
             upload_status,
+            staged_bundle_status,
+            pruned_at_utc,
+            pruned_bytes,
             started_at_local,
             stopped_at_local,
             staged_at_utc
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             stage_run_id,
@@ -426,6 +438,9 @@ def stage_one_run(
             str(run_dir.resolve()),
             item["replay_status"],
             "staged",
+            "full",
+            "",
+            0,
             payload.get("started_at_local") or "",
             payload.get("stopped_at_local") or "",
             staged_at_utc,
@@ -472,6 +487,119 @@ def stage_one_run(
 def write_batch_summary(batch_path: Path, payload: dict) -> None:
     """Persist one human-readable batch summary beside the staged artifacts."""
     batch_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def prune_stage_run_bundle(conn: sqlite3.Connection, stage_row: sqlite3.Row) -> dict:
+    """Delete staged media bytes for an acknowledged run while keeping audit files."""
+    if str(stage_row["upload_status"] or "") != "acknowledged":
+        return {"action": "skipped_not_acknowledged", "stage_run_id": stage_row["stage_run_id"], "pruned_bytes": 0}
+    if str(stage_row["pruned_at_utc"] or ""):
+        return {"action": "skipped_already_pruned", "stage_run_id": stage_row["stage_run_id"], "pruned_bytes": 0}
+
+    run_dir = Path(str(stage_row["run_dir"] or "")).resolve()
+    if not run_dir.exists():
+        pruned_at_utc = utc_now_text()
+        conn.execute(
+            """
+            UPDATE staged_runs
+            SET staged_bundle_status = 'missing',
+                pruned_at_utc = ?,
+                pruned_bytes = 0
+            WHERE stage_run_id = ?
+            """,
+            (pruned_at_utc, stage_row["stage_run_id"]),
+        )
+        return {"action": "marked_missing", "stage_run_id": stage_row["stage_run_id"], "pruned_bytes": 0}
+
+    prunable_paths: list[Path] = []
+    pruned_bytes = 0
+    for child in run_dir.iterdir():
+        if child.name in STAGED_METADATA_FILENAMES:
+            continue
+        if child.is_file():
+            pruned_bytes += child.stat().st_size
+            prunable_paths.append(child)
+
+    for child in prunable_paths:
+        child.unlink(missing_ok=True)
+
+    pruned_at_utc = utc_now_text()
+    conn.execute(
+        """
+        UPDATE staged_runs
+        SET staged_bundle_status = ?,
+            pruned_at_utc = ?,
+            pruned_bytes = ?
+        WHERE stage_run_id = ?
+        """,
+        ("metadata_only", pruned_at_utc, pruned_bytes, stage_row["stage_run_id"]),
+    )
+    return {
+        "action": "pruned",
+        "stage_run_id": stage_row["stage_run_id"],
+        "run_dir": str(run_dir),
+        "pruned_bytes": pruned_bytes,
+        "retained_filenames": sorted(name for name in STAGED_METADATA_FILENAMES if (run_dir / name).exists()),
+    }
+
+
+def prune_acknowledged_stage_runs(
+    *,
+    config_path: Path,
+    local_config_path: Path,
+    staging_root: Path | None,
+    limit: int = 0,
+) -> dict:
+    """Reclaim local staging bytes for acknowledged runs while preserving audit files."""
+    config = load_effective_config(config_path=config_path, local_override_path=local_config_path)
+    cleanup_config = (config.get("central_ingest") or {}).get("staging_cleanup") or {}
+    effective_staging_root = (staging_root or Path(config["central_ingest"]["staging_root"])).resolve()
+    effective_staging_root.mkdir(parents=True, exist_ok=True)
+    catalog_path = effective_staging_root / CATALOG_FILENAME
+    if not bool(cleanup_config.get("enabled", True)):
+        return {
+            "staging_root": str(effective_staging_root),
+            "catalog_path": str(catalog_path.resolve()),
+            "pruned_run_count": 0,
+            "pruned_bytes": 0,
+            "items": [],
+            "action": "disabled",
+        }
+    if not catalog_path.exists():
+        return {
+            "staging_root": str(effective_staging_root),
+            "catalog_path": str(catalog_path.resolve()),
+            "pruned_run_count": 0,
+            "pruned_bytes": 0,
+            "items": [],
+            "action": "missing_catalog",
+        }
+
+    with closing(get_db_connection(catalog_path)) as conn:
+        init_catalog_db(conn)
+        query = """
+            SELECT *
+            FROM staged_runs
+            WHERE upload_status = 'acknowledged'
+              AND pruned_at_utc = ''
+            ORDER BY upload_completed_at_utc ASC, staged_at_utc ASC
+        """
+        params: tuple[object, ...] = ()
+        if limit > 0:
+            query += " LIMIT ?"
+            params = (limit,)
+        rows = list(conn.execute(query, params).fetchall())
+        items = [prune_stage_run_bundle(conn, row) for row in rows]
+        conn.commit()
+
+    return {
+        "staging_root": str(effective_staging_root),
+        "catalog_path": str(catalog_path.resolve()),
+        "pruned_run_count": sum(1 for item in items if item["action"] == "pruned"),
+        "pruned_bytes": sum(int(item.get("pruned_bytes") or 0) for item in items),
+        "items": items,
+        "action": "ok",
+    }
 
 
 def stage_runs(

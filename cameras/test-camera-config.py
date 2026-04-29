@@ -65,6 +65,8 @@ class CameraConfigTests(unittest.TestCase):
             self.assertTrue(config["central_ingest"]["staging_root"])
             self.assertTrue(config["central_ingest"]["upload_root"])
             self.assertEqual(config["central_ingest"]["transport"], "filesystem")
+            self.assertTrue(config["central_ingest"]["staging_cleanup"]["enabled"])
+            self.assertTrue(config["central_ingest"]["staging_cleanup"]["prune_after_ack"])
             self.assertEqual(config["live"]["default_profile"], "default")
             self.assertEqual(config["live"]["refresh_ms"], 1000)
             self.assertEqual(config["live"]["jpeg_quality"], 4)
@@ -215,6 +217,26 @@ class CameraConfigTests(unittest.TestCase):
             validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
             self.assertTrue(any("target_free_gb" in item for item in validation["errors"]))
             self.assertTrue(any("block_new_recording_free_gb" in item for item in validation["errors"]))
+
+    def test_validation_rejects_non_object_staging_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "central_ingest": {"staging_cleanup": False},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("central_ingest.staging_cleanup" in item for item in validation["errors"]))
 
 
 if __name__ == "__main__":

@@ -62,7 +62,11 @@
     "staging_root": "C:\\QC\\cameras\\central_staging",
     "upload_root": "C:\\QC\\cameras\\central_replay_root",
     "transport": "filesystem",
-    "auto_upload_on_run_complete": false
+    "auto_upload_on_run_complete": false,
+    "staging_cleanup": {
+      "enabled": true,
+      "prune_after_ack": true
+    }
   },
   "daemon": {
     "task_name": "HamiltonCameraRecorderDaemon",
