@@ -8,6 +8,7 @@ local replay, and central staging/upload paths.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 from pathlib import Path
 
@@ -55,6 +56,60 @@ DEFAULT_LOCAL_RETENTION = {
     "last_cleanup_mode": "",
     "last_cleanup_reason": "",
 }
+
+
+def build_run_identity(payload: dict) -> dict:
+    """Build a path-independent identity for one logical recorded run."""
+    chapters = [
+        {
+            "chapter_id": str(item.get("chapter_id") or ""),
+            "start_offset_sec": _normalize_offset(item.get("start_offset_sec")),
+            "label": str(item.get("label") or ""),
+            "kind": str(item.get("kind") or ""),
+            "phase_source": str(item.get("phase_source") or ""),
+            "is_idle": bool(item.get("is_idle")),
+        }
+        for item in (payload.get("chapters") or [])
+        if isinstance(item, dict)
+    ]
+    segments = [
+        {
+            "segment_id": str(item.get("segment_id") or ""),
+            "kind": str(item.get("kind") or ""),
+            "start_offset_sec": _normalize_offset(item.get("start_offset_sec")),
+            "stop_offset_sec": _normalize_offset(item.get("stop_offset_sec")),
+            "duration_sec": _normalize_offset(item.get("duration_sec")),
+            "phase_label": str(item.get("phase_label") or ""),
+            "phase_source": str(item.get("phase_source") or ""),
+            "source_line_index": item.get("source_line_index"),
+            "video_encoding_profile": str(item.get("video_encoding_profile") or ""),
+            "is_skipped_by_default": bool(item.get("is_skipped_by_default")),
+            "derived_video_encoding_profile": str(item.get("derived_video_encoding_profile") or ""),
+        }
+        for item in (payload.get("segments") or [])
+        if isinstance(item, dict)
+    ]
+    return {
+        "identity_version": "run-identity.v2",
+        "label": str(payload.get("label") or ""),
+        "source": str(payload.get("source") or ""),
+        "process_gate": str(payload.get("process_gate") or ""),
+        "stop_reason": str(payload.get("stop_reason") or ""),
+        "started_at_local": str(payload.get("started_at_local") or ""),
+        "stopped_at_local": str(payload.get("stopped_at_local") or ""),
+        "duration_sec": _normalize_optional_float(payload.get("duration_sec"), default=0.0) or 0.0,
+        "trace_mtime_delta_sec": _normalize_optional_float(payload.get("trace_mtime_delta_sec"), default=0.0) or 0.0,
+        "trace_started_at_local": str(payload.get("trace_started_at_local") or ""),
+        "trace_stopped_at_local": str(payload.get("trace_stopped_at_local") or ""),
+        "trace_duration_sec": _normalize_optional_float(payload.get("trace_duration_sec"), default=0.0) or 0.0,
+        "trace_event_count": int(payload.get("trace_event_count") or 0),
+        "replay_manifest_version": str(payload.get("replay_manifest_version") or ""),
+        "replay_capabilities": [str(item) for item in (payload.get("replay_capabilities") or [])],
+        "storage_tier": str(payload.get("storage_tier") or ""),
+        "replay_default_mode": str(payload.get("replay_default_mode") or ""),
+        "chapters": chapters,
+        "segments": segments,
+    }
 
 
 def resolve_segment_playback(segment: dict, *, manifest_payload: dict) -> dict:
@@ -152,16 +207,8 @@ def summarize_playback_availability(manifest_payload: dict) -> dict:
 
 def compute_run_id(manifest_path: Path, payload: dict) -> str:
     """Build a stable run identifier from the manifest identity and timing."""
-    import hashlib
-
-    identity = {
-        "manifest_path": str(manifest_path.resolve()),
-        "video_path": str(Path(payload.get("video_path", "")).resolve()) if payload.get("video_path") else "",
-        "trace_path": str(Path(payload.get("trace_path", "")).resolve()) if payload.get("trace_path") else "",
-        "started_at_local": payload.get("started_at_local") or "",
-        "stopped_at_local": payload.get("stopped_at_local") or "",
-        "label": payload.get("label") or "",
-    }
+    del manifest_path
+    identity = build_run_identity(payload)
     return hashlib.sha1(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 

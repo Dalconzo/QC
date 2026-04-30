@@ -85,6 +85,28 @@ def source_file_fingerprint(path: Path) -> dict[str, int]:
 def canonicalize_manifest_for_staging(payload: dict) -> dict:
     """Strip workstation-local upload/cleanup churn before hashing or copying."""
     canonical = copy.deepcopy(payload)
+    for field_name in ("manifest_path", "video_path", "trace_path", "hamilton_log_dir"):
+        if field_name in canonical:
+            canonical[field_name] = ""
+    if "run_id" in canonical:
+        canonical["run_id"] = str(canonical.get("run_id") or "")
+    for segment in canonical.get("segments") or []:
+        if not isinstance(segment, dict):
+            continue
+        for field_name in ("video_path", "derived_video_path", "derived_video_filename"):
+            if field_name in segment:
+                segment[field_name] = ""
+    local_compaction = canonical.get("local_compaction")
+    if isinstance(local_compaction, dict):
+        for field_name in ("artifacts_root", "source_video_path"):
+            if field_name in local_compaction:
+                local_compaction[field_name] = ""
+        for derivative in local_compaction.get("segment_derivatives") or []:
+            if not isinstance(derivative, dict):
+                continue
+            for field_name in ("video_path", "video_filename"):
+                if field_name in derivative:
+                    derivative[field_name] = ""
     local_retention = canonical.get("local_retention")
     if isinstance(local_retention, dict):
         for field_name in (
@@ -103,6 +125,7 @@ def canonicalize_manifest_for_staging(payload: dict) -> dict:
         ):
             local_retention[field_name] = ""
         local_retention["lan_available"] = False
+        local_retention["original_video_path"] = ""
     return canonical
 
 

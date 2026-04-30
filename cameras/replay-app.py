@@ -176,18 +176,26 @@ def refresh_catalog(runs_root: Path) -> dict:
     runs_root.mkdir(parents=True, exist_ok=True)
     catalog_path = get_catalog_path(runs_root)
     manifests = iter_manifest_paths(runs_root)
+    current_manifest_paths = {str(path.resolve()) for path in manifests}
 
     with closing(get_db_connection(catalog_path)) as conn:
         init_catalog_db(conn)
-        seen_manifest_paths: set[str] = set()
         cataloged_at = dt.datetime.now(dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+        if current_manifest_paths:
+            placeholders = ",".join("?" for _ in current_manifest_paths)
+            conn.execute(
+                f"DELETE FROM runs WHERE manifest_path NOT IN ({placeholders})",
+                tuple(current_manifest_paths),
+            )
+        else:
+            conn.execute("DELETE FROM runs")
 
         for manifest_path in manifests:
             payload = load_run_manifest(manifest_path)
             payload["has_video"] = bool(payload.get("video_path") and Path(payload["video_path"]).exists())
             payload["has_trace"] = bool(payload.get("trace_path") and Path(payload["trace_path"]).exists())
             payload["replay_status"] = determine_replay_status(payload)
-            seen_manifest_paths.add(payload["manifest_path"])
 
             conn.execute(
                 """
@@ -214,7 +222,8 @@ def refresh_catalog(runs_root: Path) -> dict:
                     replay_status,
                     cataloged_at_utc
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(run_id) DO UPDATE SET
+                ON CONFLICT(manifest_path) DO UPDATE SET
+                    run_id = excluded.run_id,
                     manifest_path = excluded.manifest_path,
                     manifest_mtime_ns = excluded.manifest_mtime_ns,
                     label = excluded.label,
@@ -260,15 +269,6 @@ def refresh_catalog(runs_root: Path) -> dict:
                     cataloged_at,
                 ),
             )
-
-        if seen_manifest_paths:
-            placeholders = ",".join("?" for _ in seen_manifest_paths)
-            conn.execute(
-                f"DELETE FROM runs WHERE manifest_path NOT IN ({placeholders})",
-                tuple(seen_manifest_paths),
-            )
-        else:
-            conn.execute("DELETE FROM runs")
 
         conn.commit()
         row = conn.execute("SELECT COUNT(*) AS run_count FROM runs").fetchone()

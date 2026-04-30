@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -87,6 +88,45 @@ class CentralStagingTests(unittest.TestCase):
                     "video_filename": video_path.name,
                     "started_at_local": "2026-04-10T10:00:00",
                     "stopped_at_local": "2026-04-10T10:01:00",
+                    "duration_sec": 60.0,
+                    "stop_reason": "process_exit",
+                    "process_gate": "HxRun.exe",
+                    "hamilton_log_dir": str(trace_path.parent),
+                    "hamilton_log_glob": "*.trc",
+                    "trace_path": str(trace_path),
+                    "trace_filename": trace_path.name,
+                    "trace_mtime_delta_sec": 1.5,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return manifest_path, video_path, trace_path
+
+    def write_ready_run_with_paths(
+        self,
+        run_dir: Path,
+        *,
+        label: str = "demo-ready",
+        source_name: str = "Arducam USB Camera",
+        started_at_local: str = "2026-04-10T10:00:00",
+        stopped_at_local: str = "2026-04-10T10:01:00",
+    ) -> tuple[Path, Path, Path]:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        sample_trace = next((Path(__file__).resolve().parents[1] / "data" / "samples").glob("*.trc"))
+        trace_path = run_dir / "demo.trc"
+        trace_path.write_bytes(sample_trace.read_bytes())
+        video_path = run_dir / "demo.mp4"
+        video_path.write_bytes(b"\x00\x00\x00\x20ftypisomdemo-video")
+        manifest_path = run_dir / "demo.run.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "label": label,
+                    "source": source_name,
+                    "video_path": str(video_path),
+                    "video_filename": video_path.name,
+                    "started_at_local": started_at_local,
+                    "stopped_at_local": stopped_at_local,
                     "duration_sec": 60.0,
                     "stop_reason": "process_exit",
                     "process_gate": "HxRun.exe",
@@ -201,6 +241,41 @@ class CentralStagingTests(unittest.TestCase):
                 )
             finally:
                 MODULE.compute_sha256 = original_compute_sha256
+
+            self.assertEqual(second["staged_run_count"], 0)
+            self.assertEqual(second["skipped_run_count"], 1)
+
+    def test_run_moved_to_new_absolute_paths_is_still_skipped_as_duplicate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            config_path, local_path = self.write_config(root, runs_root, staging_root)
+            original_dir = runs_root / "H7" / "2026-04-10"
+            moved_dir = runs_root / "H7" / "archive" / "2026-04-10"
+            self.write_ready_run_with_paths(original_dir)
+
+            first = MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=False,
+            )
+            self.assertEqual(first["staged_run_count"], 1)
+
+            shutil.rmtree(original_dir)
+            self.write_ready_run_with_paths(moved_dir)
+
+            second = MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=False,
+            )
 
             self.assertEqual(second["staged_run_count"], 0)
             self.assertEqual(second["skipped_run_count"], 1)

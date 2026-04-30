@@ -158,6 +158,48 @@ class ReplayAppTests(unittest.TestCase):
             self.assertGreaterEqual(len(payload["segments"]), 1)
             self.assertTrue(all(item["video_path"] == str(video_path.resolve()) for item in payload["segments"]))
 
+    def test_load_run_manifest_keeps_run_id_stable_across_path_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            sample_trace = Path(__file__).resolve().parents[1] / "data" / "samples"
+            trace_bytes = next(sample_trace.glob("*.trc")).read_bytes()
+
+            def write_run(run_root: Path) -> Path:
+                run_root.mkdir(parents=True, exist_ok=True)
+                video_path = run_root / "demo.mp4"
+                trace_path = run_root / "demo.trc"
+                manifest_path = run_root / "demo.run.json"
+                video_path.write_bytes(b"fake video payload")
+                trace_path.write_bytes(trace_bytes)
+                manifest_path.write_text(
+                    json.dumps(
+                        {
+                            "label": "demo-stable-id",
+                            "source": "0",
+                            "video_path": str(video_path),
+                            "trace_path": str(trace_path),
+                            "started_at_local": "2026-03-24T14:00:00",
+                            "stopped_at_local": "2026-03-24T14:05:00",
+                            "duration_sec": 300,
+                            "stop_reason": "process_exit",
+                            "process_gate": "HxRun.exe",
+                            "hamilton_log_dir": str(run_root),
+                            "hamilton_log_glob": "*.trc",
+                            "trace_mtime_delta_sec": 2.5,
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                return manifest_path
+
+            first_manifest = write_run(root / "runs-a")
+            second_manifest = write_run(root / "runs-b")
+
+            first_payload = MODULE.load_run_manifest(first_manifest)
+            second_payload = MODULE.load_run_manifest(second_manifest)
+            self.assertEqual(first_payload["run_id"], second_payload["run_id"])
+
     def test_http_api_serves_run_index(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
