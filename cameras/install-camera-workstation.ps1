@@ -372,6 +372,15 @@ if ($LASTEXITCODE -ne 0) {
     throw "Camera config validation failed."
 }
 
+$summaryJson = & python (Join-Path $scriptDir "inspect-camera-config.py") `
+    --config ([System.IO.Path]::GetFullPath($Config)) `
+    --local-config ([System.IO.Path]::GetFullPath($LocalConfig)) `
+    --json
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to inspect effective camera config after validation."
+}
+$summary = $summaryJson | ConvertFrom-Json
+
 if (-not $SkipShortcuts) {
     $shortcutScript = Join-Path $scriptDir "install-local-camera-tools.ps1"
     Write-Host "Installing workstation shortcuts ..." -ForegroundColor Cyan
@@ -447,6 +456,9 @@ if ($ProbeCamera -or $StartReplayCheck) {
 
 Write-Host "Hamilton camera workstation bootstrap is complete." -ForegroundColor Green
 Write-Host "Local override: $LocalConfig"
+Write-Host ("Deployment branch: {0}" -f $summary.deployment.git_branch)
+Write-Host ("Deployment commit: {0}" -f $summary.deployment.git_commit_short)
+Write-Host ("Recorder contract: {0}" -f $summary.contract_status.replay_manifest_version)
 Write-Host "Camera source: $effectiveCameraSource"
 Write-Host "Runs root: $effectiveRunsRoot"
 Write-Host "Recorder logs: $effectiveRecorderLogDir"

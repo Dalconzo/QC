@@ -11,7 +11,9 @@ stack on one workstation.
 cd C:\
 git clone https://github.com/Dalconzo/QC.git camera-tools
 cd C:\camera-tools
-git pull
+git fetch origin
+git checkout main
+git pull --ff-only origin main
 ```
 
 2. Install Python and ffmpeg if they are not already available.
@@ -52,6 +54,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\test
 Healthy output should show:
 
 - no validation errors
+- the expected deployment branch and commit
+- recorder contract `hybrid-replay.v1`
 - writable runs root
 - camera probe `ok: true`
 - replay site `ready: true`
@@ -68,6 +72,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\show
 1. Confirm the daemon is installed and/or running.
 
 ```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\show-camera-config.ps1 -Validate
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\show-camera-daemon-status.ps1
 ```
 
@@ -93,13 +98,23 @@ When the repo changes on a deployed workstation:
 
 ```powershell
 cd C:\camera-tools
-git pull
+git fetch origin
+git checkout main
+git pull --ff-only origin main
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\install-camera-workstation.ps1 `
   -CameraSource 'Arducam USB Camera' `
   -CameraLabel 'Top Camera'
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\uninstall-camera-daemon-task.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\install-camera-daemon-task.ps1 -RunNow
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\show-camera-config.ps1 -Validate
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\camera-tools\cameras\show-camera-daemon-status.ps1
 ```
+
+The post-update checks should confirm:
+
+- the expected deployment branch and commit
+- recorder contract `hybrid-replay.v1`
+- the daemon is running from the refreshed checkout
 
 ## Rollback
 

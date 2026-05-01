@@ -15,6 +15,7 @@ import importlib.util
 CAMERAS_DIR = Path(__file__).resolve().parent
 INSPECT_MANIFESTS_PATH = CAMERAS_DIR / "inspect-run-manifests.py"
 TEST_CAMERA_SOURCE_PATH = CAMERAS_DIR / "test-camera-source.py"
+INSPECT_CAMERA_CONFIG_PATH = CAMERAS_DIR / "inspect-camera-config.py"
 
 
 def load_module(module_path: Path, name: str):
@@ -31,6 +32,48 @@ PROBE_MODULE = load_module(TEST_CAMERA_SOURCE_PATH, "camera_test_camera_source")
 
 
 class CameraToolingTests(unittest.TestCase):
+    def test_inspect_camera_config_reports_deployment_and_contract_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            hamilton_dir = root / "hamilton"
+            hamilton_dir.mkdir()
+            config_path = root / "camera-recorder.json"
+            local_path = root / "camera-recorder.local.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(hamilton_dir), "process_name": "HxRun.exe"},
+                        "storage": {"runs_root": str(root / "runs"), "recorder_log_dir": str(root / "logs")},
+                        "central_ingest": {
+                            "staging_root": str(root / "staging"),
+                            "upload_root": str(root / "central"),
+                            "transport": "filesystem",
+                        },
+                        "profiles": [{"id": "default", "label": "Top Cam", "source": "Arducam USB Camera"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(INSPECT_CAMERA_CONFIG_PATH),
+                    "--config",
+                    str(config_path),
+                    "--local-config",
+                    str(local_path),
+                    "--json",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["contract_status"]["replay_manifest_version"], "hybrid-replay.v1")
+            self.assertIn("trace_segments", payload["contract_status"]["replay_capabilities"])
+            self.assertIn("git_commit_short", payload["deployment"])
+
     def test_manifest_inspector_reports_missing_video(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -357,6 +357,69 @@ class CentralUploadTests(unittest.TestCase):
             self.assertFalse(second["items"][0]["created"])
             self.assertEqual(first["items"][0]["central_run_id"], second["items"][0]["central_run_id"])
 
+    def test_retry_repair_replaces_corrupt_existing_central_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            upload_root = root / "central"
+            config_path, local_path = self.write_config(root, runs_root, staging_root, upload_root)
+            self.stage_one_ready_run(config_path, local_path, runs_root, staging_root)
+            first = UPLOAD_MODULE.upload_staged_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                staging_root=staging_root,
+                upload_root=upload_root,
+                limit=0,
+                batch_id="",
+            )
+
+            self.assertEqual(first["uploaded_run_count"], 1)
+            video_relpath = next(
+                item["storage_relpath"]
+                for item in first["items"][0]["artifact_sync_actions"]
+                if item["artifact_type"] == "video_mp4"
+            )
+            central_video_path = upload_root / video_relpath
+            central_video_path.write_bytes(b"corrupt-central-video")
+
+            STAGE_MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=True,
+            )
+            second = UPLOAD_MODULE.upload_staged_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                staging_root=staging_root,
+                upload_root=upload_root,
+                limit=0,
+                batch_id="",
+            )
+
+            self.assertEqual(second["uploaded_run_count"], 1)
+            self.assertFalse(second["items"][0]["created"])
+            video_sync = next(
+                item
+                for item in second["items"][0]["artifact_sync_actions"]
+                if item["artifact_type"] == "video_mp4"
+            )
+            self.assertEqual(video_sync["sync_action"], "repaired_mismatch")
+
+            staged_payload = json.loads(
+                ((Path(second["items"][0]["ack_path"]).parent / "run-upload.json").read_text(encoding="utf-8"))
+            )
+            staged_video_sha = next(
+                item["sha256"]
+                for item in staged_payload["artifacts"]
+                if item["artifact_type"] == "video_mp4"
+            )
+            repaired_sha = STAGE_MODULE.compute_sha256(central_video_path)
+            self.assertEqual(repaired_sha, staged_video_sha)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -130,6 +130,8 @@ class CameraDaemonTests(unittest.TestCase):
             self.assertEqual(status["state"], "stopped")
             self.assertEqual(status["reason"], "run_limit")
             self.assertEqual(status["cycle_count"], 1)
+            self.assertEqual(status["contract_status"]["replay_manifest_version"], "hybrid-replay.v1")
+            self.assertIn("git_commit_short", status["deployment"])
 
             marker = json.loads(marker_path.read_text(encoding="utf-8"))
             argv = " ".join(marker["argv"])

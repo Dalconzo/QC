@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_profile, load_effective_config, validate_config
+from workstation_release import build_contract_status, get_deployment_status
 
 
 def main() -> int:
@@ -41,6 +42,8 @@ def main() -> int:
         "config_path": config["config_path"],
         "local_override_path": config["local_override_path"],
         "local_override_exists": config["local_override_exists"],
+        "deployment": get_deployment_status(Path(config["config_path"]).resolve().parents[1]),
+        "contract_status": build_contract_status(config),
         "validation": validation,
     }
 
@@ -61,6 +64,21 @@ def main() -> int:
     else:
         print(f"Base config: {payload['config_path']}")
         print(f"Local override: {payload['local_override_path']} (exists={payload['local_override_exists']})")
+        deployment = payload["deployment"]
+        print(
+            "Deployment: "
+            f"branch={deployment['git_branch'] or '(unknown)'} "
+            f"commit={deployment['git_commit_short'] or '(unknown)'} "
+            f"dirty={deployment['git_is_dirty']}"
+        )
+        contract = payload["contract_status"]
+        print(
+            "Recorder contract: "
+            f"manifest={contract['replay_manifest_version']} "
+            f"auto_upload={contract['auto_upload_on_run_complete']} "
+            f"retention_days={contract['original_retention_days']} "
+            f"prune_after_ack={contract['prune_after_ack']}"
+        )
         if args.list_profiles:
             print("Profiles:")
             for profile in payload["profiles"]:

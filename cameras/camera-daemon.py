@@ -30,6 +30,7 @@ from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, get_
 from local_retention import cleanup_runs
 from stage_central_replay import stage_runs
 from upload_central_replay import upload_staged_runs
+from workstation_release import build_contract_status, get_deployment_status
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RECORDER_REARM_EXIT_CODE = 20
@@ -338,6 +339,8 @@ def run_supervisor(
     out_dir = out_dir_override or str(config["storage"]["runs_root"])
     label = label_override or str(profile.get("label") or profile["id"])
     recorder_stop_file = Path(str(config["recorder"]["stop_file"]))
+    deployment_status = get_deployment_status(REPO_ROOT)
+    contract_status = build_contract_status(config)
 
     try:
         claim_singleton(pid_file)
@@ -372,6 +375,8 @@ def run_supervisor(
             "status_path": str(status_path),
             "daemon_log_path": str(daemon_log_path) if daemon_log_path else "",
             "recorder_log_path": str(recorder_log_path) if recorder_log_path else "",
+            "deployment": deployment_status,
+            "contract_status": contract_status,
         }
         sticky_status_fields.update(extra)
         payload.update(sticky_status_fields)

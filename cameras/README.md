@@ -73,8 +73,9 @@ and the bootstrap schema in
     creates folders, validates config, installs shortcuts, and can install the
     daemon Scheduled Task.
 - `show-camera-config.ps1`
-  - Prints the effective camera workstation config, lists profiles, or validates
-    the current machine before rollout.
+  - Prints the effective camera workstation config, deployment branch/commit,
+    and recorder contract status; can also list profiles or validate the
+    current machine before rollout.
 - `camera-daemon.py`
   - Always-on workstation supervisor that waits for `HxRun.exe`, launches one
     recorder child per run, and returns to idle for the next run.
@@ -103,7 +104,8 @@ and the bootstrap schema in
 - `stop-camera-daemon.ps1`
   - Stops the daemon and asks any active recorder child to finalize cleanly.
 - `show-camera-daemon-status.ps1`
-  - Shows whether the workstation is idle, recording, or stopped.
+  - Shows whether the workstation is idle, recording, or stopped, along with
+    the deployed branch/commit and recorder contract captured by the daemon.
 - `test-camera-workstation.ps1`
   - Runs a workstation preflight: config validation, runs-root write checks,
     manifest health summary, optional camera probe, and optional replay-site
