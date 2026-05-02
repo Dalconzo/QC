@@ -7,6 +7,7 @@ import json
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 from pathlib import Path
 
@@ -376,6 +377,8 @@ class CameraDaemonTests(unittest.TestCase):
             self.assertEqual(status["last_failed_upload_run_count"], 0)
             self.assertEqual(status["last_cleanup_deleted_run_count"], 1)
             self.assertEqual(status["last_cleanup_deleted_bytes"], 2048)
+            self.assertEqual(status["ingest_state"], "completed")
+            self.assertEqual(status["pending_ingest_count"], 0)
 
     def test_supervisor_runs_local_cleanup_without_auto_upload(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -578,7 +581,6 @@ class CameraDaemonTests(unittest.TestCase):
             self.assertEqual(result["upload"]["ingest_batch_id"], "upload-1")
             self.assertIsNone(result["cleanup"])
             self.assertEqual(cleanup_calls, [])
-
     def test_supervisor_skips_auto_upload_after_failed_cycle(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -672,6 +674,146 @@ class CameraDaemonTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertEqual(calls["count"], 0)
 
+    def test_supervisor_rearms_for_next_run_while_upload_runs_in_background(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            runs_root = root / "runs"
+            logs_root = root / "logs"
+            logs_root.mkdir()
+
+            config_path = root / "camera-recorder.json"
+            local_path = root / "camera-recorder.local.json"
+            stop_file = root / "daemon.stop"
+            counter_path = root / "launch-count.txt"
+            recorder_script = root / "mock-recorder.py"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {
+                            "log_dir": str(log_dir),
+                            "process_name": "HxRun.exe",
+                        },
+                        "storage": {
+                            "runs_root": str(runs_root),
+                            "recorder_log_dir": str(logs_root),
+                        },
+                        "central_ingest": {
+                            "staging_root": str(root / "staging"),
+                            "upload_root": str(root / "upload"),
+                            "transport": "filesystem",
+                            "auto_upload_on_run_complete": True,
+                        },
+                        "recorder": {
+                            "stop_file": str(root / "recorder.stop"),
+                        },
+                        "daemon": {
+                            "stop_file": str(stop_file),
+                            "pid_file": str(root / "daemon.pid"),
+                            "status_path": str(root / "daemon-status.json"),
+                            "log_path": str(root / "daemon.log"),
+                            "idle_poll_sec": 0.02,
+                            "heartbeat_sec": 0.02,
+                            "relaunch_delay_sec": 0.0,
+                        },
+                        "profiles": [
+                            {
+                                "id": "default",
+                                "label": "BenchCam",
+                                "source": 'dshow:video="Bench Cam"',
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            recorder_script.write_text(
+                textwrap.dedent(
+                    f"""
+                    import pathlib
+                    import time
+
+                    counter_path = pathlib.Path(r"{counter_path}")
+                    count = int(counter_path.read_text(encoding="utf-8") or "0") if counter_path.exists() else 0
+                    count += 1
+                    counter_path.write_text(str(count), encoding="utf-8")
+                    time.sleep(0.03)
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            ingest_calls = {"count": 0}
+            observed = {"second_launch_before_upload_complete": False}
+
+            def fake_post_run_ingest(**kwargs):
+                ingest_calls["count"] += 1
+                deadline = time.monotonic() + 0.30
+                while time.monotonic() < deadline:
+                    if counter_path.exists() and counter_path.read_text(encoding="utf-8").strip() == "2":
+                        observed["second_launch_before_upload_complete"] = True
+                        break
+                    time.sleep(0.01)
+                return {
+                    "stage": {
+                        "batch_id": f"batch-auto-{ingest_calls['count']}",
+                        "staged_run_count": 1,
+                        "skipped_run_count": 0,
+                    },
+                    "upload": {
+                        "ingest_batch_id": f"ingest-auto-{ingest_calls['count']}",
+                        "uploaded_run_count": 1,
+                        "failed_run_count": 0,
+                        "items": [],
+                    },
+                }
+
+            poll_calls = {"count": 0, "between_runs": 0}
+
+            def fake_is_running(_name: str) -> bool:
+                poll_calls["count"] += 1
+                launches = int(counter_path.read_text(encoding="utf-8").strip()) if counter_path.exists() else 0
+                if launches == 0:
+                    return poll_calls["count"] >= 2
+                if launches == 1:
+                    poll_calls["between_runs"] += 1
+                    return poll_calls["between_runs"] >= 3
+                stop_file.write_text("stop", encoding="utf-8")
+                return False
+
+            rc = DAEMON.run_supervisor(
+                config_path=config_path,
+                local_config_path=local_path,
+                profile_id="default",
+                source_override="",
+                out_dir_override="",
+                label_override="",
+                stop_file=stop_file,
+                pid_file=root / "daemon.pid",
+                status_path=root / "daemon-status.json",
+                daemon_log_path=root / "daemon.log",
+                recorder_log_path=root / "recorder.log",
+                idle_poll_sec=0.02,
+                heartbeat_sec=0.02,
+                relaunch_delay_sec=0.0,
+                idle_timeout_sec=2,
+                run_once=False,
+                max_cycles=2,
+                recorder_script=recorder_script,
+                is_process_running_fn=fake_is_running,
+                post_run_ingest_fn=fake_post_run_ingest,
+            )
+
+            self.assertEqual(rc, 0)
+            self.assertEqual(counter_path.read_text(encoding="utf-8").strip(), "2")
+            self.assertEqual(ingest_calls["count"], 2)
+            self.assertTrue(observed["second_launch_before_upload_complete"])
+            status = json.loads((root / "daemon-status.json").read_text(encoding="utf-8"))
+            self.assertEqual(status["ingest_state"], "completed")
+            self.assertEqual(status["pending_ingest_count"], 0)
+
     def test_supervisor_rearms_immediately_after_exit_code_20(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -696,6 +838,12 @@ class CameraDaemonTests(unittest.TestCase):
                         "storage": {
                             "runs_root": str(runs_root),
                             "recorder_log_dir": str(logs_root),
+                        },
+                        "central_ingest": {
+                            "staging_root": str(root / "staging"),
+                            "upload_root": str(root / "upload"),
+                            "transport": "filesystem",
+                            "auto_upload_on_run_complete": True,
                         },
                         "recorder": {
                             "stop_file": str(root / "recorder.stop"),

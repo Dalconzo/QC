@@ -20,10 +20,12 @@ import argparse
 import datetime as dt
 import json
 import os
+import queue
 import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from urllib import error as urlerror
@@ -64,6 +66,12 @@ REARM_EXIT_CODES = {
     EXIT_CONTRACT_REARM_SEGMENT,
     EXIT_CONTRACT_DISCARD_SPECULATIVE_SEGMENT,
 }
+
+INGEST_IDLE = "idle"
+INGEST_QUEUED = "queued"
+INGEST_RUNNING = "running"
+INGEST_COMPLETED = "completed"
+INGEST_FAILED = "failed"
 
 
 def classify_exit_contract(return_code: int) -> str:
@@ -426,6 +434,132 @@ def run_post_run_local_cleanup(
     return cleanup_payload
 
 
+class AsyncIngestManager:
+    """Run post-recording staging/upload work off the supervisor hot path."""
+
+    def __init__(
+        self,
+        *,
+        config_path: Path,
+        local_config_path: Path,
+        daemon_log_path: Path | None,
+        post_run_ingest_fn,
+    ) -> None:
+        self._config_path = config_path
+        self._local_config_path = local_config_path
+        self._daemon_log_path = daemon_log_path
+        self._post_run_ingest_fn = post_run_ingest_fn
+        self._jobs: queue.Queue[dict | None] = queue.Queue()
+        self._completions: queue.Queue[dict] = queue.Queue()
+        self._lock = threading.Lock()
+        self._stop_requested = False
+        self._pending_count = 0
+        self._active_job: dict | None = None
+        self._active_phase = ""
+        self._thread: threading.Thread | None = None
+
+    def enabled(self) -> bool:
+        return self._post_run_ingest_fn is not None
+
+    def pending_count(self) -> int:
+        with self._lock:
+            return self._pending_count
+
+    def active_job(self) -> dict | None:
+        with self._lock:
+            return dict(self._active_job) if self._active_job else None
+
+    def active_phase(self) -> str:
+        with self._lock:
+            return self._active_phase
+
+    def has_pending_work(self) -> bool:
+        with self._lock:
+            return self._pending_count > 0 or self._active_job is not None
+
+    def enqueue(self, job: dict) -> int:
+        with self._lock:
+            self._pending_count += 1
+        self._ensure_started()
+        self._jobs.put(dict(job))
+        return self.pending_count()
+
+    def poll_completions(self) -> list[dict]:
+        items: list[dict] = []
+        while True:
+            try:
+                items.append(self._completions.get_nowait())
+            except queue.Empty:
+                return items
+
+    def shutdown(self, *, drain_timeout_sec: float = 0.0) -> None:
+        with self._lock:
+            self._stop_requested = True
+        if self._thread is None:
+            return
+        self._jobs.put(None)
+        if drain_timeout_sec > 0:
+            self._thread.join(timeout=max(0.0, drain_timeout_sec))
+
+    def _ensure_started(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(
+            target=self._worker_main,
+            name="camera-daemon-ingest",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _worker_main(self) -> None:
+        while True:
+            job = self._jobs.get()
+            if job is None:
+                return
+
+            run_payload = dict(job.get("run_payload") or {})
+            with self._lock:
+                self._active_job = dict(job)
+                self._active_phase = "staging"
+            phase_updates: list[dict] = []
+
+            def capture_phase(_state: str, **extra: object) -> None:
+                phase = str(extra.get("upload_phase") or "")
+                with self._lock:
+                    self._active_phase = phase or self._active_phase
+                phase_updates.append(dict(extra))
+
+            try:
+                ingest_payload = self._post_run_ingest_fn(
+                    config_path=self._config_path,
+                    local_config_path=self._local_config_path,
+                    daemon_log_path=self._daemon_log_path,
+                    update_status_fn=capture_phase,
+                )
+            except Exception as exc:
+                result = {
+                    "ok": False,
+                    "error": str(exc),
+                    "run_payload": run_payload,
+                    "completed_at": dt.datetime.now().isoformat(),
+                    "phase_updates": phase_updates,
+                }
+            else:
+                result = {
+                    "ok": True,
+                    "payload": ingest_payload,
+                    "run_payload": run_payload,
+                    "completed_at": dt.datetime.now().isoformat(),
+                    "phase_updates": phase_updates,
+                }
+
+            with self._lock:
+                self._pending_count = max(0, self._pending_count - 1)
+                self._active_job = None
+            self._active_phase = ""
+        self._completions.put(result)
+
+
 def run_supervisor(
     *,
     config_path: Path,
@@ -475,6 +609,7 @@ def run_supervisor(
     contract_status = build_contract_status(config)
     enable_midrun_split = bool(config.get("daemon", {}).get("enable_midrun_split", False))
     runs_root = Path(str(config["storage"]["runs_root"])).resolve()
+    auto_upload_enabled = bool(config.get("central_ingest", {}).get("auto_upload_on_run_complete", False))
 
     try:
         claim_singleton(pid_file)
@@ -492,6 +627,13 @@ def run_supervisor(
     sticky_status_fields: dict[str, object] = {}
     next_launch_speculative = False
     current_run_payload: dict | None = None
+    current_state = "starting"
+    ingest_manager = AsyncIngestManager(
+        config_path=config_path,
+        local_config_path=local_config_path,
+        daemon_log_path=daemon_log_path,
+        post_run_ingest_fn=(post_run_ingest_fn if auto_upload_enabled else None),
+    )
 
     def publish_workstation_status(state: str, *, extra: dict | None = None) -> None:
         if not status_server_url:
@@ -540,6 +682,7 @@ def run_supervisor(
             emit_log(f"[daemon] Run status push failed: {exc}", log_path=daemon_log_path, is_error=True)
 
     def update_status(state: str, **extra: object) -> None:
+        nonlocal current_state
         payload = {
             "state": state,
             "daemon_pid": os.getpid(),
@@ -562,17 +705,111 @@ def run_supervisor(
         sticky_status_fields.update(extra)
         payload.update(sticky_status_fields)
         payload.update(extra)
+        current_state = state
         write_status(status_path, payload)
         publish_workstation_status(state, extra=payload)
+
+    def update_ingest_status(ingest_state: str, *, state: str | None = None, **extra: object) -> None:
+        active_job = ingest_manager.active_job()
+        payload = {
+            "ingest_state": ingest_state,
+            "pending_ingest_count": ingest_manager.pending_count(),
+            "active_ingest_run_id": str(((active_job or {}).get("run_payload") or {}).get("local_run_id") or ""),
+            "active_ingest_manifest_path": str(((active_job or {}).get("run_payload") or {}).get("manifest_path") or ""),
+            "active_ingest_phase": ingest_manager.active_phase(),
+        }
+        payload.update(extra)
+        effective_state = state or current_state
+        update_status(effective_state, **payload)
+
+    def flush_ingest_completions() -> None:
+        for item in ingest_manager.poll_completions():
+            run_payload = item.get("run_payload") or None
+            base_payload = {
+                "pending_ingest_count": ingest_manager.pending_count(),
+                "active_ingest_run_id": "",
+                "active_ingest_manifest_path": "",
+                "active_ingest_phase": "",
+                "last_ingest_completed_at": item.get("completed_at", ""),
+                "last_ingest_run_id": str((run_payload or {}).get("local_run_id") or ""),
+                "last_ingest_manifest_path": str((run_payload or {}).get("manifest_path") or ""),
+            }
+            if not item.get("ok"):
+                error_text = str(item.get("error") or "unknown ingest failure")
+                emit_log(
+                    f"[daemon] Background auto-upload failed: {error_text}",
+                    log_path=daemon_log_path,
+                    is_error=True,
+                )
+                update_ingest_status(
+                    INGEST_FAILED,
+                    **base_payload,
+                    last_upload_error=error_text,
+                    last_ingest_error=error_text,
+                )
+                if run_payload:
+                    publish_run_status("failed", run_payload, extra={"last_error": error_text})
+                continue
+
+            ingest_payload = item.get("payload") or None
+            if ingest_payload:
+                update_ingest_status(
+                    INGEST_COMPLETED,
+                    **base_payload,
+                    last_upload_error="",
+                    last_ingest_error="",
+                    last_stage_batch_id=ingest_payload["stage"]["batch_id"],
+                    last_stage_staged_run_count=ingest_payload["stage"]["staged_run_count"],
+                    last_stage_skipped_run_count=ingest_payload["stage"]["skipped_run_count"],
+                    last_upload_batch_id=ingest_payload["upload"]["ingest_batch_id"],
+                    last_uploaded_run_count=ingest_payload["upload"]["uploaded_run_count"],
+                    last_failed_upload_run_count=ingest_payload["upload"]["failed_run_count"],
+                )
+                if run_payload:
+                    matching_item = next(
+                        (
+                            entry
+                            for entry in ingest_payload["upload"].get("items", [])
+                            if entry.get("local_run_id") == run_payload.get("local_run_id") and entry.get("action") == "acknowledged"
+                        ),
+                        None,
+                    )
+                    if matching_item:
+                        publish_run_status(
+                            "available",
+                            run_payload,
+                            extra={"central_run_id": matching_item.get("central_run_id", "")},
+                        )
+                    elif ingest_payload["upload"].get("failed_run_count", 0) > 0:
+                        publish_run_status("failed", run_payload, extra={"last_error": "auto_upload_failed"})
+            else:
+                update_ingest_status(
+                    INGEST_COMPLETED,
+                    **base_payload,
+                    last_upload_error="",
+                    last_ingest_error="",
+                )
 
     emit_log(
         f"[daemon] Starting supervisor for profile '{profile['id']}' gated on {process_name}",
         log_path=daemon_log_path,
     )
-    update_status("starting")
+    update_status(
+        "starting",
+        ingest_state=INGEST_IDLE,
+        pending_ingest_count=0,
+        active_ingest_run_id="",
+        active_ingest_manifest_path="",
+        active_ingest_phase="",
+        last_ingest_run_id="",
+        last_ingest_manifest_path="",
+        last_ingest_completed_at="",
+        last_ingest_error="",
+    )
 
     try:
         while True:
+            flush_ingest_completions()
             if stop_file.exists():
                 emit_log("[daemon] Stop file detected. Exiting idle loop.", log_path=daemon_log_path)
                 update_status("stopping", reason="daemon_stop_file")
@@ -606,91 +843,36 @@ def run_supervisor(
                     log_path=daemon_log_path,
                     is_error=(return_code not in (EXIT_CONTRACT_FINALIZED_RUN, *REARM_EXIT_CODES)),
                 )
-                ingest_payload = None
                 if return_code == EXIT_CONTRACT_FINALIZED_RUN:
                     current_run_payload = find_recent_run_payload(runs_root, not_before=recorder_finished_at - dt.timedelta(minutes=30))
                     if current_run_payload:
                         publish_run_status("pending_upload", current_run_payload)
-                if return_code == EXIT_CONTRACT_FINALIZED_RUN and post_run_ingest_fn is not None:
-                    try:
-                        if current_run_payload:
-                            publish_run_status("uploading", current_run_payload, extra={"upload_phase": "staging"})
-                        ingest_payload = post_run_ingest_fn(
-                            config_path=config_path,
-                            local_config_path=local_config_path,
-                            daemon_log_path=daemon_log_path,
-                            update_status_fn=update_status,
-                        )
-                    except Exception as exc:
-                        emit_log(
-                            f"[daemon] Auto-upload failed: {exc}",
-                            log_path=daemon_log_path,
-                            is_error=True,
-                        )
-                        if current_run_payload:
-                            publish_run_status("failed", current_run_payload, extra={"last_error": str(exc)})
-                        update_status(
-                            "idle",
-                            last_exit_code=return_code,
-                            last_exit_contract=exit_contract,
-                            last_cycle_completed_at=dt.datetime.now().isoformat(),
-                            last_upload_error=str(exc),
-                            waiting_for_process_exit=False,
-                        )
-                    else:
-                        if ingest_payload:
-                            cleanup_payload = ingest_payload.get("cleanup") or {}
-                            update_status(
-                                "idle",
-                                last_exit_code=return_code,
-                                last_exit_contract=exit_contract,
-                                last_cycle_completed_at=dt.datetime.now().isoformat(),
-                                last_stage_batch_id=ingest_payload["stage"]["batch_id"],
-                                last_stage_staged_run_count=ingest_payload["stage"]["staged_run_count"],
-                                last_stage_skipped_run_count=ingest_payload["stage"]["skipped_run_count"],
-                                last_upload_batch_id=ingest_payload["upload"]["ingest_batch_id"],
-                                last_uploaded_run_count=ingest_payload["upload"]["uploaded_run_count"],
-                                last_failed_upload_run_count=ingest_payload["upload"]["failed_run_count"],
-                                last_cleanup_deleted_run_count=int(cleanup_payload.get("deleted_run_count", 0) or 0),
-                                last_cleanup_deleted_bytes=int(cleanup_payload.get("deleted_bytes", 0) or 0),
-                                last_cleanup_eligible_run_count=int(cleanup_payload.get("eligible_run_count", 0) or 0),
-                                waiting_for_process_exit=False,
-                            )
-                            if current_run_payload:
-                                matching_item = next(
-                                    (
-                                        item
-                                        for item in ingest_payload["upload"].get("items", [])
-                                        if item.get("local_run_id") == current_run_payload.get("local_run_id")
-                                        and item.get("action") == "acknowledged"
-                                    ),
-                                    None,
-                                )
-                                if matching_item:
-                                    publish_run_status(
-                                        "available",
-                                        current_run_payload,
-                                        extra={"central_run_id": matching_item.get("central_run_id", "")},
-                                    )
-                                elif ingest_payload["upload"].get("failed_run_count", 0) > 0:
-                                    publish_run_status("failed", current_run_payload, extra={"last_error": "auto_upload_failed"})
-                        else:
-                            update_status(
-                                "idle",
-                                last_exit_code=return_code,
-                                last_exit_contract=exit_contract,
-                                last_cycle_completed_at=dt.datetime.now().isoformat(),
-                                waiting_for_process_exit=False,
-                            )
-                else:
-                    update_status(
-                        "idle",
-                        last_exit_code=return_code,
-                        last_exit_contract=exit_contract,
-                        last_cycle_completed_at=dt.datetime.now().isoformat(),
+                update_status(
+                    "idle",
+                    last_exit_code=return_code,
+                    last_exit_contract=exit_contract,
+                    last_cycle_completed_at=dt.datetime.now().isoformat(),
+                    waiting_for_process_exit=False,
+                )
+                if return_code == EXIT_CONTRACT_FINALIZED_RUN and auto_upload_enabled and ingest_manager.enabled():
+                    if current_run_payload:
+                        publish_run_status("uploading", current_run_payload, extra={"upload_phase": "queued"})
+                    pending_count = ingest_manager.enqueue(
+                        {
+                            "run_payload": current_run_payload or {},
+                            "enqueued_at": dt.datetime.now().isoformat(),
+                        }
                     )
+                    update_ingest_status(
+                        INGEST_QUEUED,
+                        state="idle",
+                        pending_ingest_count=pending_count,
+                        last_ingest_enqueued_at=dt.datetime.now().isoformat(),
+                    )
+                else:
+                    update_ingest_status(INGEST_IDLE, state="idle")
                 cleanup_payload = None
-                if return_code == 0 and post_run_cleanup_fn is not None:
+                if return_code == EXIT_CONTRACT_FINALIZED_RUN and post_run_cleanup_fn is not None:
                     try:
                         cleanup_payload = post_run_cleanup_fn(
                             config_path=config_path,
@@ -825,6 +1007,9 @@ def run_supervisor(
 
         return 0
     finally:
+        flush_ingest_completions()
+        ingest_manager.shutdown(drain_timeout_sec=15.0)
+        flush_ingest_completions()
         if child_proc is not None and child_proc.poll() is None:
             try:
                 recorder_stop_file.parent.mkdir(parents=True, exist_ok=True)

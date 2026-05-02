@@ -1,0 +1,25 @@
+# Deployment Agent Handoff
+
+- Issue IDs covered: `QC-agv`
+- Branch and worktree: `codex/deploy` in `C:\QC-deploy`
+- Files changed:
+  - `cameras/camera-daemon.py`
+  - `cameras/test-camera-daemon.py`
+- What changed in daemon/runtime behavior:
+  - moved post-run central staging/upload off the supervisor hot path into a background ingest worker
+  - daemon now returns to process watching immediately after a finalized run instead of blocking on staging/upload
+  - status JSON now tracks ingest queue state, active ingest target, pending ingest count, completion timestamps, and ingest errors separately from top-level daemon state
+  - terminal daemon states such as `stopped` are preserved when background ingest completions arrive during shutdown
+  - auto-upload queueing only activates when `central_ingest.auto_upload_on_run_complete` is enabled
+- Tests run with exact commands:
+  - `& 'C:\Program Files\Python313\python.exe' cameras\test-camera-daemon.py`
+- Known failure modes not yet covered:
+  - daemon shutdown still drains the background ingest worker for up to 15 seconds; that is intentional for status/result capture, but a very slow share can still defer process exit
+  - in-flight ingest work is thread-local to the daemon process; if the workstation is hard-killed mid-upload, retry depends on the next daemon run re-staging/uploading pending work
+  - operator-facing PowerShell status wrappers still print the raw status payload; no extra formatting work was added in this slice
+- Review focus requested:
+  - missed-run risk after finalized runs
+  - daemon timing around run rearm and shutdown
+  - rollback safety if background ingest is reverted
+  - correctness of new ingest status fields for unattended workstation debugging
+- Current state: commit-ready
