@@ -420,6 +420,34 @@ class CentralUploadTests(unittest.TestCase):
             repaired_sha = STAGE_MODULE.compute_sha256(central_video_path)
             self.assertEqual(repaired_sha, staged_video_sha)
 
+    def test_missing_target_copy_is_verified_before_ack(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_path = root / "source.bin"
+            target_path = root / "central" / "artifact.bin"
+            source_bytes = b"expected-central-artifact"
+            source_path.write_bytes(source_bytes)
+            expected_sha256 = STAGE_MODULE.compute_sha256(source_path)
+
+            original_copy2 = UPLOAD_MODULE.shutil.copy2
+            try:
+                def corrupting_copy2(src, dst, *args, **kwargs):
+                    destination = Path(dst)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(b"corrupt-bytes")
+                    return str(destination)
+
+                UPLOAD_MODULE.shutil.copy2 = corrupting_copy2
+
+                with self.assertRaises(RuntimeError):
+                    UPLOAD_MODULE.ensure_central_artifact(
+                        source_path=source_path,
+                        target_path=target_path,
+                        expected_sha256=expected_sha256,
+                    )
+            finally:
+                UPLOAD_MODULE.shutil.copy2 = original_copy2
+
 
 if __name__ == "__main__":
     unittest.main()

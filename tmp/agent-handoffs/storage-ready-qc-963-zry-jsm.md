@@ -38,7 +38,7 @@ Tests run:
 Storage-risk notes:
 - Retry reuse no longer trusts an existing central catalog row blindly; corrupt or missing central artifact bytes are rewritten from the staged source before the run is acknowledged again.
 - The new workstation metadata is read-only and should not affect artifact contents or replay identity.
-- This slice does not add a full historical migration for already-uploaded stale central rows; it hardens future retries and reuploads.
+- Non-goal for this beta slice unless a reviewer explicitly reopens it: a full historical migration/backfill for already-uploaded stale central rows. This work hardens future retries and reuploads only.
 
 Commit readiness:
 - commit-ready

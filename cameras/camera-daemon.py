@@ -239,29 +239,10 @@ def run_post_run_central_ingest(
         log_path=daemon_log_path,
         is_error=(upload_payload["failed_run_count"] > 0),
     )
-    cleanup_payload = None
-    retention = config.get("storage", {}).get("retention", {})
-    if bool(retention.get("cleanup_on_run_complete", False)):
-        runs_root = Path(config["storage"]["runs_root"]).resolve()
-        emit_log("[daemon] Running local retention cleanup", log_path=daemon_log_path)
-        cleanup_payload = cleanup_runs(
-            runs_root=runs_root,
-            delete=True,
-            limit=0,
-            emergency_config=retention.get("emergency") or {},
-        )
-        emit_log(
-            "[daemon] Local cleanup complete: "
-            f"deleted={cleanup_payload['deleted_run_count']} "
-            f"eligible={cleanup_payload['eligible_run_count']} "
-            f"emergency_deleted={cleanup_payload['emergency_deleted_run_count']} "
-            f"critical={cleanup_payload['critical_pressure_remaining']}",
-            log_path=daemon_log_path,
-        )
     return {
         "stage": stage_payload,
         "upload": upload_payload,
-        "cleanup": cleanup_payload,
+        "cleanup": None,
     }
 
 

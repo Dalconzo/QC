@@ -470,6 +470,97 @@ class CameraDaemonTests(unittest.TestCase):
             self.assertEqual(status["last_cleanup_deleted_bytes"], 8192)
             self.assertEqual(status["last_cleanup_eligible_run_count"], 1)
 
+    def test_post_run_central_ingest_does_not_own_local_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            upload_root = root / "upload"
+            logs_root = root / "logs"
+            logs_root.mkdir()
+
+            config_path = root / "camera-recorder.json"
+            local_path = root / "camera-recorder.local.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {
+                            "log_dir": str(log_dir),
+                            "process_name": "HxRun.exe",
+                        },
+                        "storage": {
+                            "runs_root": str(runs_root),
+                            "recorder_log_dir": str(logs_root),
+                            "retention": {
+                                "cleanup_on_run_complete": True,
+                            },
+                        },
+                        "central_ingest": {
+                            "staging_root": str(staging_root),
+                            "upload_root": str(upload_root),
+                            "transport": "filesystem",
+                            "auto_upload_on_run_complete": True,
+                        },
+                        "recorder": {
+                            "stop_file": str(root / "recorder.stop"),
+                        },
+                        "daemon": {
+                            "stop_file": str(root / "daemon.stop"),
+                            "pid_file": str(root / "daemon.pid"),
+                            "status_path": str(root / "daemon-status.json"),
+                            "log_path": str(root / "daemon.log"),
+                        },
+                        "profiles": [
+                            {
+                                "id": "default",
+                                "label": "BenchCam",
+                                "source": 'dshow:video="Bench Cam"',
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            cleanup_calls: list[dict] = []
+            original_stage_runs = DAEMON.stage_runs
+            original_upload_staged_runs = DAEMON.upload_staged_runs
+            original_cleanup_runs = DAEMON.cleanup_runs
+            try:
+                DAEMON.stage_runs = lambda **kwargs: {
+                    "batch_id": "stage-1",
+                    "staged_run_count": 1,
+                    "skipped_run_count": 0,
+                }
+                DAEMON.upload_staged_runs = lambda **kwargs: {
+                    "ingest_batch_id": "upload-1",
+                    "uploaded_run_count": 1,
+                    "failed_run_count": 0,
+                }
+
+                def fake_cleanup_runs(**kwargs):
+                    cleanup_calls.append(kwargs)
+                    return {"deleted_run_count": 1}
+
+                DAEMON.cleanup_runs = fake_cleanup_runs
+
+                result = DAEMON.run_post_run_central_ingest(
+                    config_path=config_path,
+                    local_config_path=local_path,
+                    daemon_log_path=root / "daemon.log",
+                )
+            finally:
+                DAEMON.stage_runs = original_stage_runs
+                DAEMON.upload_staged_runs = original_upload_staged_runs
+                DAEMON.cleanup_runs = original_cleanup_runs
+
+            self.assertEqual(result["stage"]["batch_id"], "stage-1")
+            self.assertEqual(result["upload"]["ingest_batch_id"], "upload-1")
+            self.assertIsNone(result["cleanup"])
+            self.assertEqual(cleanup_calls, [])
+
     def test_supervisor_skips_auto_upload_after_failed_cycle(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

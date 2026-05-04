@@ -303,7 +303,13 @@ def ensure_central_artifact(
     target_path.parent.mkdir(parents=True, exist_ok=True)
     if not target_path.exists():
         shutil.copy2(source_path, target_path)
-        return {"action": "copied_missing", "verified": False}
+        copied_sha256 = compute_sha256(target_path)
+        if copied_sha256 != expected_sha256:
+            raise RuntimeError(
+                f"Central artifact verification failed after initial copy for {target_path}: "
+                f"expected {expected_sha256}, got {copied_sha256}"
+            )
+        return {"action": "copied_missing", "verified": True}
 
     existing_sha256 = compute_sha256(target_path)
     if existing_sha256 == expected_sha256:
