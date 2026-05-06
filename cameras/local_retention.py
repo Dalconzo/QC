@@ -54,6 +54,7 @@ def build_local_retention_payload(
     manifest_payload: dict,
     enabled: bool,
     retention_days: int,
+    derived_retention_days: int,
     require_upload_ack: bool,
     require_local_compaction: bool,
 ) -> dict:
@@ -62,6 +63,7 @@ def build_local_retention_payload(
         {
             "enabled": bool(enabled),
             "retention_days": int(retention_days),
+            "derived_retention_days": int(derived_retention_days),
             "require_upload_ack": bool(require_upload_ack),
             "require_local_compaction": bool(require_local_compaction),
         }
@@ -80,6 +82,7 @@ def initialize_local_retention(
     *,
     enabled: bool,
     retention_days: int,
+    derived_retention_days: int,
     require_upload_ack: bool,
     require_local_compaction: bool,
 ) -> dict:
@@ -87,6 +90,7 @@ def initialize_local_retention(
         manifest_payload=manifest_payload,
         enabled=enabled,
         retention_days=retention_days,
+        derived_retention_days=derived_retention_days,
         require_upload_ack=require_upload_ack,
         require_local_compaction=require_local_compaction,
     )
@@ -172,6 +176,53 @@ def evaluate_cleanup(manifest_payload: dict, *, now_local: dt.datetime | None = 
     return ("eligible", "eligible_for_deletion")
 
 
+def _iter_local_derived_paths(manifest_payload: dict) -> list[Path]:
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for segment in manifest_payload.get("segments") or []:
+        path_text = str(segment.get("derived_video_path") or "")
+        if path_text and path_text not in seen:
+            seen.add(path_text)
+            paths.append(Path(path_text))
+    for item in (manifest_payload.get("local_compaction") or {}).get("segment_derivatives") or []:
+        path_text = str((item or {}).get("video_path") or "")
+        if path_text and path_text not in seen:
+            seen.add(path_text)
+            paths.append(Path(path_text))
+    return paths
+
+
+def evaluate_derived_cleanup(manifest_payload: dict, *, now_local: dt.datetime | None = None) -> tuple[str, str]:
+    retention = manifest_payload.get("local_retention") or {}
+    if not bool(retention.get("enabled", False)):
+        return ("disabled", "retention_disabled")
+    if retention.get("derived_deleted_at_local"):
+        return ("already_deleted", "derived_already_deleted")
+    derived_paths = _iter_local_derived_paths(manifest_payload)
+    if not any(path.exists() for path in derived_paths):
+        return ("missing_derived", "derived_missing")
+
+    video_path = Path(str(manifest_payload.get("video_path") or ""))
+    if str(video_path) and video_path.exists() and not retention.get("original_deleted_at_local"):
+        return ("blocked", "original_still_retained")
+
+    if bool(retention.get("require_upload_ack", True)) and retention.get("upload_status") != "acknowledged":
+        return ("blocked", "upload_not_acknowledged")
+
+    if bool(retention.get("require_local_compaction", False)):
+        compaction_status = str((manifest_payload.get("local_compaction") or {}).get("status") or "")
+        if compaction_status != "succeeded":
+            return ("blocked", "local_compaction_not_ready")
+
+    eligible_text = str(retention.get("derived_delete_eligible_at_local") or "")
+    eligible_at = _parse_local_timestamp(eligible_text)
+    if eligible_at is None:
+        return ("blocked", "derived_delete_window_not_ready")
+    if local_now(now_local) < eligible_at:
+        return ("blocked", "derived_retention_window_not_elapsed")
+    return ("eligible", "derived_eligible_for_deletion")
+
+
 def evaluate_emergency_cleanup(manifest_payload: dict) -> tuple[str, str]:
     retention = manifest_payload.get("local_retention") or {}
     if not bool(retention.get("enabled", False)):
@@ -235,6 +286,70 @@ def _apply_cleanup_result(
         result["deleted_bytes"] = deleted_bytes
 
     payload["local_retention"] = retention
+    write_manifest(manifest_path, payload)
+    return result
+
+
+def _apply_derived_cleanup_result(
+    manifest_path: Path,
+    payload: dict,
+    *,
+    action: str,
+    reason: str,
+    now_local: dt.datetime | None = None,
+    delete: bool = True,
+    mode: str = "normal",
+) -> dict:
+    retention = dict(payload.get("local_retention") or DEFAULT_LOCAL_RETENTION)
+    derived_paths = _iter_local_derived_paths(payload)
+    result = {
+        "manifest_path": str(manifest_path.resolve()),
+        "video_path": "",
+        "action": action,
+        "reason": reason,
+        "deleted_bytes": 0,
+        "mode": mode,
+        "artifact_kind": "derived",
+    }
+
+    retention["last_cleanup_at_local"] = local_now_text(now_local)
+    retention["last_cleanup_action"] = action
+    retention["last_cleanup_mode"] = mode
+    retention["last_cleanup_reason"] = reason
+
+    if action == "eligible" and delete:
+        deleted_bytes = 0
+        deleted_any = False
+        for path in derived_paths:
+            try:
+                if path.exists():
+                    deleted_bytes += path.stat().st_size
+                    path.unlink(missing_ok=True)
+                    deleted_any = True
+            except Exception:
+                continue
+        artifacts_root = Path(str((payload.get("local_compaction") or {}).get("artifacts_root") or ""))
+        if artifacts_root.exists():
+            try:
+                next(artifacts_root.iterdir())
+            except StopIteration:
+                artifacts_root.rmdir()
+            except Exception:
+                pass
+        if deleted_any:
+            retention["derived_deleted_at_local"] = local_now_text(now_local)
+            retention["derived_total_size_bytes"] = 0
+            result["action"] = "deleted"
+            result["reason"] = "derived_eligible_for_deletion"
+            result["deleted_bytes"] = deleted_bytes
+            retention["last_cleanup_action"] = "deleted"
+            retention["last_cleanup_reason"] = "derived_eligible_for_deletion"
+
+    payload["local_retention"] = retention
+    payload["local_compaction"] = {
+        **dict(payload.get("local_compaction") or {}),
+        "total_derived_size_bytes": int(retention.get("derived_total_size_bytes") or 0),
+    }
     write_manifest(manifest_path, payload)
     return result
 
@@ -304,6 +419,8 @@ def cleanup_runs(
     blocked_count = 0
     missing_count = 0
     deleted_bytes = 0
+    deleted_original_run_count = 0
+    deleted_derived_run_count = 0
     emergency_deleted_count = 0
     emergency_deleted_bytes = 0
     original_bytes = 0
@@ -329,6 +446,7 @@ def cleanup_runs(
             items.append(result)
             if result["action"] == "deleted":
                 deleted_count += 1
+                deleted_original_run_count += 1
                 deleted_bytes += int(result["deleted_bytes"] or 0)
             elif result["action"] == "eligible":
                 eligible_count += 1
@@ -336,6 +454,22 @@ def cleanup_runs(
                 missing_count += 1
             elif result["action"] == "blocked":
                 blocked_count += 1
+            payload = load_manifest(manifest_path)
+            derived_action, derived_reason = evaluate_derived_cleanup(payload, now_local=now_local)
+            derived_result = _apply_derived_cleanup_result(
+                manifest_path,
+                payload,
+                action=derived_action,
+                reason=derived_reason,
+                now_local=now_local,
+                delete=delete,
+                mode="normal",
+            )
+            items.append(derived_result)
+            if derived_result["action"] == "deleted":
+                deleted_count += 1
+                deleted_derived_run_count += 1
+                deleted_bytes += int(derived_result["deleted_bytes"] or 0)
         emergency_candidates.append((manifest_path, payload))
 
     disk_mid = disk_usage_fn(usage_root)
@@ -374,6 +508,8 @@ def cleanup_runs(
     return {
         "scanned_run_count": scanned_count,
         "deleted_run_count": deleted_count,
+        "deleted_original_run_count": deleted_original_run_count,
+        "deleted_derived_run_count": deleted_derived_run_count,
         "eligible_run_count": eligible_count,
         "blocked_run_count": blocked_count,
         "missing_original_run_count": missing_count,

@@ -182,8 +182,12 @@ class CameraRecorderTests(unittest.TestCase):
             manifest_path = root / "run.run.json"
             video_path = root / "run.mp4"
             trace_path = root / "run.trc"
+            derived_root = root / "run.derived"
+            derived_root.mkdir()
+            derived_path = derived_root / "idle-001_idle.mp4"
             video_path.write_bytes(b"x" * 2048)
             trace_path.write_text("trace", encoding="utf-8")
+            derived_path.write_bytes(b"x" * 1024)
 
             run_window = RECORDER.build_run_window(
                 capture_started_at=dt.datetime(2026, 4, 16, 12, 0, 0),
@@ -223,6 +227,7 @@ class CameraRecorderTests(unittest.TestCase):
             self.assertEqual(payload["local_compaction"]["status"], "not_requested")
             self.assertEqual(payload["local_retention"]["upload_status"], "pending")
             self.assertEqual(payload["local_retention"]["retention_days"], 7)
+            self.assertEqual(payload["local_retention"]["derived_retention_days"], 30)
 
     def test_write_run_manifest_persists_local_compaction_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -230,8 +235,12 @@ class CameraRecorderTests(unittest.TestCase):
             manifest_path = root / "run.run.json"
             video_path = root / "run.mp4"
             trace_path = root / "run.trc"
+            derived_root = root / "run.derived"
+            derived_root.mkdir()
+            derived_path = derived_root / "idle-001_idle.mp4"
             video_path.write_bytes(b"x" * 2048)
             trace_path.write_text("trace", encoding="utf-8")
+            derived_path.write_bytes(b"x" * 1024)
 
             run_window = RECORDER.build_run_window(
                 capture_started_at=dt.datetime(2026, 4, 16, 12, 0, 0),
@@ -255,15 +264,15 @@ class CameraRecorderTests(unittest.TestCase):
                     "video_path": str(video_path.resolve()),
                     "video_encoding_profile": "source_full_run",
                     "is_skipped_by_default": True,
-                    "derived_video_path": str((root / "run.derived" / "idle-001_idle.mp4").resolve()),
-                    "derived_video_filename": "idle-001_idle.mp4",
+                    "derived_video_path": str(derived_path.resolve()),
+                    "derived_video_filename": derived_path.name,
                     "derived_video_encoding_profile": "derived_idle_h264_2fps",
                     "derived_size_bytes": 1024,
                 }
             ]
             local_compaction = {
                 "status": "succeeded",
-                "artifacts_root": str((root / "run.derived").resolve()),
+                "artifacts_root": str(derived_root.resolve()),
                 "generated_at_local": "2026-04-16T12:08:30",
                 "failure": "",
                 "source_video_path": str(video_path.resolve()),
@@ -273,8 +282,8 @@ class CameraRecorderTests(unittest.TestCase):
                     {
                         "segment_id": "idle-001",
                         "kind": "idle",
-                        "video_path": str((root / "run.derived" / "idle-001_idle.mp4").resolve()),
-                        "video_filename": "idle-001_idle.mp4",
+                        "video_path": str(derived_path.resolve()),
+                        "video_filename": derived_path.name,
                         "video_encoding_profile": "derived_idle_h264_2fps",
                         "size_bytes": 1024,
                     }
@@ -301,6 +310,7 @@ class CameraRecorderTests(unittest.TestCase):
             self.assertEqual(payload["storage_tier"], "full_run_plus_local_derivatives")
             self.assertEqual(payload["local_compaction"]["status"], "succeeded")
             self.assertEqual(payload["local_retention"]["derived_total_size_bytes"], 1024)
+            self.assertEqual(payload["local_retention"]["derived_retention_days"], 30)
             self.assertEqual(payload["segments"][0]["derived_video_filename"], "idle-001_idle.mp4")
             self.assertEqual(payload["local_compaction"]["segment_derivatives"][0]["video_encoding_profile"], "derived_idle_h264_2fps")
 

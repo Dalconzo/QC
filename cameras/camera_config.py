@@ -44,6 +44,7 @@ DEFAULT_CONFIG = {
         "retention": {
             "enabled": True,
             "original_retention_days": 7,
+            "derived_retention_days": 30,
             "require_upload_ack": True,
             "require_local_compaction": False,
             "cleanup_on_run_complete": True,
@@ -402,6 +403,8 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     else:
         if int(retention.get("original_retention_days", 0) or 0) < 0:
             errors.append("storage.retention.original_retention_days cannot be negative.")
+        if int(retention.get("derived_retention_days", 0) or 0) < 0:
+            errors.append("storage.retention.derived_retention_days cannot be negative.")
         emergency = retention.get("emergency") or {}
         if not isinstance(emergency, dict):
             errors.append("storage.retention.emergency must be an object when provided.")

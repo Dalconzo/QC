@@ -27,6 +27,7 @@
     "retention": {
       "enabled": true,
       "original_retention_days": 7,
+      "derived_retention_days": 30,
       "require_upload_ack": true,
       "require_local_compaction": false,
       "cleanup_on_run_complete": true,

@@ -72,6 +72,7 @@ class CameraToolingTests(unittest.TestCase):
             payload = json.loads(result.stdout)
             self.assertEqual(payload["contract_status"]["replay_manifest_version"], "hybrid-replay.v1")
             self.assertIn("trace_segments", payload["contract_status"]["replay_capabilities"])
+            self.assertEqual(payload["contract_status"]["derived_retention_days"], 30)
             self.assertIn("git_commit_short", payload["deployment"])
 
     def test_manifest_inspector_reports_missing_video(self) -> None:
@@ -210,6 +211,7 @@ class CameraToolingTests(unittest.TestCase):
             self.assertEqual(item["playback_status"], "ready_segments_only")
             self.assertEqual(item["local_derived_segment_count"], 1)
             self.assertTrue(item["lan_available"])
+            self.assertEqual(item["derived_deleted_at_local"], "")
 
     def test_camera_probe_script_uses_capture_hook(self) -> None:
         original_capture = PROBE_MODULE.capture_live_frame
@@ -235,6 +237,7 @@ class CameraToolingTests(unittest.TestCase):
                     "retention": {
                         "enabled": True,
                         "original_retention_days": 7,
+                        "derived_retention_days": 30,
                         "require_upload_ack": True,
                         "require_local_compaction": False,
                         "cleanup_on_run_complete": True,

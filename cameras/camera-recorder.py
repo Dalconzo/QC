@@ -1079,6 +1079,7 @@ def main() -> int:
         },
         enabled=bool(retention_config.get("enabled", True)),
         retention_days=int(retention_config.get("original_retention_days", 7) or 7),
+        derived_retention_days=int(retention_config.get("derived_retention_days", 30) or 30),
         require_upload_ack=bool(retention_config.get("require_upload_ack", True)),
         require_local_compaction=bool(retention_config.get("require_local_compaction", False)),
     )

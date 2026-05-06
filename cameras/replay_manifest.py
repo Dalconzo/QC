@@ -37,6 +37,7 @@ DEFAULT_LOCAL_COMPACTION = {
 DEFAULT_LOCAL_RETENTION = {
     "enabled": True,
     "retention_days": 7,
+    "derived_retention_days": 30,
     "require_upload_ack": True,
     "require_local_compaction": False,
     "upload_status": "pending",
@@ -51,6 +52,9 @@ DEFAULT_LOCAL_RETENTION = {
     "retain_until_local": "",
     "original_delete_eligible_at_local": "",
     "original_deleted_at_local": "",
+    "derived_retain_until_local": "",
+    "derived_delete_eligible_at_local": "",
+    "derived_deleted_at_local": "",
     "last_cleanup_at_local": "",
     "last_cleanup_action": "",
     "last_cleanup_mode": "",
@@ -202,7 +206,22 @@ def summarize_playback_availability(manifest_payload: dict) -> dict:
         "lan_available": lan_available,
         "central_run_id": str(retention.get("central_run_id") or ""),
         "original_deleted_at_local": str(retention.get("original_deleted_at_local") or ""),
+        "derived_deleted_at_local": str(retention.get("derived_deleted_at_local") or ""),
     }
+
+
+def determine_storage_tier(manifest_payload: dict) -> str:
+    """Describe the currently available local/LAN replay tier for the run."""
+    playback = summarize_playback_availability(manifest_payload)
+    if playback["full_source_available"] and playback["local_derived_segment_count"] > 0:
+        return "full_run_plus_local_derivatives"
+    if playback["full_source_available"]:
+        return "full_run_source"
+    if playback["local_derived_segment_count"] > 0:
+        return "local_derived_hot"
+    if playback["lan_available"]:
+        return "lan_archive_only"
+    return "metadata_only"
 
 
 def compute_run_id(manifest_path: Path, payload: dict) -> str:
@@ -269,6 +288,7 @@ def normalize_replay_manifest_payload(payload: dict, *, manifest_path: Path | No
     enriched["segments"] = normalized_segments
     enriched["idle_segment_count"] = sum(1 for item in normalized_segments if item.get("kind") == "idle")
     enriched["active_segment_count"] = sum(1 for item in normalized_segments if item.get("kind") == "active")
+    enriched["storage_tier"] = determine_storage_tier(enriched)
 
     if manifest_path is not None:
         enriched["run_id"] = compute_run_id(manifest_path, enriched)
@@ -460,6 +480,7 @@ def _normalize_local_retention(raw_value, *, payload: dict) -> dict:
         or 0
     )
     retention_days = int(raw_value.get("retention_days") or DEFAULT_LOCAL_RETENTION["retention_days"])
+    derived_retention_days = int(raw_value.get("derived_retention_days") or DEFAULT_LOCAL_RETENTION["derived_retention_days"])
     require_upload_ack = bool(
         raw_value.get("require_upload_ack")
         if "require_upload_ack" in raw_value
@@ -475,6 +496,9 @@ def _normalize_local_retention(raw_value, *, payload: dict) -> dict:
     retain_until_local = ""
     if stopped_at_local is not None:
         retain_until_local = (stopped_at_local + dt.timedelta(days=retention_days)).isoformat(timespec="seconds")
+    derived_retain_until_local = ""
+    if stopped_at_local is not None:
+        derived_retain_until_local = (stopped_at_local + dt.timedelta(days=derived_retention_days)).isoformat(timespec="seconds")
 
     upload_completed_at_utc = str(raw_value.get("upload_completed_at_utc") or "")
     upload_completed_local = _parse_utc_datetime(upload_completed_at_utc)
@@ -503,9 +527,31 @@ def _normalize_local_retention(raw_value, *, payload: dict) -> dict:
     if eligibility_candidates:
         eligible_at_local = max(eligibility_candidates).isoformat(timespec="seconds")
 
+    derived_eligible_at_local = ""
+    derived_eligibility_candidates: list[dt.datetime] = []
+    if derived_retain_until_local and derived_total_size_bytes > 0:
+        derived_retain_until_dt = _parse_local_datetime(derived_retain_until_local)
+        if derived_retain_until_dt is not None:
+            derived_eligibility_candidates.append(derived_retain_until_dt)
+    if require_upload_ack:
+        if upload_status == "acknowledged" and upload_completed_local is not None:
+            derived_eligibility_candidates.append(upload_completed_local)
+        else:
+            derived_eligibility_candidates = []
+    if require_local_compaction:
+        if compaction_status == "succeeded":
+            generated_at = _parse_local_datetime(str(local_compaction.get("generated_at_local") or ""))
+            if generated_at is not None:
+                derived_eligibility_candidates.append(generated_at)
+        else:
+            derived_eligibility_candidates = []
+    if derived_eligibility_candidates:
+        derived_eligible_at_local = max(derived_eligibility_candidates).isoformat(timespec="seconds")
+
     return {
         "enabled": bool(raw_value.get("enabled") if "enabled" in raw_value else DEFAULT_LOCAL_RETENTION["enabled"]),
         "retention_days": retention_days,
+        "derived_retention_days": derived_retention_days,
         "require_upload_ack": require_upload_ack,
         "require_local_compaction": require_local_compaction,
         "upload_status": upload_status,
@@ -522,6 +568,11 @@ def _normalize_local_retention(raw_value, *, payload: dict) -> dict:
             raw_value.get("original_delete_eligible_at_local") or eligible_at_local
         ),
         "original_deleted_at_local": str(raw_value.get("original_deleted_at_local") or ""),
+        "derived_retain_until_local": str(raw_value.get("derived_retain_until_local") or derived_retain_until_local),
+        "derived_delete_eligible_at_local": str(
+            raw_value.get("derived_delete_eligible_at_local") or derived_eligible_at_local
+        ),
+        "derived_deleted_at_local": str(raw_value.get("derived_deleted_at_local") or ""),
         "last_cleanup_at_local": str(raw_value.get("last_cleanup_at_local") or ""),
         "last_cleanup_action": str(raw_value.get("last_cleanup_action") or ""),
         "last_cleanup_mode": str(raw_value.get("last_cleanup_mode") or ""),

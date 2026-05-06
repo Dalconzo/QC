@@ -35,6 +35,10 @@ class LocalRetentionTests(unittest.TestCase):
         video_path.write_bytes(b"x" * 4096)
         trace_path = root / "run.trc"
         trace_path.write_text("trace", encoding="utf-8")
+        derived_root = root / "run.derived"
+        derived_root.mkdir()
+        derived_path = derived_root / "idle-001.mp4"
+        derived_path.write_bytes(b"d" * 1024)
         manifest_path = root / "run.run.json"
         payload = {
             "label": "demo",
@@ -53,19 +57,47 @@ class LocalRetentionTests(unittest.TestCase):
             "trace_mtime_delta_sec": 1.5,
             "local_compaction": {
                 "status": "succeeded",
-                "artifacts_root": "",
+                "artifacts_root": str(derived_root.resolve()),
                 "generated_at_local": "2026-04-10T10:02:00",
                 "failure": "",
                 "source_video_path": str(video_path.resolve()),
                 "source_video_size_bytes": 4096,
                 "total_derived_size_bytes": 1024,
-                "segment_derivatives": [],
+                "segment_derivatives": [
+                    {
+                        "segment_id": "idle-001",
+                        "kind": "idle",
+                        "video_path": str(derived_path.resolve()),
+                        "video_filename": derived_path.name,
+                        "video_encoding_profile": "derived_idle_h264_2fps",
+                        "size_bytes": 1024,
+                    }
+                ],
             },
+            "segments": [
+                {
+                    "segment_id": "idle-001",
+                    "kind": "idle",
+                    "start_offset_sec": 0,
+                    "stop_offset_sec": 300,
+                    "duration_sec": 300,
+                    "phase_label": "Idle",
+                    "phase_source": "trace",
+                    "video_path": str(video_path.resolve()),
+                    "video_encoding_profile": "source_full_run",
+                    "is_skipped_by_default": True,
+                    "derived_video_path": str(derived_path.resolve()),
+                    "derived_video_filename": derived_path.name,
+                    "derived_video_encoding_profile": "derived_idle_h264_2fps",
+                    "derived_size_bytes": 1024,
+                }
+            ],
         }
         initialized = RETENTION.initialize_local_retention(
             payload,
             enabled=True,
             retention_days=7,
+            derived_retention_days=30,
             require_upload_ack=True,
             require_local_compaction=False,
         )
@@ -88,6 +120,8 @@ class LocalRetentionTests(unittest.TestCase):
             self.assertEqual(retention["central_run_id"], "central-run-1")
             self.assertEqual(retention["retain_until_local"], "2026-04-17T10:01:00")
             self.assertEqual(retention["original_delete_eligible_at_local"], "2026-04-17T10:01:00")
+            self.assertEqual(retention["derived_retain_until_local"], "2026-05-10T10:01:00")
+            self.assertEqual(retention["derived_delete_eligible_at_local"], "2026-05-10T10:01:00")
 
     def test_cleanup_deletes_only_after_upload_and_retention_window(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -108,8 +142,10 @@ class LocalRetentionTests(unittest.TestCase):
 
             self.assertEqual(result["action"], "deleted")
             self.assertFalse((root / "run.mp4").exists())
+            self.assertTrue((root / "run.derived" / "idle-001.mp4").exists())
             payload = RETENTION.load_manifest(manifest_path)
             self.assertTrue(payload["local_retention"]["original_deleted_at_local"])
+            self.assertFalse(payload["local_retention"]["derived_deleted_at_local"])
 
     def test_cleanup_blocks_when_upload_ack_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -196,6 +232,7 @@ class LocalRetentionTests(unittest.TestCase):
                 payload,
                 enabled=True,
                 retention_days=7,
+                derived_retention_days=30,
                 require_upload_ack=False,
                 require_local_compaction=False,
             )
@@ -221,6 +258,34 @@ class LocalRetentionTests(unittest.TestCase):
 
             self.assertEqual(result["emergency_deleted_run_count"], 1)
             self.assertFalse((root / "run.mp4").exists())
+
+    def test_normal_cleanup_deletes_derived_hot_storage_after_original_window(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest_path = self.write_manifest(root, stopped_at="2026-04-10T10:01:00")
+            RETENTION.record_upload_ack(
+                manifest_path,
+                central_run_id="central-run-1",
+                acknowledged_at_utc="2026-04-11T00:00:00Z",
+                ack_path=str(root / "run-ack.json"),
+            )
+            (root / "run.mp4").unlink()
+            payload = RETENTION.load_manifest(manifest_path)
+            payload["local_retention"]["original_deleted_at_local"] = "2026-04-17T10:01:00"
+            manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+            result = RETENTION.cleanup_runs(
+                runs_root=root,
+                now_local=dt.datetime(2026, 5, 11, 9, 0, 0),
+                delete=True,
+                emergency_config={"enabled": False},
+            )
+
+            self.assertEqual(result["deleted_derived_run_count"], 1)
+            self.assertFalse((root / "run.derived" / "idle-001.mp4").exists())
+            updated = RETENTION.load_manifest(manifest_path)
+            self.assertTrue(updated["local_retention"]["derived_deleted_at_local"])
+            self.assertEqual(updated["local_retention"]["derived_total_size_bytes"], 0)
 
 
 if __name__ == "__main__":

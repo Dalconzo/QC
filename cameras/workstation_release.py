@@ -54,6 +54,7 @@ def build_contract_status(config: dict) -> dict:
         "local_compaction_enabled": bool(compaction.get("enabled", False)),
         "retention_enabled": bool(retention.get("enabled", False)),
         "original_retention_days": int(retention.get("original_retention_days", 0) or 0),
+        "derived_retention_days": int(retention.get("derived_retention_days", 0) or 0),
         "require_upload_ack": bool(retention.get("require_upload_ack", True)),
         "require_local_compaction": bool(retention.get("require_local_compaction", False)),
         "cleanup_on_run_complete": bool(retention.get("cleanup_on_run_complete", False)),

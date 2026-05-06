@@ -118,6 +118,8 @@ def canonicalize_manifest_for_staging(payload: dict) -> dict:
             "lan_available",
             "original_delete_eligible_at_local",
             "original_deleted_at_local",
+            "derived_delete_eligible_at_local",
+            "derived_deleted_at_local",
             "last_cleanup_at_local",
             "last_cleanup_action",
             "last_cleanup_mode",
