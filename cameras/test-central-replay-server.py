@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import io
 import json
 import sqlite3
 import sys
@@ -38,6 +39,31 @@ UPLOAD_HELPER = load_module(UPLOAD_HELPER_PATH, "camera_upload_central_replay_he
 
 
 class CentralReplayServerTests(unittest.TestCase):
+    def test_stream_file_handle_uses_bounded_reads(self) -> None:
+        class RecordingBytesIO(io.BytesIO):
+            def __init__(self, payload: bytes):
+                super().__init__(payload)
+                self.read_sizes: list[int] = []
+
+            def read(self, size: int = -1) -> bytes:
+                self.read_sizes.append(size)
+                if size < 0:
+                    raise AssertionError("stream_file_handle requested an unbounded read")
+                return super().read(size)
+
+        payload = b"0123456789"
+        reader = RecordingBytesIO(payload)
+        writer = io.BytesIO()
+        SERVER_MODULE.stream_file_handle(reader, writer, chunk_size=4)
+        self.assertEqual(writer.getvalue(), payload)
+        self.assertEqual(reader.read_sizes, [4, 4, 4, 4])
+
+        ranged_reader = RecordingBytesIO(payload)
+        ranged_writer = io.BytesIO()
+        SERVER_MODULE.stream_file_handle(ranged_reader, ranged_writer, start=2, byte_count=5, chunk_size=4)
+        self.assertEqual(ranged_writer.getvalue(), b"23456")
+        self.assertEqual(ranged_reader.read_sizes, [4, 1])
+
     def test_runtime_settings_use_server_config_and_catalog_convention(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -279,6 +305,23 @@ class CentralReplayServerTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=5)
 
+    def test_media_endpoint_serves_full_files_without_range(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            upload_root, central_run_id = self.create_catalog_fixture(Path(tmpdir))
+            server, thread = self.start_server(upload_root)
+            try:
+                detail = self.fetch_json(f"http://127.0.0.1:{server.server_port}/api/runs/{central_run_id}")
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{server.server_port}{detail['run']['video_url']}"
+                ) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.headers.get("Content-Length"), "22")
+                    self.assertEqual(response.read(), b"\x00\x00\x00 ftypisomdemo-video")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
     def test_status_posts_surface_pending_runs_before_upload(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             upload_root = Path(tmpdir) / "central"
@@ -371,6 +414,119 @@ class CentralReplayServerTests(unittest.TestCase):
                 self.assertEqual(workstations["items"][0]["current_state"], "offline")
                 self.assertEqual(workstations["items"][0]["last_reported_state"], "pending_upload")
                 self.assertEqual(workstations["items"][0]["upload_phase"], "")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_runs_can_filter_by_camera_profile_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            upload_root = Path(tmpdir) / "central"
+            upload_root.mkdir(parents=True, exist_ok=True)
+            server, thread = self.start_server(upload_root)
+            try:
+                base_url = f"http://127.0.0.1:{server.server_port}"
+                workstation = {
+                    "workstation_id": "bench-1",
+                    "hostname": "BENCH-1",
+                    "machine_alias": "Bench 1",
+                    "repo_root": "C:\\camera-tools",
+                    "local_ip": "192.168.70.55",
+                    "software_version": "camera-daemon.jdp.v1",
+                }
+
+                default_payload = {
+                    "workstation": workstation,
+                    "camera_profile": {
+                        "profile_id": "default",
+                        "profile_key": "default",
+                        "profile_label": "Top Camera",
+                        "source_name": "Arducam USB Camera",
+                    },
+                    "status": {
+                        "state": "pending_upload",
+                        "upload_phase": "",
+                    },
+                    "run": {
+                        "local_run_id": "run-top",
+                        "label": "Top Camera",
+                        "source_name": "Arducam USB Camera",
+                        "process_gate": "HxRun.exe",
+                        "stop_reason": "process_exit",
+                        "started_at_local": "2026-04-19T09:15:00",
+                        "stopped_at_local": "2026-04-19T09:25:00",
+                        "duration_sec": 600,
+                        "hamilton_log_dir": "C:\\Program Files (x86)\\HAMILTON\\LogFiles",
+                        "hamilton_log_glob": "*.trc",
+                        "trace_pairing_delta_sec": 1.2,
+                        "local_manifest_path": "C:\\camera-tools\\runs\\run-top.run.json",
+                        "local_video_path": "C:\\camera-tools\\runs\\run-top.mp4",
+                        "local_trace_path": "C:\\camera-tools\\runs\\run-top.trc",
+                        "replay_status": "pending_upload",
+                    },
+                }
+                side_payload = {
+                    **default_payload,
+                    "camera_profile": {
+                        "profile_id": "side",
+                        "profile_key": "side",
+                        "profile_label": "Side Camera",
+                        "source_name": "Logitech C920",
+                    },
+                    "run": {
+                        **default_payload["run"],
+                        "local_run_id": "run-side",
+                        "label": "Side Camera",
+                        "local_manifest_path": "C:\\camera-tools\\runs\\run-side.run.json",
+                        "local_video_path": "C:\\camera-tools\\runs\\run-side.mp4",
+                        "local_trace_path": "C:\\camera-tools\\runs\\run-side.trc",
+                    },
+                }
+
+                self.post_json(f"{base_url}/api/runs/status", default_payload)
+                self.post_json(f"{base_url}/api/runs/status", side_payload)
+
+                runs = self.fetch_json(f"{base_url}/api/runs?camera_profile_id=bench-1:side")
+                self.assertEqual(runs["filters"]["camera_profile_id"], "bench-1:side")
+                self.assertEqual(len(runs["items"]), 1)
+                self.assertEqual(runs["items"][0]["camera_profile_id"], "bench-1:side")
+                self.assertEqual(runs["items"][0]["label"], "Side Camera")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_uploaded_run_detail_reports_missing_required_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            upload_root, central_run_id = self.create_catalog_fixture(Path(tmpdir))
+            catalog_path = upload_root / UPLOAD_HELPER.CENTRAL_CATALOG_FILENAME
+            with closing(sqlite3.connect(catalog_path)) as conn:
+                conn.execute(
+                    """
+                    DELETE FROM artifacts
+                    WHERE central_run_id = ? AND artifact_type = 'trace_trc'
+                    """,
+                    (central_run_id,),
+                )
+                conn.commit()
+
+            server, thread = self.start_server(upload_root)
+            try:
+                detail = self.fetch_json(f"http://127.0.0.1:{server.server_port}/api/runs/{central_run_id}")
+                self.assertEqual(detail["run"]["missing_required_artifact_count"], 1)
+                self.assertEqual(detail["run"]["missing_required_artifact_types"], ["trace_trc"])
+                self.assertFalse(detail["run"]["has_all_required_artifacts"])
+
+                trace_artifact = next(
+                    item for item in detail["artifacts"] if item["artifact_type"] == "trace_trc"
+                )
+                self.assertFalse(trace_artifact["is_ready"])
+                self.assertEqual(trace_artifact["storage_relpath"], "")
+                self.assertEqual(trace_artifact["media_url"], "")
+
+                runs = self.fetch_json(f"http://127.0.0.1:{server.server_port}/api/runs")
+                self.assertEqual(runs["items"][0]["missing_required_artifact_count"], 1)
+                self.assertEqual(runs["items"][0]["missing_required_artifact_types"], ["trace_trc"])
             finally:
                 server.shutdown()
                 server.server_close()

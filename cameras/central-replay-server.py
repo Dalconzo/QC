@@ -33,6 +33,12 @@ DEFAULT_SERVER_CONFIG_PATH = REPO_ROOT / "config" / "central-replay-server.json"
 DEFAULT_SERVER_LOCAL_CONFIG_PATH = REPO_ROOT / "config" / "central-replay-server.local.json"
 TRACE_LINE_RE = re.compile(r"^(?P<stamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})> ?(?P<body>.*)$")
 PENDING_RUN_PREFIX = "pending-run:"
+FILE_STREAM_CHUNK_SIZE = 1024 * 1024
+REQUIRED_ARTIFACT_TYPES = (
+    ("run_manifest_json", "application/json"),
+    ("video_mp4", "video/mp4"),
+    ("trace_trc", "text/plain"),
+)
 STATUS_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS workstation_runtime_status (
     workstation_id TEXT PRIMARY KEY,
@@ -297,6 +303,31 @@ def parse_trace_events(trace_path: Path) -> list[TraceEvent]:
     return events
 
 
+def stream_file_handle(
+    handle,
+    writer,
+    *,
+    start: int = 0,
+    byte_count: int | None = None,
+    chunk_size: int = FILE_STREAM_CHUNK_SIZE,
+) -> None:
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than 0")
+
+    if start:
+        handle.seek(start)
+
+    remaining = byte_count
+    while remaining is None or remaining > 0:
+        read_size = chunk_size if remaining is None else min(chunk_size, remaining)
+        chunk = handle.read(read_size)
+        if not chunk:
+            break
+        writer.write(chunk)
+        if remaining is not None:
+            remaining -= len(chunk)
+
+
 def get_db_connection(catalog_path: Path) -> sqlite3.Connection:
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(catalog_path)
@@ -338,11 +369,50 @@ def artifact_row_to_summary(artifact: sqlite3.Row) -> dict:
     }
 
 
+def append_missing_required_artifacts(artifacts: list[dict], central_run_id: str) -> list[dict]:
+    items = [dict(item) for item in artifacts]
+    by_type = {str(item["artifact_type"]): item for item in items}
+    for artifact_type, mime_type in REQUIRED_ARTIFACT_TYPES:
+        if artifact_type in by_type:
+            continue
+        items.append(
+            {
+                "artifact_id": f"{central_run_id}:{artifact_type}:missing",
+                "artifact_type": artifact_type,
+                "original_filename": "",
+                "storage_relpath": "",
+                "mime_type": mime_type,
+                "compression_kind": "none",
+                "content_sha256": "",
+                "size_bytes": 0,
+                "stored_at_utc": "",
+                "is_required": True,
+                "is_ready": False,
+                "media_url": "",
+            }
+        )
+    items.sort(key=lambda item: (str(item["artifact_type"]), str(item["original_filename"])))
+    return items
+
+
+def summarize_artifact_health(artifacts: list[dict]) -> dict:
+    required_artifacts = [item for item in artifacts if item.get("is_required")]
+    missing_required = [item for item in required_artifacts if not item.get("is_ready")]
+    return {
+        "required_artifact_count": len(required_artifacts),
+        "ready_artifact_count": sum(1 for item in required_artifacts if item.get("is_ready")),
+        "missing_required_artifact_count": len(missing_required),
+        "missing_required_artifact_types": [str(item["artifact_type"]) for item in missing_required],
+        "has_all_required_artifacts": len(missing_required) == 0,
+    }
+
+
 def summarize_run_row(row: sqlite3.Row, artifacts: list[dict]) -> dict:
     artifact_by_type = {item["artifact_type"]: item for item in artifacts}
     video_artifact = artifact_by_type.get("video_mp4")
     trace_artifact = artifact_by_type.get("trace_trc")
     manifest_artifact = artifact_by_type.get("run_manifest_json")
+    artifact_health = summarize_artifact_health(artifacts)
     return {
         "central_run_id": row["central_run_id"],
         "local_run_id": row["local_run_id"],
@@ -364,8 +434,11 @@ def summarize_run_row(row: sqlite3.Row, artifacts: list[dict]) -> dict:
         "idle_segment_count": row["idle_segment_count"],
         "active_segment_count": row["active_segment_count"],
         "replay_status": row["replay_status"],
-        "ready_artifact_count": row["ready_artifact_count"],
-        "required_artifact_count": row["required_artifact_count"],
+        "ready_artifact_count": artifact_health["ready_artifact_count"],
+        "required_artifact_count": artifact_health["required_artifact_count"],
+        "missing_required_artifact_count": artifact_health["missing_required_artifact_count"],
+        "missing_required_artifact_types": artifact_health["missing_required_artifact_types"],
+        "has_all_required_artifacts": artifact_health["has_all_required_artifacts"],
         "first_ingested_utc": row["first_ingested_utc"],
         "last_ingested_utc": row["last_ingested_utc"],
         "workstation_id": row["workstation_id"],
@@ -383,6 +456,8 @@ def summarize_run_row(row: sqlite3.Row, artifacts: list[dict]) -> dict:
 
 
 def summarize_pending_run_row(row: sqlite3.Row) -> dict:
+    artifacts = append_missing_required_artifacts([], str(row["pending_run_id"]))
+    artifact_health = summarize_artifact_health(artifacts)
     return {
         "central_run_id": row["pending_run_id"],
         "local_run_id": row["local_run_id"],
@@ -397,8 +472,11 @@ def summarize_pending_run_row(row: sqlite3.Row) -> dict:
         "hamilton_log_glob": row["hamilton_log_glob"],
         "trace_pairing_delta_sec": row["trace_pairing_delta_sec"],
         "replay_status": row["replay_status"],
-        "ready_artifact_count": 0,
-        "required_artifact_count": 3,
+        "ready_artifact_count": artifact_health["ready_artifact_count"],
+        "required_artifact_count": artifact_health["required_artifact_count"],
+        "missing_required_artifact_count": artifact_health["missing_required_artifact_count"],
+        "missing_required_artifact_types": artifact_health["missing_required_artifact_types"],
+        "has_all_required_artifacts": artifact_health["has_all_required_artifacts"],
         "first_ingested_utc": row["first_reported_utc"],
         "last_ingested_utc": row["last_reported_utc"],
         "workstation_id": row["workstation_id"],
@@ -781,6 +859,7 @@ def list_runs(
     catalog_path: Path,
     *,
     workstation_id: str = "",
+    camera_profile_id: str = "",
     replay_status: str = "",
     started_after: str = "",
     started_before: str = "",
@@ -825,6 +904,9 @@ def list_runs(
     if workstation_id:
         uploaded_query += " AND runs.workstation_id = ?"
         params.append(workstation_id)
+    if camera_profile_id:
+        uploaded_query += " AND runs.camera_profile_id = ?"
+        params.append(camera_profile_id)
     if replay_status:
         uploaded_query += " AND runs.replay_status = ?"
         params.append(replay_status)
@@ -879,6 +961,9 @@ def list_runs(
         if workstation_id:
             pending_query += " AND pending_runs.workstation_id = ?"
             pending_params.append(workstation_id)
+        if camera_profile_id:
+            pending_query += " AND pending_runs.camera_profile_id = ?"
+            pending_params.append(camera_profile_id)
         if replay_status:
             pending_query += " AND pending_runs.replay_status = ?"
             pending_params.append(replay_status)
@@ -894,7 +979,7 @@ def list_runs(
             pending_params.append(limit)
         pending_rows = conn.execute(pending_query, tuple(pending_params)).fetchall()
 
-        run_ids = [row["central_run_id"] for row in run_rows]
+        run_ids = [str(row["central_run_id"]) for row in run_rows]
         artifacts_by_run: dict[str, list[dict]] = {run_id: [] for run_id in run_ids}
         if run_ids:
             placeholders = ",".join("?" for _ in run_ids)
@@ -909,7 +994,8 @@ def list_runs(
             ).fetchall()
             for artifact in artifact_rows:
                 artifacts_by_run[str(artifact["central_run_id"])].append(artifact_row_to_summary(artifact))
-
+        for run_id in run_ids:
+            artifacts_by_run[run_id] = append_missing_required_artifacts(artifacts_by_run[run_id], run_id)
     items = [summarize_run_row(row, artifacts_by_run.get(str(row["central_run_id"]), [])) for row in run_rows]
     items.extend(summarize_pending_run_row(row) for row in pending_rows)
     items.sort(key=lambda item: ((item.get("started_at_local") or ""), (item.get("last_ingested_utc") or "")), reverse=True)
@@ -953,7 +1039,7 @@ def get_run_artifacts(catalog_path: Path, central_run_id: str) -> list[dict]:
                     "media_url": "",
                 }
             )
-        return items
+        return append_missing_required_artifacts(items, central_run_id)
     with closing(get_db_connection(catalog_path)) as conn:
         rows = conn.execute(
             """
@@ -964,7 +1050,7 @@ def get_run_artifacts(catalog_path: Path, central_run_id: str) -> list[dict]:
             """,
             (central_run_id,),
         ).fetchall()
-    return [artifact_row_to_summary(row) for row in rows]
+    return append_missing_required_artifacts([artifact_row_to_summary(row) for row in rows], central_run_id)
 
 
 def get_run_detail(catalog_path: Path, central_run_id: str) -> dict:
@@ -1264,8 +1350,7 @@ def make_handler(
                 self.send_header("Content-Length", str(length))
                 self.end_headers()
                 with path.open("rb") as handle:
-                    handle.seek(start)
-                    self.wfile.write(handle.read(length))
+                    stream_file_handle(handle, self.wfile, start=start, byte_count=length)
                 return
 
             self.send_response(HTTPStatus.OK)
@@ -1274,7 +1359,7 @@ def make_handler(
             self.send_header("Content-Length", str(file_size))
             self.end_headers()
             with path.open("rb") as handle:
-                self.wfile.write(handle.read())
+                stream_file_handle(handle, self.wfile)
 
         def do_GET(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
@@ -1305,6 +1390,7 @@ def make_handler(
 
                 if route == "/api/runs":
                     workstation_id = (params.get("workstation_id") or [""])[0].strip()
+                    camera_profile_id = (params.get("camera_profile_id") or [""])[0].strip()
                     replay_status = (params.get("replay_status") or [""])[0].strip()
                     started_after = (params.get("started_after") or [""])[0].strip()
                     started_before = (params.get("started_before") or [""])[0].strip()
@@ -1316,6 +1402,7 @@ def make_handler(
                     items = list_runs(
                         catalog_path,
                         workstation_id=workstation_id,
+                        camera_profile_id=camera_profile_id,
                         replay_status=replay_status,
                         started_after=started_after,
                         started_before=started_before,
@@ -1327,6 +1414,7 @@ def make_handler(
                             "catalog_path": str(catalog_path),
                             "filters": {
                                 "workstation_id": workstation_id,
+                                "camera_profile_id": camera_profile_id,
                                 "replay_status": replay_status,
                                 "started_after": started_after,
                                 "started_before": started_before,
