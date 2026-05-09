@@ -21,6 +21,7 @@ import mimetypes
 import re
 import sqlite3
 import subprocess
+from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
@@ -43,6 +44,7 @@ from trace_replay import TRACE_LINE_RE, parse_trace_lines
 REPO_ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "replay_static"
 CATALOG_FILENAME = ".replay_catalog.sqlite3"
+FILE_STREAM_CHUNK_SIZE = 64 * 1024
 
 
 @dataclass
@@ -144,6 +146,23 @@ def init_catalog_db(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def iter_file_chunks(path: Path, *, start: int = 0, length: int | None = None) -> Iterator[bytes]:
+    """Yield file bytes in bounded chunks for full and range responses."""
+    remaining = length
+    with path.open("rb") as handle:
+        handle.seek(start)
+        while True:
+            if remaining is not None and remaining <= 0:
+                return
+            chunk_size = FILE_STREAM_CHUNK_SIZE if remaining is None else min(FILE_STREAM_CHUNK_SIZE, remaining)
+            chunk = handle.read(chunk_size)
+            if not chunk:
+                return
+            yield chunk
+            if remaining is not None:
+                remaining -= len(chunk)
+
+
 def iter_manifest_paths(runs_root: Path) -> list[Path]:
     """Return manifest files in newest-first order for catalog refresh."""
     return sorted(runs_root.rglob("*.run.json"), key=lambda path: path.stat().st_mtime, reverse=True)
@@ -176,26 +195,18 @@ def refresh_catalog(runs_root: Path) -> dict:
     runs_root.mkdir(parents=True, exist_ok=True)
     catalog_path = get_catalog_path(runs_root)
     manifests = iter_manifest_paths(runs_root)
-    current_manifest_paths = {str(path.resolve()) for path in manifests}
 
     with closing(get_db_connection(catalog_path)) as conn:
         init_catalog_db(conn)
         cataloged_at = dt.datetime.now(dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
-
-        if current_manifest_paths:
-            placeholders = ",".join("?" for _ in current_manifest_paths)
-            conn.execute(
-                f"DELETE FROM runs WHERE manifest_path NOT IN ({placeholders})",
-                tuple(current_manifest_paths),
-            )
-        else:
-            conn.execute("DELETE FROM runs")
+        current_run_ids: set[str] = set()
 
         for manifest_path in manifests:
             payload = load_run_manifest(manifest_path)
             payload["has_video"] = bool(payload.get("video_path") and Path(payload["video_path"]).exists())
             payload["has_trace"] = bool(payload.get("trace_path") and Path(payload["trace_path"]).exists())
             payload["replay_status"] = determine_replay_status(payload)
+            current_run_ids.add(payload["run_id"])
 
             conn.execute(
                 """
@@ -222,8 +233,7 @@ def refresh_catalog(runs_root: Path) -> dict:
                     replay_status,
                     cataloged_at_utc
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(manifest_path) DO UPDATE SET
-                    run_id = excluded.run_id,
+                ON CONFLICT(run_id) DO UPDATE SET
                     manifest_path = excluded.manifest_path,
                     manifest_mtime_ns = excluded.manifest_mtime_ns,
                     label = excluded.label,
@@ -244,6 +254,7 @@ def refresh_catalog(runs_root: Path) -> dict:
                     has_trace = excluded.has_trace,
                     replay_status = excluded.replay_status,
                     cataloged_at_utc = excluded.cataloged_at_utc
+                WHERE excluded.manifest_mtime_ns >= runs.manifest_mtime_ns
                 """,
                 (
                     payload["run_id"],
@@ -269,6 +280,15 @@ def refresh_catalog(runs_root: Path) -> dict:
                     cataloged_at,
                 ),
             )
+
+        if current_run_ids:
+            placeholders = ",".join("?" for _ in current_run_ids)
+            conn.execute(
+                f"DELETE FROM runs WHERE run_id NOT IN ({placeholders})",
+                tuple(current_run_ids),
+            )
+        else:
+            conn.execute("DELETE FROM runs")
 
         conn.commit()
         row = conn.execute("SELECT COUNT(*) AS run_count FROM runs").fetchone()
@@ -476,9 +496,8 @@ def make_handler(runs_root: Path, config: dict):
                 self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
                 self.send_header("Content-Length", str(length))
                 self.end_headers()
-                with path.open("rb") as handle:
-                    handle.seek(start)
-                    self.wfile.write(handle.read(length))
+                for chunk in iter_file_chunks(path, start=start, length=length):
+                    self.wfile.write(chunk)
                 return
 
             self.send_response(HTTPStatus.OK)
@@ -486,8 +505,8 @@ def make_handler(runs_root: Path, config: dict):
             self.send_header("Accept-Ranges", "bytes")
             self.send_header("Content-Length", str(file_size))
             self.end_headers()
-            with path.open("rb") as handle:
-                self.wfile.write(handle.read())
+            for chunk in iter_file_chunks(path):
+                self.wfile.write(chunk)
 
         def _parse_range_header(self, header_value: str, file_size: int) -> tuple[int, int]:
             """Parse a simple single-range header for MP4 seeking.
