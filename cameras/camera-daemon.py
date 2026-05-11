@@ -322,6 +322,7 @@ def run_supervisor(
     recorder_stop_file = Path(str(config["recorder"]["stop_file"]))
     deployment_status = get_deployment_status(REPO_ROOT)
     contract_status = build_contract_status(config)
+    enable_midrun_split = bool(config.get("daemon", {}).get("enable_midrun_split", False))
 
     try:
         claim_singleton(pid_file)
@@ -561,7 +562,7 @@ def run_supervisor(
                 source=source,
                 out_dir=out_dir,
                 label=label,
-                enable_midrun_split=True,
+                enable_midrun_split=enable_midrun_split,
                 discard_without_trace=next_launch_speculative,
             )
             emit_log(f"[daemon] Launching recorder child for active {process_name} session", log_path=daemon_log_path)

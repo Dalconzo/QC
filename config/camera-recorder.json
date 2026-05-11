@@ -77,7 +77,8 @@
     "log_path": "C:\\QC\\logs\\camera-daemon.log",
     "idle_poll_sec": 1.0,
     "heartbeat_sec": 10.0,
-    "relaunch_delay_sec": 2.0
+    "relaunch_delay_sec": 2.0,
+    "enable_midrun_split": false
   },
   "profiles": [
     {

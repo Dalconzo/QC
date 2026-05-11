@@ -79,6 +79,7 @@ class CameraConfigTests(unittest.TestCase):
             self.assertEqual(config["storage"]["retention"]["emergency"]["min_free_gb"], 20)
             self.assertEqual(MODULE.get_profile(config)["id"], "top")
             self.assertTrue(config["daemon"]["task_name"])
+            self.assertFalse(config["daemon"]["enable_midrun_split"])
 
     def test_legacy_flat_keys_still_feed_nested_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -258,6 +259,26 @@ class CameraConfigTests(unittest.TestCase):
             config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
             validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
             self.assertTrue(any("central_ingest.staging_cleanup" in item for item in validation["errors"]))
+
+    def test_validation_rejects_non_boolean_midrun_split_toggle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "daemon": {"enable_midrun_split": "yes"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("daemon.enable_midrun_split" in item for item in validation["errors"]))
 
 
 if __name__ == "__main__":

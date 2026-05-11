@@ -52,6 +52,7 @@ def build_contract_status(config: dict) -> dict:
         "replay_manifest_version": REPLAY_MANIFEST_VERSION,
         "replay_capabilities": list(REPLAY_MANIFEST_CAPABILITIES),
         "local_compaction_enabled": bool(compaction.get("enabled", False)),
+        "midrun_split_enabled": bool(config.get("daemon", {}).get("enable_midrun_split", False)),
         "retention_enabled": bool(retention.get("enabled", False)),
         "original_retention_days": int(retention.get("original_retention_days", 0) or 0),
         "derived_retention_days": int(retention.get("derived_retention_days", 0) or 0),

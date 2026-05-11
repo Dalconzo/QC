@@ -72,6 +72,7 @@ class CameraToolingTests(unittest.TestCase):
             payload = json.loads(result.stdout)
             self.assertEqual(payload["contract_status"]["replay_manifest_version"], "hybrid-replay.v1")
             self.assertIn("trace_segments", payload["contract_status"]["replay_capabilities"])
+            self.assertFalse(payload["contract_status"]["midrun_split_enabled"])
             self.assertEqual(payload["contract_status"]["derived_retention_days"], 30)
             self.assertIn("git_commit_short", payload["deployment"])
 

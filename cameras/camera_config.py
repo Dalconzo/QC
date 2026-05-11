@@ -95,6 +95,7 @@ DEFAULT_CONFIG = {
         "idle_poll_sec": 1.0,
         "heartbeat_sec": 10.0,
         "relaunch_delay_sec": 2.0,
+        "enable_midrun_split": False,
     },
     "profiles": [
         {
@@ -332,6 +333,9 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
 
     if float(daemon.get("relaunch_delay_sec", 0)) < 0:
         errors.append("daemon.relaunch_delay_sec cannot be negative.")
+
+    if not isinstance(daemon.get("enable_midrun_split", False), bool):
+        errors.append("daemon.enable_midrun_split must be a boolean.")
 
     if not str(daemon.get("task_name") or "").strip():
         errors.append("daemon.task_name is required.")

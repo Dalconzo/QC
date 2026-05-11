@@ -75,6 +75,7 @@ def main() -> int:
         print(
             "Recorder contract: "
             f"manifest={contract['replay_manifest_version']} "
+            f"midrun_split={contract['midrun_split_enabled']} "
             f"auto_upload={contract['auto_upload_on_run_complete']} "
             f"retention_days={contract['original_retention_days']} "
             f"prune_after_ack={contract['prune_after_ack']}"
