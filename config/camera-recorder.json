@@ -13,7 +13,31 @@
   "storage": {
     "runs_root": "C:\\QC\\cameras\\video_clips",
     "manifest_dir": "",
-    "recorder_log_dir": "C:\\QC\\logs"
+    "recorder_log_dir": "C:\\QC\\logs",
+    "compaction": {
+      "enabled": false,
+      "artifacts_root": "",
+      "min_segment_duration_sec": 5.0,
+      "active_crf": 30,
+      "active_preset": "veryfast",
+      "idle_crf": 36,
+      "idle_preset": "veryfast",
+      "idle_fps": 2
+    },
+    "retention": {
+      "enabled": true,
+      "original_retention_days": 7,
+      "derived_retention_days": 30,
+      "require_upload_ack": true,
+      "require_local_compaction": false,
+      "cleanup_on_run_complete": true,
+      "emergency": {
+        "enabled": true,
+        "min_free_gb": 20,
+        "target_free_gb": 30,
+        "block_new_recording_free_gb": 8
+      }
+    }
   },
   "recorder": {
     "default_profile": "default",
@@ -39,7 +63,11 @@
     "staging_root": "C:\\QC\\cameras\\central_staging",
     "upload_root": "C:\\QC\\cameras\\central_replay_root",
     "transport": "filesystem",
-    "auto_upload_on_run_complete": false
+    "auto_upload_on_run_complete": false,
+    "staging_cleanup": {
+      "enabled": true,
+      "prune_after_ack": true
+    }
   },
   "daemon": {
     "task_name": "HamiltonCameraRecorderDaemon",
@@ -49,7 +77,8 @@
     "log_path": "C:\\QC\\logs\\camera-daemon.log",
     "idle_poll_sec": 1.0,
     "heartbeat_sec": 10.0,
-    "relaunch_delay_sec": 2.0
+    "relaunch_delay_sec": 2.0,
+    "enable_midrun_split": false
   },
   "profiles": [
     {

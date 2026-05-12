@@ -20,6 +20,12 @@ we can verify the contract and dedup logic before introducing the LAN service.
 The next slice now also exists: a filesystem-backed uploader can ingest those
 staged runs into a shared root, assign `central_run_id` values, populate the
 central SQLite catalog, and write acknowledgements back to the workstation.
+The staging ledger also caches source-file hash results behind file stat
+fingerprints so repeated auto-upload scans do not keep re-reading unchanged
+video and trace files from the workstation disk.
+The current storage pass also keeps local `run_id` values path-independent and
+scrubs workstation-local paths from staged manifest copies so moved run folders
+do not look like brand-new central artifacts.
 
 ## Goals
 
@@ -54,13 +60,14 @@ The local replay app also parses the trace file into timed events on demand.
 
 ## Design Constraint: Local `run_id` Is Not A Good Central Primary Key
 
-The current local replay app computes `run_id` from manifest path, video path,
-trace path, label, and timing. That is acceptable for a workstation-local
-catalog, but not for the central shared catalog because:
+The current local replay app now computes `run_id` from path-independent run
+metadata, trace-derived structure, and timing. That is better for workstation
+and staging stability, but it is still not a good central shared primary key
+because:
 
 - workstation clone roots can differ (`C:\QC`, `C:\camera-tools`, etc.)
-- local paths should not become durable shared identifiers
-- re-ingest after moving artifacts would change the local identity
+- local identities can still collide in theory across sites or future recorder variants
+- the central catalog still needs its own durable server-issued identity and audit trail
 
 So the central catalog should store:
 

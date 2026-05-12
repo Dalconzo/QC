@@ -22,6 +22,7 @@ import argparse
 import datetime as dt
 import importlib.util
 import json
+import hashlib
 import shutil
 import sqlite3
 import sys
@@ -30,6 +31,7 @@ from contextlib import closing
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config
+from local_retention import record_upload_ack, record_upload_failure
 
 
 CAMERAS_DIR = Path(__file__).resolve().parent
@@ -282,6 +284,47 @@ def copy_if_missing(source: Path, target: Path) -> None:
     shutil.copy2(source, target)
 
 
+def compute_sha256(path: Path) -> str:
+    """Hash one stored artifact to verify retry reuse safety."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def ensure_central_artifact(
+    *,
+    source_path: Path,
+    target_path: Path,
+    expected_sha256: str,
+) -> dict:
+    """Ensure the managed artifact path exists and matches the expected bytes."""
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    if not target_path.exists():
+        shutil.copy2(source_path, target_path)
+        copied_sha256 = compute_sha256(target_path)
+        if copied_sha256 != expected_sha256:
+            raise RuntimeError(
+                f"Central artifact verification failed after initial copy for {target_path}: "
+                f"expected {expected_sha256}, got {copied_sha256}"
+            )
+        return {"action": "copied_missing", "verified": True}
+
+    existing_sha256 = compute_sha256(target_path)
+    if existing_sha256 == expected_sha256:
+        return {"action": "verified_existing", "verified": True}
+
+    shutil.copy2(source_path, target_path)
+    repaired_sha256 = compute_sha256(target_path)
+    if repaired_sha256 != expected_sha256:
+        raise RuntimeError(
+            f"Central artifact verification failed after repair for {target_path}: "
+            f"expected {expected_sha256}, got {repaired_sha256}"
+        )
+    return {"action": "repaired_mismatch", "verified": True}
+
+
 def record_ingest_items(
     conn: sqlite3.Connection,
     *,
@@ -349,6 +392,7 @@ def ingest_one_run(
     central_run_id = existing_central_run_id or f"central-run-{uuid.uuid4().hex}"
     run = payload["run"]
     artifact_rows: list[dict] = []
+    artifact_sync_actions: list[dict] = []
     for artifact in payload["artifacts"]:
         storage_relpath = central_artifact_relpath(
             workstation_id,
@@ -357,7 +401,18 @@ def ingest_one_run(
             artifact["staged_filename"],
         )
         stored_path = central_root / storage_relpath
-        copy_if_missing(Path(artifact["staged_path"]), stored_path)
+        sync_result = ensure_central_artifact(
+            source_path=Path(artifact["staged_path"]),
+            target_path=stored_path,
+            expected_sha256=str(artifact["sha256"] or ""),
+        )
+        artifact_sync_actions.append(
+            {
+                "artifact_type": artifact["artifact_type"],
+                "storage_relpath": storage_relpath.replace("\\", "/"),
+                "sync_action": sync_result["action"],
+            }
+        )
         artifact_rows.append(
             {
                 **artifact,
@@ -568,6 +623,7 @@ def ingest_one_run(
         "workstation_id": workstation_id,
         "camera_profile_id": camera_profile_id,
         "artifact_count": len(artifact_rows),
+        "artifact_sync_actions": artifact_sync_actions,
         "stored_artifacts": [
             {
                 "artifact_type": artifact["artifact_type"],
@@ -585,6 +641,22 @@ def write_ack(stage_row: sqlite3.Row, ack_payload: dict) -> Path:
     ack_path = Path(stage_row["run_dir"]) / ACK_FILENAME
     ack_path.write_text(json.dumps(ack_payload, indent=2), encoding="utf-8")
     return ack_path
+
+
+def update_local_manifest_after_upload(stage_row: sqlite3.Row, *, ack_payload: dict | None = None, error_text: str = "") -> None:
+    manifest_path = Path(str(stage_row["manifest_path"] or "")).resolve()
+    if not manifest_path.exists():
+        return
+    if ack_payload is not None:
+        record_upload_ack(
+            manifest_path,
+            central_run_id=str(ack_payload.get("central_run_id") or ""),
+            acknowledged_at_utc=str(ack_payload.get("acknowledged_at_utc") or ""),
+            ack_path=str(Path(str(stage_row["run_dir"])) / ACK_FILENAME),
+        )
+        return
+    if error_text:
+        record_upload_failure(manifest_path, error_text=error_text)
 
 
 def mark_upload_result(
@@ -638,6 +710,7 @@ def upload_staged_runs(
 ) -> dict:
     """Upload pending staged runs into the shared central replay root."""
     config = load_effective_config(config_path=config_path, local_override_path=local_config_path)
+    staging_cleanup = (config.get("central_ingest") or {}).get("staging_cleanup") or {}
     effective_staging_root = (staging_root or Path(config["central_ingest"]["staging_root"])).resolve()
     effective_upload_root = (upload_root or Path(config["central_ingest"]["upload_root"])).resolve()
     effective_staging_root.mkdir(parents=True, exist_ok=True)
@@ -724,6 +797,7 @@ def upload_staged_runs(
                         "stored_artifacts": ingest_result["stored_artifacts"],
                     }
                     ack_path = write_ack(stage_row, ack_payload)
+                    update_local_manifest_after_upload(stage_row, ack_payload=ack_payload)
                     mark_upload_result(
                         stage_conn,
                         stage_run_id=stage_row["stage_run_id"],
@@ -733,19 +807,34 @@ def upload_staged_runs(
                         central_run_id=ingest_result["central_run_id"],
                         ack_path=str(ack_path.resolve()),
                     )
+                    pruned = {
+                        "action": "skipped_disabled",
+                        "pruned_bytes": 0,
+                    }
+                    if bool(staging_cleanup.get("enabled", True)) and bool(staging_cleanup.get("prune_after_ack", True)):
+                        refreshed_row = stage_conn.execute(
+                            "SELECT * FROM staged_runs WHERE stage_run_id = ?",
+                            (stage_row["stage_run_id"],),
+                        ).fetchone()
+                        if refreshed_row is not None:
+                            pruned = STAGE_MODULE.prune_stage_run_bundle(stage_conn, refreshed_row)
                     uploaded_count += 1
                     items.append(
                         {
                             "action": "acknowledged",
                             "stage_run_id": stage_row["stage_run_id"],
                             "local_run_id": stage_row["local_run_id"],
-                            "central_run_id": ingest_result["central_run_id"],
-                            "created": ingest_result["created"],
-                            "ack_path": str(ack_path.resolve()),
-                        }
+                        "central_run_id": ingest_result["central_run_id"],
+                        "created": ingest_result["created"],
+                        "ack_path": str(ack_path.resolve()),
+                        "artifact_sync_actions": ingest_result["artifact_sync_actions"],
+                        "prune_action": pruned["action"],
+                        "pruned_bytes": int(pruned.get("pruned_bytes") or 0),
+                    }
                     )
                 except Exception as exc:
                     failed_count += 1
+                    update_local_manifest_after_upload(stage_row, error_text=str(exc))
                     mark_upload_result(
                         stage_conn,
                         stage_run_id=stage_row["stage_run_id"],
