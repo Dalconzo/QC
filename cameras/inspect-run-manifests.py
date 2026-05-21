@@ -12,18 +12,44 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import logging
 import shutil
+import sys
 from pathlib import Path
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config
 from replay_manifest import normalize_replay_manifest_payload
+from replay_tags import derive_run_tags
 
 
-def load_run_manifest(manifest_path: Path) -> dict:
+def emit_log(message: str) -> None:
+    """Mirror manifest inspection diagnostics to the operator shell."""
+    logging.getLogger("camera.inspect_run_manifests").info(message)
+    print(message, file=sys.stdout)
+
+
+def load_run_manifest(manifest_path: Path, *, log_fn=emit_log) -> dict:
     """Read one run manifest and normalize the main absolute paths."""
     with manifest_path.open("r", encoding="utf-8-sig") as handle:
         payload = json.load(handle)
-    return normalize_replay_manifest_payload(payload, manifest_path=manifest_path)
+    normalized = normalize_replay_manifest_payload(payload, manifest_path=manifest_path)
+    trace_path = Path(normalized["trace_path"]) if normalized.get("trace_path") else None
+    tag_payload = derive_run_tags(trace_path, log_fn=log_fn)
+    normalized["run_tags_version"] = tag_payload["version"]
+    normalized["run_tags"] = tag_payload["tags"]
+    normalized["run_tag_summary"] = tag_payload["summary"]
+    normalized["run_tag_search_text"] = tag_payload["search_text"]
+    if log_fn:
+        summary = tag_payload["summary"]
+        log_fn(
+            "[inspect-run-manifests] "
+            f"manifest={manifest_path.resolve()} "
+            f"trace={trace_path.resolve() if trace_path else ''} "
+            f"outcome={summary.get('outcome') or 'unknown'} "
+            f"primary_barcode={summary.get('primary_barcode') or '-'} "
+            f"replay_tag_count={summary.get('tag_count') or 0}"
+        )
+    return normalized
 
 
 def determine_replay_status(payload: dict) -> str:

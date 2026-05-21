@@ -17,10 +17,12 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import logging
 import mimetypes
 import re
 import sqlite3
 import subprocess
+import sys
 from contextlib import closing
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
@@ -31,12 +33,14 @@ from urllib.parse import parse_qs, unquote, urlparse
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config, validate_config
 from camera_live import capture_live_frame as capture_live_frame_once, summarize_profile
 from replay_manifest import DEFAULT_REPLAY_MODE, DEFAULT_STORAGE_TIER, normalize_replay_manifest_payload
+from replay_tags import derive_run_tags, serialize_summary, serialize_tags
 from trace_replay import TRACE_LINE_RE, parse_trace_lines
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "replay_static"
 CATALOG_FILENAME = ".replay_catalog.sqlite3"
+FILE_STREAM_CHUNK_SIZE = 64 * 1024
 
 
 @dataclass
@@ -47,6 +51,12 @@ class TraceEvent:
     elapsed_sec: float
     stamp_local: str
     line: str
+
+
+def emit_log(message: str) -> None:
+    """Mirror local replay diagnostics to the operator shell."""
+    logging.getLogger("camera.replay_app").info(message)
+    print(message, file=sys.stdout)
 
 
 def list_live_profiles(config: dict) -> dict:
@@ -83,7 +93,22 @@ def load_run_manifest(manifest_path: Path) -> dict:
     """Read one run manifest and normalize common fields."""
     with manifest_path.open("r", encoding="utf-8-sig") as handle:
         payload = json.load(handle)
-    return normalize_replay_manifest_payload(payload, manifest_path=manifest_path)
+    normalized = normalize_replay_manifest_payload(payload, manifest_path=manifest_path)
+    trace_path = Path(normalized["trace_path"]) if normalized.get("trace_path") else None
+    tag_payload = derive_run_tags(trace_path, log_fn=emit_log)
+    normalized["run_tags_version"] = tag_payload["version"]
+    normalized["run_tags"] = tag_payload["tags"]
+    normalized["run_tag_summary"] = tag_payload["summary"]
+    normalized["run_tag_search_text"] = tag_payload["search_text"]
+    summary = tag_payload["summary"]
+    emit_log(
+        "[replay-app] "
+        f"loaded_manifest={manifest_path.resolve()} "
+        f"run_id={normalized.get('run_id') or ''} "
+        f"outcome={summary.get('outcome') or 'unknown'} "
+        f"primary_barcode={summary.get('primary_barcode') or '-'}"
+    )
+    return normalized
 
 
 def get_catalog_path(runs_root: Path) -> Path:
@@ -123,11 +148,17 @@ def init_catalog_db(conn: sqlite3.Connection) -> None:
             has_video INTEGER NOT NULL,
             has_trace INTEGER NOT NULL,
             replay_status TEXT NOT NULL,
+            run_tags_json TEXT NOT NULL DEFAULT '[]',
+            run_tag_summary_json TEXT NOT NULL DEFAULT '{}',
+            run_tag_search_text TEXT NOT NULL DEFAULT '',
+            run_outcome_tag TEXT NOT NULL DEFAULT '',
+            primary_barcode TEXT NOT NULL DEFAULT '',
             cataloged_at_utc TEXT NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS idx_runs_started_at ON runs(started_at_local DESC);
         CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(replay_status, started_at_local DESC);
+        CREATE INDEX IF NOT EXISTS idx_runs_outcome ON runs(run_outcome_tag, started_at_local DESC);
         """
     )
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(runs)").fetchall()}
@@ -135,6 +166,16 @@ def init_catalog_db(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE runs ADD COLUMN segment_count INTEGER NOT NULL DEFAULT 0")
     if "idle_segment_count" not in columns:
         conn.execute("ALTER TABLE runs ADD COLUMN idle_segment_count INTEGER NOT NULL DEFAULT 0")
+    if "run_tags_json" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN run_tags_json TEXT NOT NULL DEFAULT '[]'")
+    if "run_tag_summary_json" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN run_tag_summary_json TEXT NOT NULL DEFAULT '{}'")
+    if "run_tag_search_text" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN run_tag_search_text TEXT NOT NULL DEFAULT ''")
+    if "run_outcome_tag" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN run_outcome_tag TEXT NOT NULL DEFAULT ''")
+    if "primary_barcode" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN primary_barcode TEXT NOT NULL DEFAULT ''")
     conn.commit()
 
 
@@ -180,6 +221,15 @@ def refresh_catalog(runs_root: Path) -> dict:
             payload["has_trace"] = bool(payload.get("trace_path") and Path(payload["trace_path"]).exists())
             payload["replay_status"] = determine_replay_status(payload)
             seen_manifest_paths.add(payload["manifest_path"])
+            run_summary = payload.get("run_tag_summary") or {}
+            emit_log(
+                "[replay-app] "
+                f"catalog_run run_id={payload['run_id']} "
+                f"manifest={payload['manifest_path']} "
+                f"status={payload['replay_status']} "
+                f"outcome={run_summary.get('outcome') or 'unknown'} "
+                f"primary_barcode={run_summary.get('primary_barcode') or '-'}"
+            )
 
             conn.execute(
                 """
@@ -204,8 +254,13 @@ def refresh_catalog(runs_root: Path) -> dict:
                     has_video,
                     has_trace,
                     replay_status,
+                    run_tags_json,
+                    run_tag_summary_json,
+                    run_tag_search_text,
+                    run_outcome_tag,
+                    primary_barcode,
                     cataloged_at_utc
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_id) DO UPDATE SET
                     manifest_path = excluded.manifest_path,
                     manifest_mtime_ns = excluded.manifest_mtime_ns,
@@ -226,6 +281,11 @@ def refresh_catalog(runs_root: Path) -> dict:
                     has_video = excluded.has_video,
                     has_trace = excluded.has_trace,
                     replay_status = excluded.replay_status,
+                    run_tags_json = excluded.run_tags_json,
+                    run_tag_summary_json = excluded.run_tag_summary_json,
+                    run_tag_search_text = excluded.run_tag_search_text,
+                    run_outcome_tag = excluded.run_outcome_tag,
+                    primary_barcode = excluded.primary_barcode,
                     cataloged_at_utc = excluded.cataloged_at_utc
                 """,
                 (
@@ -249,6 +309,11 @@ def refresh_catalog(runs_root: Path) -> dict:
                     int(payload["has_video"]),
                     int(payload["has_trace"]),
                     payload["replay_status"],
+                    serialize_tags(payload.get("run_tags") or []),
+                    serialize_summary(payload.get("run_tag_summary") or {}),
+                    payload.get("run_tag_search_text") or "",
+                    str((payload.get("run_tag_summary") or {}).get("outcome") or ""),
+                    str((payload.get("run_tag_summary") or {}).get("primary_barcode") or ""),
                     cataloged_at,
                 ),
             )
@@ -265,6 +330,11 @@ def refresh_catalog(runs_root: Path) -> dict:
         conn.commit()
         row = conn.execute("SELECT COUNT(*) AS run_count FROM runs").fetchone()
 
+    emit_log(
+        "[replay-app] "
+        f"catalog_refresh runs_root={runs_root.resolve()} "
+        f"manifest_count={len(manifests)} run_count={int(row['run_count']) if row else 0}"
+    )
     return {
         "catalog_path": str(catalog_path.resolve()),
         "manifest_count": len(manifests),
@@ -275,6 +345,8 @@ def refresh_catalog(runs_root: Path) -> dict:
 
 def summarize_catalog_row(row: sqlite3.Row) -> dict:
     """Return lightweight metadata for the run picker."""
+    run_tags = json.loads(row["run_tags_json"] or "[]")
+    run_tag_summary = json.loads(row["run_tag_summary_json"] or "{}")
     return {
         "run_id": row["run_id"],
         "label": row["label"],
@@ -291,24 +363,57 @@ def summarize_catalog_row(row: sqlite3.Row) -> dict:
         "process_gate": row["process_gate"],
         "segment_count": row["segment_count"],
         "idle_segment_count": row["idle_segment_count"],
+        "run_tags": run_tags,
+        "run_tag_summary": run_tag_summary,
+        "run_outcome": row["run_outcome_tag"] or run_tag_summary.get("outcome") or "",
+        "primary_barcode": row["primary_barcode"] or run_tag_summary.get("primary_barcode") or "",
     }
 
 
-def list_catalog_runs(runs_root: Path) -> list[dict]:
+def list_catalog_runs(
+    runs_root: Path,
+    *,
+    query: str = "",
+    outcome: str = "",
+) -> list[dict]:
     """Read the run picker from the local catalog instead of the filesystem."""
     catalog_path = get_catalog_path(runs_root)
     if not catalog_path.exists():
         refresh_catalog(runs_root)
     with closing(get_db_connection(catalog_path)) as conn:
         init_catalog_db(conn)
-        rows = conn.execute(
-            """
+        sql = """
             SELECT *
             FROM runs
-            ORDER BY COALESCE(started_at_local, '') DESC, manifest_mtime_ns DESC
+            WHERE 1 = 1
+        """
+        params: list[object] = []
+        normalized_query = query.strip().lower()
+        normalized_outcome = outcome.strip().lower()
+        if normalized_query:
+            like_value = f"%{normalized_query}%"
+            sql += """
+                AND (
+                    LOWER(label) LIKE ?
+                    OR LOWER(video_filename) LIKE ?
+                    OR LOWER(trace_filename) LIKE ?
+                    OR LOWER(run_tag_search_text) LIKE ?
+                )
             """
-        ).fetchall()
-    return [summarize_catalog_row(row) for row in rows]
+            params.extend([like_value, like_value, like_value, like_value])
+        if normalized_outcome:
+            sql += " AND LOWER(run_outcome_tag) = ?"
+            params.append(normalized_outcome)
+        sql += " ORDER BY COALESCE(started_at_local, '') DESC, manifest_mtime_ns DESC"
+        rows = conn.execute(sql, tuple(params)).fetchall()
+    items = [summarize_catalog_row(row) for row in rows]
+    emit_log(
+        "[replay-app] "
+        f"list_runs query={normalized_query or '-'} "
+        f"outcome={normalized_outcome or '-'} results={len(items)} "
+        f"barcodes={[item.get('primary_barcode') or '' for item in items]}"
+    )
+    return items
 
 
 def get_latest_ready_run(runs_root: Path) -> dict | None:
@@ -372,6 +477,10 @@ def summarize_run(run: dict) -> dict:
         "idle_segment_count": int(run.get("idle_segment_count") or 0),
         "storage_tier": run.get("storage_tier") or DEFAULT_STORAGE_TIER,
         "replay_default_mode": run.get("replay_default_mode") or DEFAULT_REPLAY_MODE,
+        "run_tags": run.get("run_tags") or [],
+        "run_tag_summary": run.get("run_tag_summary") or {},
+        "run_outcome": str((run.get("run_tag_summary") or {}).get("outcome") or ""),
+        "primary_barcode": str((run.get("run_tag_summary") or {}).get("primary_barcode") or ""),
     }
 
 
@@ -401,6 +510,9 @@ def get_run_detail(runs_root: Path, run_id: str) -> dict:
             "replay_default_mode": run.get("replay_default_mode"),
             "full_detail_retained_until_local": run.get("full_detail_retained_until_local"),
             "trace_duration_sec": run.get("trace_duration_sec"),
+            "run_tags_version": run.get("run_tags_version"),
+            "run_tags": run.get("run_tags") or [],
+            "run_tag_summary": run.get("run_tag_summary") or {},
         },
         "chapters": run.get("chapters") or [],
         "segments": run.get("segments") or [],
@@ -447,7 +559,7 @@ def make_handler(runs_root: Path, config: dict):
                 self.end_headers()
                 with path.open("rb") as handle:
                     handle.seek(start)
-                    self.wfile.write(handle.read(length))
+                    self._stream_file(handle, length)
                 return
 
             self.send_response(HTTPStatus.OK)
@@ -456,7 +568,15 @@ def make_handler(runs_root: Path, config: dict):
             self.send_header("Content-Length", str(file_size))
             self.end_headers()
             with path.open("rb") as handle:
-                self.wfile.write(handle.read())
+                self._stream_file(handle, file_size)
+
+        def _stream_file(self, handle, remaining_bytes: int) -> None:
+            while remaining_bytes > 0:
+                chunk = handle.read(min(FILE_STREAM_CHUNK_SIZE, remaining_bytes))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining_bytes -= len(chunk)
 
         def _parse_range_header(self, header_value: str, file_size: int) -> tuple[int, int]:
             """Parse a simple single-range header for MP4 seeking.
@@ -512,8 +632,20 @@ def make_handler(runs_root: Path, config: dict):
                 return self._send_file(asset_path)
 
             if route == "/api/runs":
-                runs = list_catalog_runs(runs_root)
-                return self._send_json({"items": runs, "catalog_path": str(get_catalog_path(runs_root).resolve())})
+                query = (params.get("query") or [""])[0].strip()
+                outcome = (params.get("outcome") or [""])[0].strip()
+                runs = list_catalog_runs(runs_root, query=query, outcome=outcome)
+                emit_log(
+                    "[replay-app] "
+                    f"/api/runs query={query or '-'} outcome={outcome or '-'} results={len(runs)}"
+                )
+                return self._send_json(
+                    {
+                        "items": runs,
+                        "catalog_path": str(get_catalog_path(runs_root).resolve()),
+                        "filters": {"query": query, "outcome": outcome},
+                    }
+                )
 
             if route == "/api/runs/latest":
                 latest = get_latest_ready_run(runs_root)

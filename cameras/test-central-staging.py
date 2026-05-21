@@ -139,6 +139,10 @@ class CentralStagingTests(unittest.TestCase):
             self.assertTrue(payload_path.exists())
             payload = json.loads(payload_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["run"]["label"], "demo-ready")
+            self.assertEqual(payload["run"]["run_tags_version"], "replay-tags.v1")
+            self.assertEqual(payload["run"]["run_tag_summary"]["primary_barcode"], "TBDR80300001000236")
+            self.assertEqual(payload["run"]["run_tag_summary"]["outcome"], "error")
+            self.assertTrue(any(item["key"] == "pillar_plate_barcode" for item in payload["run"]["run_tags"]))
             self.assertEqual(len(payload["artifacts"]), 3)
             self.assertTrue((payload_path.parent / "video.mp4").exists())
             self.assertEqual((payload_path.parent / "video.mp4").read_bytes(), video_path.read_bytes())
@@ -239,6 +243,31 @@ class CentralStagingTests(unittest.TestCase):
             self.assertEqual(len(staged_payloads), 1)
             payload = json.loads(staged_payloads[0].read_text(encoding="utf-8"))
             self.assertEqual(payload["run"]["local_manifest_path"].split("\\")[-1], "recent.run.json")
+
+    def test_stage_runs_emits_barcode_logging(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            config_path, local_path = self.write_config(root, runs_root, staging_root)
+            self.write_ready_run(runs_root)
+
+            with self.assertLogs(level="INFO") as captured:
+                result = MODULE.stage_runs(
+                    config_path=config_path,
+                    local_config_path=local_path,
+                    runs_root=runs_root,
+                    staging_root=staging_root,
+                    limit=0,
+                    restage=False,
+                )
+
+            joined = "\n".join(captured.output)
+            self.assertEqual(result["staged_run_count"], 1)
+            self.assertIn("stage_runs", joined)
+            self.assertIn("build_payload", joined)
+            self.assertIn("primary_barcode=TBDR80300001000236", joined)
+            self.assertIn("batch_complete", joined)
 
 
 if __name__ == "__main__":

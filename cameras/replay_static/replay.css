@@ -94,6 +94,30 @@ body {
   font-size: 0.9rem;
 }
 
+.run-search-toolbar {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.run-search-input,
+.run-search-select {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.run-search-input {
+  flex: 1 1 auto;
+}
+
+.run-search-select {
+  flex: 0 0 9rem;
+}
+
 .run-list {
   display: flex;
   flex-direction: column;
@@ -131,10 +155,16 @@ body {
   font-size: 0.9rem;
 }
 
+.run-card .tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
 .run-card .status-chip {
   display: inline-flex;
   align-items: center;
-  margin-top: 0.45rem;
   border-radius: 999px;
   padding: 0.2rem 0.55rem;
   font-size: 0.78rem;
@@ -145,6 +175,11 @@ body {
 .status-chip.ready {
   color: #1f5d44;
   background: #d9efe4;
+}
+
+.status-chip.tag-chip {
+  color: var(--accent);
+  background: rgba(47, 107, 88, 0.12);
 }
 
 .status-chip.missing_trace,

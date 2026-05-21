@@ -8,6 +8,8 @@ const terminalCountEl = document.getElementById("terminal-count");
 const refreshCatalogButtonEl = document.getElementById("refresh-catalog");
 const refreshLiveButtonEl = document.getElementById("refresh-live");
 const catalogStateEl = document.getElementById("catalog-state");
+const runSearchEl = document.getElementById("run-search");
+const runOutcomeFilterEl = document.getElementById("run-outcome-filter");
 const sidebarCopyEl = document.getElementById("sidebar-copy");
 const replayPanelEl = document.getElementById("replay-panel");
 const livePanelEl = document.getElementById("live-panel");
@@ -29,6 +31,8 @@ let terminalAutoFollow = true;
 let activeMode = "replay";
 let liveRefreshMs = 1000;
 let liveRefreshTimer = null;
+let activeSearchQuery = "";
+let activeOutcomeFilter = "";
 
 function forceMutedPlayback() {
   runVideoEl.muted = true;
@@ -140,6 +144,14 @@ function renderRunList(items) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `run-card${item.run_id === activeRunId ? " active" : ""}`;
+    const tags = [];
+    if (item.primary_barcode) {
+      tags.push(`<span class="status-chip tag-chip">${item.primary_barcode}</span>`);
+    }
+    if (item.run_outcome) {
+      tags.push(`<span class="status-chip tag-chip">${item.run_outcome}</span>`);
+    }
+    tags.push(`<span class="status-chip ${item.replay_status || "unknown"}">${formatStatus(item.replay_status)}</span>`);
     button.innerHTML = `
       <h3>${item.label}</h3>
       <p>${item.started_at_local || "Unknown start"}</p>
@@ -147,7 +159,7 @@ function renderRunList(items) {
       <p>Trace: ${item.trace_filename || "Missing trace"}</p>
       <p>Gate: ${item.process_gate || "unknown"}</p>
       <p>${formatSegmentSummary(item)}</p>
-      <span class="status-chip ${item.replay_status || "unknown"}">${formatStatus(item.replay_status)}</span>
+      <div class="tag-row">${tags.join("")}</div>
     `;
     button.addEventListener("click", () => {
       loadRun(item.run_id);
@@ -241,6 +253,12 @@ async function loadRun(runId) {
 
   runTitleEl.textContent = `${run.label} (${run.video_filename || "missing video"})`;
   runMetaEl.textContent = `${run.started_at_local || "Unknown start"} | ${run.trace_filename || "No trace"} | ${formatStatus(run.replay_status)} | ${run.stop_reason || "unknown stop reason"} | ${segments.length} segments / ${chapters.length} chapters`;
+  if (run.primary_barcode) {
+    runMetaEl.textContent += ` | ${run.primary_barcode}`;
+  }
+  if (run.run_outcome) {
+    runMetaEl.textContent += ` | ${run.run_outcome}`;
+  }
   if (run.has_video) {
     runVideoEl.src = `/api/runs/${runId}/video`;
     forceMutedPlayback();
@@ -256,7 +274,14 @@ async function loadRun(runId) {
 }
 
 async function loadRunIndex() {
-  const response = await fetch("/api/runs");
+  const params = new URLSearchParams();
+  if (activeSearchQuery) {
+    params.set("query", activeSearchQuery);
+  }
+  if (activeOutcomeFilter) {
+    params.set("outcome", activeOutcomeFilter);
+  }
+  const response = await fetch(`/api/runs${params.toString() ? `?${params}` : ""}`);
   if (!response.ok) {
     throw new Error("Failed to load run index");
   }
@@ -446,6 +471,24 @@ refreshLiveButtonEl.addEventListener("click", () => {
 if (videoHeightScaleEl) {
   videoHeightScaleEl.addEventListener("input", () => {
     applyVideoHeightScale(videoHeightScaleEl.value);
+  });
+}
+
+if (runSearchEl) {
+  runSearchEl.addEventListener("input", () => {
+    activeSearchQuery = runSearchEl.value.trim().toLowerCase();
+    loadRunIndex().catch((error) => {
+      catalogStateEl.textContent = error.message;
+    });
+  });
+}
+
+if (runOutcomeFilterEl) {
+  runOutcomeFilterEl.addEventListener("change", () => {
+    activeOutcomeFilter = runOutcomeFilterEl.value.trim().toLowerCase();
+    loadRunIndex().catch((error) => {
+      catalogStateEl.textContent = error.message;
+    });
   });
 }
 

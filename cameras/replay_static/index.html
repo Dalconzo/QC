@@ -17,6 +17,16 @@
           <button id="refresh-live" class="catalog-button" type="button" hidden>Refresh Preview</button>
           <span id="catalog-state" class="catalog-state">Catalog not loaded yet.</span>
         </div>
+        <div class="run-search-toolbar">
+          <input id="run-search" class="run-search-input" type="search" placeholder="Search barcode, tag, or file">
+          <select id="run-outcome-filter" class="run-search-select">
+            <option value="">All outcomes</option>
+            <option value="ok">OK</option>
+            <option value="error">Error</option>
+            <option value="aborted">Aborted</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
       </div>
       <div id="run-list" class="run-list"></div>
     </aside>

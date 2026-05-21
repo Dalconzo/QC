@@ -34,6 +34,7 @@ from replay_manifest import (
     REPLAY_MANIFEST_CAPABILITIES,
     REPLAY_MANIFEST_VERSION,
 )
+from replay_tags import derive_run_tags
 from trace_replay import build_trace_replay_summary
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1005,6 +1006,17 @@ def main() -> int:
         except Exception:
             pass
         return 0
+
+    if trace_match:
+        tag_payload = derive_run_tags(trace_match.path)
+        tag_summary = tag_payload["summary"]
+        emit_log(
+            "[recorder] "
+            f"Trace tags outcome={tag_summary.get('outcome') or 'unknown'} "
+            f"primary_barcode={tag_summary.get('primary_barcode') or '-'} "
+            f"errors={tag_summary.get('error_count') or 0} aborts={tag_summary.get('abort_count') or 0}",
+            log_path=recorder_log,
+        )
 
     run_window = build_run_window(
         capture_started_at=started_at,

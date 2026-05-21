@@ -66,6 +66,8 @@ class ReplayAppTests(unittest.TestCase):
             self.assertEqual(runs_payload[0]["label"], "demo-catalog")
             self.assertEqual(runs_payload[0]["replay_status"], "ready")
             self.assertGreaterEqual(runs_payload[0]["segment_count"], 1)
+            self.assertEqual(runs_payload[0]["primary_barcode"], "TBDR80300001000236")
+            self.assertEqual(runs_payload[0]["run_outcome"], "error")
 
     def test_parse_trace_events_uses_first_timestamp_as_zero(self) -> None:
         sample_trace = Path(__file__).resolve().parents[1] / "data" / "samples"
@@ -76,6 +78,137 @@ class ReplayAppTests(unittest.TestCase):
         self.assertEqual(events[0].elapsed_sec, 0.0)
         self.assertLessEqual(events[0].elapsed_sec, events[1].elapsed_sec)
         self.assertIn("Start method - progress", "\n".join(event.line for event in events[:12]))
+
+    def test_refresh_catalog_extracts_abort_outcome_from_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            video_path = root / "abort.mp4"
+            trace_path = root / "abort.trc"
+            manifest_path = root / "abort.run.json"
+
+            video_path.write_bytes(b"fake video payload")
+            trace_path.write_text(
+                "\n".join(
+                    [
+                        "2026-03-24 14:00:00> SYSTEM : Start method - progress",
+                        "2026-03-24 14:00:03> USER : Trace - complete; Barcode for NO1 pillar plate is:  TBDRTEST0001",
+                        "2026-03-24 14:00:05> SYSTEM : Abort method - error; Wrong run control state detected",
+                        "2026-03-24 14:00:06> SYSTEM : Execute method - progress; Step aborted. The method should be restarted.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "label": "demo-abort",
+                        "source": "0",
+                        "video_path": str(video_path),
+                        "trace_path": str(trace_path),
+                        "started_at_local": "2026-03-24T14:00:00",
+                        "stopped_at_local": "2026-03-24T14:05:00",
+                        "duration_sec": 300,
+                        "stop_reason": "process_exit",
+                        "process_gate": "HxRun.exe",
+                        "hamilton_log_dir": str(root),
+                        "hamilton_log_glob": "*.trc",
+                        "trace_mtime_delta_sec": 2.5,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            MODULE.refresh_catalog(root)
+            run = MODULE.list_catalog_runs(root)[0]
+            self.assertEqual(run["primary_barcode"], "TBDRTEST0001")
+            self.assertEqual(run["run_outcome"], "aborted")
+            self.assertTrue(run["run_tag_summary"]["has_error"])
+            self.assertTrue(run["run_tag_summary"]["has_abort"])
+
+    def test_list_catalog_runs_supports_barcode_and_outcome_filters(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            sample_trace = Path(__file__).resolve().parents[1] / "data" / "samples"
+            source_trace = next(sample_trace.glob("*.trc")).read_bytes()
+
+            for label, trace_bytes in (
+                ("tagged", source_trace),
+                ("clean", b"2026-03-24 14:00:00> SYSTEM : Start method - progress\n2026-03-24 14:00:02> USER : Trace - complete; finished successfully\n"),
+            ):
+                video_path = root / f"{label}.mp4"
+                trace_path = root / f"{label}.trc"
+                manifest_path = root / f"{label}.run.json"
+                video_path.write_bytes(label.encode("utf-8"))
+                trace_path.write_bytes(trace_bytes)
+                manifest_path.write_text(
+                    json.dumps(
+                        {
+                            "label": label,
+                            "source": "0",
+                            "video_path": str(video_path),
+                            "trace_path": str(trace_path),
+                            "started_at_local": "2026-03-24T14:00:00",
+                            "stopped_at_local": "2026-03-24T14:05:00",
+                            "duration_sec": 300,
+                            "stop_reason": "process_exit",
+                            "process_gate": "HxRun.exe",
+                            "hamilton_log_dir": str(root),
+                            "hamilton_log_glob": "*.trc",
+                            "trace_mtime_delta_sec": 1.0,
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+
+            MODULE.refresh_catalog(root)
+            barcode_results = MODULE.list_catalog_runs(root, query="TBDR80300001000236")
+            self.assertEqual([item["label"] for item in barcode_results], ["tagged"])
+            ok_results = MODULE.list_catalog_runs(root, outcome="ok")
+            self.assertEqual([item["label"] for item in ok_results], ["clean"])
+
+    def test_refresh_catalog_and_filters_emit_barcode_logging(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            video_path = root / "demo.mp4"
+            trace_path = root / "demo.trc"
+            manifest_path = root / "demo.run.json"
+
+            video_path.write_bytes(b"fake video payload")
+            sample_trace = Path(__file__).resolve().parents[1] / "data" / "samples"
+            trace_path.write_bytes(next(sample_trace.glob("*.trc")).read_bytes())
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "label": "demo-log",
+                        "source": "0",
+                        "video_path": str(video_path),
+                        "trace_path": str(trace_path),
+                        "started_at_local": "2026-03-24T14:00:00",
+                        "stopped_at_local": "2026-03-24T14:05:00",
+                        "duration_sec": 300,
+                        "stop_reason": "process_exit",
+                        "process_gate": "HxRun.exe",
+                        "hamilton_log_dir": str(root),
+                        "hamilton_log_glob": "*.trc",
+                        "trace_mtime_delta_sec": 1.0,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertLogs(level="INFO") as captured:
+                refresh_payload = MODULE.refresh_catalog(root)
+                filtered = MODULE.list_catalog_runs(root, query="TBDR80300001000236", outcome="error")
+
+            joined = "\n".join(captured.output)
+            self.assertEqual(refresh_payload["run_count"], 1)
+            self.assertEqual(len(filtered), 1)
+            self.assertIn("primary_barcode=TBDR80300001000236", joined)
+            self.assertIn("catalog_refresh", joined)
+            self.assertIn("list_runs query=tbdr80300001000236 outcome=error results=1", joined)
 
     def test_run_detail_returns_manifest_and_trace_events(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -201,6 +334,8 @@ class ReplayAppTests(unittest.TestCase):
                 payload = json.loads(urllib.request.urlopen(url).read().decode("utf-8"))
                 self.assertEqual(len(payload["items"]), 1)
                 self.assertEqual(payload["items"][0]["label"], "demo-http")
+                self.assertIn("run_tags", payload["items"][0])
+                self.assertEqual(payload["items"][0]["primary_barcode"], "TBDR80300001000236")
                 self.assertIn("catalog_path", payload)
             finally:
                 server.shutdown()
@@ -349,6 +484,58 @@ class ReplayAppTests(unittest.TestCase):
                     self.assertEqual(response.status, 206)
                     self.assertEqual(response.headers.get("Content-Range"), "bytes 4-7/16")
                     self.assertEqual(response.read(), b"4567")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_http_video_endpoint_streams_non_range_responses(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            video_path = root / "demo.mp4"
+            trace_path = root / "demo.trc"
+            manifest_path = root / "demo.run.json"
+
+            payload = bytes(range(256)) * 512
+            video_path.write_bytes(payload)
+            sample_trace = Path(__file__).resolve().parents[1] / "data" / "samples"
+            trace_path.write_bytes(next(sample_trace.glob("*.trc")).read_bytes())
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "label": "demo-video",
+                        "source": "0",
+                        "video_path": str(video_path),
+                        "trace_path": str(trace_path),
+                        "started_at_local": "2026-03-24T14:00:00",
+                        "stopped_at_local": "2026-03-24T14:05:00",
+                        "duration_sec": 300,
+                        "stop_reason": "process_exit",
+                        "process_gate": "HxRun.exe",
+                        "hamilton_log_dir": str(root),
+                        "hamilton_log_glob": "*.trc",
+                        "trace_mtime_delta_sec": 1.0,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            MODULE.refresh_catalog(root)
+            run_id = MODULE.list_catalog_runs(root)[0]["run_id"]
+            handler = MODULE.make_handler(root, self.make_test_config())
+            from http.server import ThreadingHTTPServer
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                url = f"http://127.0.0.1:{server.server_port}/api/runs/{run_id}/video"
+                with urllib.request.urlopen(url) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.headers.get("Accept-Ranges"), "bytes")
+                    self.assertEqual(int(response.headers.get("Content-Length") or 0), len(payload))
+                    self.assertEqual(response.read(), payload)
             finally:
                 server.shutdown()
                 server.server_close()

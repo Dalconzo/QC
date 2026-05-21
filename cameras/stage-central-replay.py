@@ -22,10 +22,12 @@ import datetime as dt
 import hashlib
 import importlib.util
 import json
+import logging
 import mimetypes
 import shutil
 import socket
 import sqlite3
+import sys
 import uuid
 from contextlib import closing
 from pathlib import Path
@@ -48,6 +50,12 @@ def load_inspect_module():
 
 
 INSPECT_MODULE = load_inspect_module()
+
+
+def emit_log(message: str) -> None:
+    """Mirror staging diagnostics to the operator shell."""
+    logging.getLogger("camera.stage_central_replay").info(message)
+    print(message, file=sys.stdout)
 
 
 def utc_now_text() -> str:
@@ -248,6 +256,14 @@ def build_payload(
 ) -> dict:
     """Assemble the future upload contract for one completed local run."""
     hostname = socket.gethostname()
+    run_tag_summary = payload.get("run_tag_summary") or {}
+    emit_log(
+        "[stage-central-replay] "
+        f"build_payload run_id={item['run_id']} "
+        f"outcome={run_tag_summary.get('outcome') or 'unknown'} "
+        f"primary_barcode={run_tag_summary.get('primary_barcode') or '-'} "
+        f"tag_count={len(payload.get('run_tags') or [])}"
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "created_at_utc": utc_now_text(),
@@ -289,6 +305,10 @@ def build_payload(
             "segment_count": len(payload.get("segments") or []),
             "idle_segment_count": int(payload.get("idle_segment_count") or 0),
             "active_segment_count": int(payload.get("active_segment_count") or 0),
+            "run_tags_version": payload.get("run_tags_version") or "",
+            "run_tags": payload.get("run_tags") or [],
+            "run_tag_summary": payload.get("run_tag_summary") or {},
+            "run_tag_search_text": payload.get("run_tag_search_text") or "",
         },
         "artifacts": artifact_rows,
     }
@@ -312,6 +332,10 @@ def stage_one_run(
     trace_path = Path(payload["trace_path"])
 
     if item["replay_status"] != "ready":
+        emit_log(
+            "[stage-central-replay] "
+            f"skip_not_ready run_id={item['run_id']} status={item['replay_status']} manifest={item['manifest_path']}"
+        )
         return {"action": "skipped_not_ready", "run_id": item["run_id"], "label": item["label"]}
 
     normalized_manifest_text = json.dumps(payload, indent=2)
@@ -322,6 +346,7 @@ def stage_one_run(
     }
     signature = compute_stage_signature(item, artifact_hashes)
     if (not restage) and is_already_staged(conn, signature):
+        emit_log(f"[stage-central-replay] skip_duplicate run_id={item['run_id']} manifest={item['manifest_path']}")
         return {"action": "skipped_duplicate", "run_id": item["run_id"], "label": item["label"]}
     if restage:
         signature = f"{signature}:{batch_id}"
@@ -358,6 +383,11 @@ def stage_one_run(
         artifact_rows=artifact_rows,
     )
     payload_path.write_text(json.dumps(upload_payload, indent=2), encoding="utf-8")
+    emit_log(
+        "[stage-central-replay] "
+        f"staged_run run_id={item['run_id']} payload={payload_path.resolve()} "
+        f"primary_barcode={(payload.get('run_tag_summary') or {}).get('primary_barcode') or '-'}"
+    )
 
     stage_run_id = f"stage-run-{uuid.uuid4().hex}"
     staged_at_utc = utc_now_text()
@@ -474,6 +504,11 @@ def stage_runs(
         INSPECT_MODULE.describe_manifest(path)
         for path in INSPECT_MODULE.iter_manifest_paths(effective_runs_root, recent_days=max(0.0, recent_days))
     ]
+    emit_log(
+        "[stage-central-replay] "
+        f"stage_runs runs_root={effective_runs_root} staging_root={effective_staging_root} "
+        f"recent_days={max(0.0, recent_days):g} manifest_count={len(items)}"
+    )
     if limit > 0:
         items = items[:limit]
 
@@ -558,6 +593,10 @@ def stage_runs(
         "items": results,
     }
     write_batch_summary(batch_dir / "batch-summary.json", batch_summary)
+    emit_log(
+        "[stage-central-replay] "
+        f"batch_complete batch_id={batch_id} staged={staged_count} skipped={skipped_count}"
+    )
     return batch_summary
 
 
