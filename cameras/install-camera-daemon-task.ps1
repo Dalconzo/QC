@@ -75,6 +75,9 @@ try {
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
 Write-Host "Installed scheduled task: $taskName" -ForegroundColor Green
+Write-Host ("Deployment branch: {0}" -f $effective.deployment.git_branch)
+Write-Host ("Deployment commit: {0}" -f $effective.deployment.git_commit_short)
+Write-Host ("Recorder contract: {0}" -f $effective.contract_status.replay_manifest_version)
 
 if ($RunNow) {
   Start-ScheduledTask -TaskName $taskName

@@ -18,6 +18,7 @@ central replay server:
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as dt
 import hashlib
 import importlib.util
@@ -38,6 +39,9 @@ from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load
 SCHEMA_VERSION = "central-replay-stage.v1"
 CATALOG_FILENAME = ".central_ingest_staging.sqlite3"
 INSPECT_MANIFESTS_PATH = Path(__file__).resolve().parent / "inspect-run-manifests.py"
+RUN_UPLOAD_FILENAME = "run-upload.json"
+RUN_ACK_FILENAME = "run-ack.json"
+STAGED_METADATA_FILENAMES = {RUN_UPLOAD_FILENAME, RUN_ACK_FILENAME}
 
 
 def load_inspect_module():
@@ -75,6 +79,67 @@ def compute_sha256(path: Path) -> str:
 def compute_text_sha256(text: str) -> str:
     """Hash generated JSON content before it is written to disk."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def source_file_fingerprint(path: Path) -> dict[str, int]:
+    """Capture cheap source-file metadata so unchanged files can reuse cached hashes."""
+    stat_result = path.stat()
+    return {
+        "size_bytes": int(stat_result.st_size),
+        "mtime_ns": int(stat_result.st_mtime_ns),
+    }
+
+
+def canonicalize_manifest_for_staging(payload: dict) -> dict:
+    """Strip workstation-local upload/cleanup churn before hashing or copying."""
+    canonical = copy.deepcopy(payload)
+    for field_name in ("manifest_path", "video_path", "trace_path", "hamilton_log_dir"):
+        if field_name in canonical:
+            canonical[field_name] = ""
+    if "run_id" in canonical:
+        canonical["run_id"] = str(canonical.get("run_id") or "")
+    for segment in canonical.get("segments") or []:
+        if not isinstance(segment, dict):
+            continue
+        for field_name in ("video_path", "derived_video_path", "derived_video_filename"):
+            if field_name in segment:
+                segment[field_name] = ""
+    local_compaction = canonical.get("local_compaction")
+    if isinstance(local_compaction, dict):
+        for field_name in ("artifacts_root", "source_video_path"):
+            if field_name in local_compaction:
+                local_compaction[field_name] = ""
+        for derivative in local_compaction.get("segment_derivatives") or []:
+            if not isinstance(derivative, dict):
+                continue
+            for field_name in ("video_path", "video_filename"):
+                if field_name in derivative:
+                    derivative[field_name] = ""
+    local_retention = canonical.get("local_retention")
+    if isinstance(local_retention, dict):
+        for field_name in (
+            "upload_status",
+            "upload_completed_at_utc",
+            "upload_error",
+            "ack_path",
+            "central_run_id",
+            "lan_available",
+            "original_delete_eligible_at_local",
+            "original_deleted_at_local",
+            "derived_delete_eligible_at_local",
+            "derived_deleted_at_local",
+            "last_cleanup_at_local",
+            "last_cleanup_action",
+            "last_cleanup_mode",
+            "last_cleanup_reason",
+        ):
+            local_retention[field_name] = ""
+        local_retention["lan_available"] = False
+        local_retention["original_video_path"] = ""
+    run_tag_summary = canonical.get("run_tag_summary")
+    if isinstance(run_tag_summary, dict) and "trace_path" in run_tag_summary:
+        run_tag_summary["trace_path"] = ""
+    return canonical
 
 
 def stage_batch_id() -> str:
@@ -121,6 +186,7 @@ def infer_profile(config: dict, payload: dict) -> dict:
 def artifact_metadata(artifact_type: str, source_path: Path, staged_path: Path) -> dict:
     """Describe one artifact exactly as the future central service will need it."""
     mime_type, _encoding = mimetypes.guess_type(source_path.name)
+    source_fingerprint = source_file_fingerprint(source_path)
     return {
         "artifact_type": artifact_type,
         "original_filename": source_path.name,
@@ -128,6 +194,8 @@ def artifact_metadata(artifact_type: str, source_path: Path, staged_path: Path) 
         "staged_path": str(staged_path.resolve()),
         "staged_filename": staged_path.name,
         "mime_type": mime_type or "application/octet-stream",
+        "source_size_bytes": source_fingerprint["size_bytes"],
+        "source_mtime_ns": source_fingerprint["mtime_ns"],
         "size_bytes": staged_path.stat().st_size,
         "sha256": compute_sha256(staged_path),
     }
@@ -172,6 +240,9 @@ def init_catalog_db(conn: sqlite3.Connection) -> None:
             upload_completed_at_utc TEXT NOT NULL DEFAULT '',
             ack_path TEXT NOT NULL DEFAULT '',
             last_upload_error TEXT NOT NULL DEFAULT '',
+            staged_bundle_status TEXT NOT NULL DEFAULT 'full',
+            pruned_at_utc TEXT NOT NULL DEFAULT '',
+            pruned_bytes INTEGER NOT NULL DEFAULT 0,
             started_at_local TEXT NOT NULL DEFAULT '',
             stopped_at_local TEXT NOT NULL DEFAULT '',
             staged_at_utc TEXT NOT NULL,
@@ -184,6 +255,8 @@ def init_catalog_db(conn: sqlite3.Connection) -> None:
             artifact_type TEXT NOT NULL,
             source_path TEXT NOT NULL,
             staged_path TEXT NOT NULL,
+            source_size_bytes INTEGER NOT NULL DEFAULT 0,
+            source_mtime_ns INTEGER NOT NULL DEFAULT 0,
             content_sha256 TEXT NOT NULL,
             size_bytes INTEGER NOT NULL,
             mime_type TEXT NOT NULL DEFAULT '',
@@ -216,6 +289,13 @@ def ensure_catalog_migrations(conn: sqlite3.Connection) -> None:
         "upload_completed_at_utc": "TEXT NOT NULL DEFAULT ''",
         "ack_path": "TEXT NOT NULL DEFAULT ''",
         "last_upload_error": "TEXT NOT NULL DEFAULT ''",
+        "staged_bundle_status": "TEXT NOT NULL DEFAULT 'full'",
+        "pruned_at_utc": "TEXT NOT NULL DEFAULT ''",
+        "pruned_bytes": "INTEGER NOT NULL DEFAULT 0",
+    }
+    expected_artifact_columns = {
+        "source_size_bytes": "INTEGER NOT NULL DEFAULT 0",
+        "source_mtime_ns": "INTEGER NOT NULL DEFAULT 0",
     }
     existing_columns = {
         row["name"]
@@ -225,6 +305,14 @@ def ensure_catalog_migrations(conn: sqlite3.Connection) -> None:
         if column_name in existing_columns:
             continue
         conn.execute(f"ALTER TABLE staged_runs ADD COLUMN {column_name} {column_type}")
+    existing_artifact_columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(staged_artifacts)")
+    }
+    for column_name, column_type in expected_artifact_columns.items():
+        if column_name in existing_artifact_columns:
+            continue
+        conn.execute(f"ALTER TABLE staged_artifacts ADD COLUMN {column_name} {column_type}")
 
 
 def get_db_connection(catalog_path: Path) -> sqlite3.Connection:
@@ -241,6 +329,63 @@ def is_already_staged(conn: sqlite3.Connection, stage_signature: str) -> bool:
         (stage_signature,),
     ).fetchone()
     return row is not None
+
+
+def find_cached_artifact_hash(
+    conn: sqlite3.Connection,
+    *,
+    local_run_id: str,
+    artifact_type: str,
+    source_path: Path,
+    source_size_bytes: int,
+    source_mtime_ns: int,
+) -> str:
+    """Reuse a prior source hash when the same local file is unchanged on disk."""
+    row = conn.execute(
+        """
+        SELECT staged_artifacts.content_sha256
+        FROM staged_artifacts
+        JOIN staged_runs
+          ON staged_runs.stage_run_id = staged_artifacts.stage_run_id
+        WHERE staged_runs.local_run_id = ?
+          AND staged_artifacts.artifact_type = ?
+          AND staged_artifacts.source_path = ?
+          AND staged_artifacts.source_size_bytes = ?
+          AND staged_artifacts.source_mtime_ns = ?
+        ORDER BY staged_runs.staged_at_utc DESC
+        LIMIT 1
+        """,
+        (
+            local_run_id,
+            artifact_type,
+            str(source_path.resolve()),
+            int(source_size_bytes),
+            int(source_mtime_ns),
+        ),
+    ).fetchone()
+    return "" if row is None else str(row["content_sha256"] or "")
+
+
+def resolve_source_hash(
+    conn: sqlite3.Connection,
+    *,
+    local_run_id: str,
+    artifact_type: str,
+    source_path: Path,
+) -> tuple[str, dict[str, int]]:
+    """Return the source hash plus the stat fingerprint used for cache reuse."""
+    fingerprint = source_file_fingerprint(source_path)
+    cached_hash = find_cached_artifact_hash(
+        conn,
+        local_run_id=local_run_id,
+        artifact_type=artifact_type,
+        source_path=source_path,
+        source_size_bytes=fingerprint["size_bytes"],
+        source_mtime_ns=fingerprint["mtime_ns"],
+    )
+    if cached_hash:
+        return cached_hash, fingerprint
+    return compute_sha256(source_path), fingerprint
 
 
 def build_payload(
@@ -338,11 +483,24 @@ def stage_one_run(
         )
         return {"action": "skipped_not_ready", "run_id": item["run_id"], "label": item["label"]}
 
-    normalized_manifest_text = json.dumps(payload, indent=2)
+    staging_manifest_payload = canonicalize_manifest_for_staging(payload)
+    normalized_manifest_text = json.dumps(staging_manifest_payload, indent=2)
+    video_hash, _video_fingerprint = resolve_source_hash(
+        conn,
+        local_run_id=item["run_id"],
+        artifact_type="video_mp4",
+        source_path=video_path,
+    )
+    trace_hash, _trace_fingerprint = resolve_source_hash(
+        conn,
+        local_run_id=item["run_id"],
+        artifact_type="trace_trc",
+        source_path=trace_path,
+    )
     artifact_hashes = {
         "run_manifest_json": compute_text_sha256(normalized_manifest_text),
-        "video_mp4": compute_sha256(video_path),
-        "trace_trc": compute_sha256(trace_path),
+        "video_mp4": video_hash,
+        "trace_trc": trace_hash,
     }
     signature = compute_stage_signature(item, artifact_hashes)
     if (not restage) and is_already_staged(conn, signature):
@@ -371,7 +529,7 @@ def stage_one_run(
 
     workstation_id = socket.gethostname().lower()
     machine_alias = detect_machine_alias(runs_root, manifest_path)
-    payload_path = run_dir / "run-upload.json"
+    payload_path = run_dir / RUN_UPLOAD_FILENAME
     upload_payload = build_payload(
         batch_id=batch_id,
         config=config,
@@ -409,10 +567,13 @@ def stage_one_run(
             run_dir,
             replay_status,
             upload_status,
+            staged_bundle_status,
+            pruned_at_utc,
+            pruned_bytes,
             started_at_local,
             stopped_at_local,
             staged_at_utc
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             stage_run_id,
@@ -430,6 +591,9 @@ def stage_one_run(
             str(run_dir.resolve()),
             item["replay_status"],
             "staged",
+            "full",
+            "",
+            0,
             payload.get("started_at_local") or "",
             payload.get("stopped_at_local") or "",
             staged_at_utc,
@@ -445,11 +609,13 @@ def stage_one_run(
                 artifact_type,
                 source_path,
                 staged_path,
+                source_size_bytes,
+                source_mtime_ns,
                 content_sha256,
                 size_bytes,
                 mime_type,
                 created_at_utc
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 f"stage-artifact-{uuid.uuid4().hex}",
@@ -457,6 +623,8 @@ def stage_one_run(
                 artifact_row["artifact_type"],
                 artifact_row["source_path"],
                 artifact_row["staged_path"],
+                artifact_row["source_size_bytes"],
+                artifact_row["source_mtime_ns"],
                 artifact_row["sha256"],
                 artifact_row["size_bytes"],
                 artifact_row["mime_type"],
@@ -476,6 +644,119 @@ def stage_one_run(
 def write_batch_summary(batch_path: Path, payload: dict) -> None:
     """Persist one human-readable batch summary beside the staged artifacts."""
     batch_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def prune_stage_run_bundle(conn: sqlite3.Connection, stage_row: sqlite3.Row) -> dict:
+    """Delete staged media bytes for an acknowledged run while keeping audit files."""
+    if str(stage_row["upload_status"] or "") != "acknowledged":
+        return {"action": "skipped_not_acknowledged", "stage_run_id": stage_row["stage_run_id"], "pruned_bytes": 0}
+    if str(stage_row["pruned_at_utc"] or ""):
+        return {"action": "skipped_already_pruned", "stage_run_id": stage_row["stage_run_id"], "pruned_bytes": 0}
+
+    run_dir = Path(str(stage_row["run_dir"] or "")).resolve()
+    if not run_dir.exists():
+        pruned_at_utc = utc_now_text()
+        conn.execute(
+            """
+            UPDATE staged_runs
+            SET staged_bundle_status = 'missing',
+                pruned_at_utc = ?,
+                pruned_bytes = 0
+            WHERE stage_run_id = ?
+            """,
+            (pruned_at_utc, stage_row["stage_run_id"]),
+        )
+        return {"action": "marked_missing", "stage_run_id": stage_row["stage_run_id"], "pruned_bytes": 0}
+
+    prunable_paths: list[Path] = []
+    pruned_bytes = 0
+    for child in run_dir.iterdir():
+        if child.name in STAGED_METADATA_FILENAMES:
+            continue
+        if child.is_file():
+            pruned_bytes += child.stat().st_size
+            prunable_paths.append(child)
+
+    for child in prunable_paths:
+        child.unlink(missing_ok=True)
+
+    pruned_at_utc = utc_now_text()
+    conn.execute(
+        """
+        UPDATE staged_runs
+        SET staged_bundle_status = ?,
+            pruned_at_utc = ?,
+            pruned_bytes = ?
+        WHERE stage_run_id = ?
+        """,
+        ("metadata_only", pruned_at_utc, pruned_bytes, stage_row["stage_run_id"]),
+    )
+    return {
+        "action": "pruned",
+        "stage_run_id": stage_row["stage_run_id"],
+        "run_dir": str(run_dir),
+        "pruned_bytes": pruned_bytes,
+        "retained_filenames": sorted(name for name in STAGED_METADATA_FILENAMES if (run_dir / name).exists()),
+    }
+
+
+def prune_acknowledged_stage_runs(
+    *,
+    config_path: Path,
+    local_config_path: Path,
+    staging_root: Path | None,
+    limit: int = 0,
+) -> dict:
+    """Reclaim local staging bytes for acknowledged runs while preserving audit files."""
+    config = load_effective_config(config_path=config_path, local_override_path=local_config_path)
+    cleanup_config = (config.get("central_ingest") or {}).get("staging_cleanup") or {}
+    effective_staging_root = (staging_root or Path(config["central_ingest"]["staging_root"])).resolve()
+    effective_staging_root.mkdir(parents=True, exist_ok=True)
+    catalog_path = effective_staging_root / CATALOG_FILENAME
+    if not bool(cleanup_config.get("enabled", True)):
+        return {
+            "staging_root": str(effective_staging_root),
+            "catalog_path": str(catalog_path.resolve()),
+            "pruned_run_count": 0,
+            "pruned_bytes": 0,
+            "items": [],
+            "action": "disabled",
+        }
+    if not catalog_path.exists():
+        return {
+            "staging_root": str(effective_staging_root),
+            "catalog_path": str(catalog_path.resolve()),
+            "pruned_run_count": 0,
+            "pruned_bytes": 0,
+            "items": [],
+            "action": "missing_catalog",
+        }
+
+    with closing(get_db_connection(catalog_path)) as conn:
+        init_catalog_db(conn)
+        query = """
+            SELECT *
+            FROM staged_runs
+            WHERE upload_status = 'acknowledged'
+              AND pruned_at_utc = ''
+            ORDER BY upload_completed_at_utc ASC, staged_at_utc ASC
+        """
+        params: tuple[object, ...] = ()
+        if limit > 0:
+            query += " LIMIT ?"
+            params = (limit,)
+        rows = list(conn.execute(query, params).fetchall())
+        items = [prune_stage_run_bundle(conn, row) for row in rows]
+        conn.commit()
+
+    return {
+        "staging_root": str(effective_staging_root),
+        "catalog_path": str(catalog_path.resolve()),
+        "pruned_run_count": sum(1 for item in items if item["action"] == "pruned"),
+        "pruned_bytes": sum(int(item.get("pruned_bytes") or 0) for item in items),
+        "items": items,
+        "action": "ok",
+    }
 
 
 def stage_runs(

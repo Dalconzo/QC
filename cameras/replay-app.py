@@ -23,6 +23,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
@@ -32,7 +33,13 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config, validate_config
 from camera_live import capture_live_frame as capture_live_frame_once, summarize_profile
-from replay_manifest import DEFAULT_REPLAY_MODE, DEFAULT_STORAGE_TIER, normalize_replay_manifest_payload
+from replay_manifest import (
+    DEFAULT_REPLAY_MODE,
+    DEFAULT_STORAGE_TIER,
+    normalize_replay_manifest_payload,
+    resolve_segment_playback,
+    summarize_playback_availability,
+)
 from replay_tags import derive_run_tags, serialize_summary, serialize_tags
 from trace_replay import TRACE_LINE_RE, parse_trace_lines
 
@@ -179,6 +186,23 @@ def init_catalog_db(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def iter_file_chunks(path: Path, *, start: int = 0, length: int | None = None) -> Iterator[bytes]:
+    """Yield file bytes in bounded chunks for full and range responses."""
+    remaining = length
+    with path.open("rb") as handle:
+        handle.seek(start)
+        while True:
+            if remaining is not None and remaining <= 0:
+                return
+            chunk_size = FILE_STREAM_CHUNK_SIZE if remaining is None else min(FILE_STREAM_CHUNK_SIZE, remaining)
+            chunk = handle.read(chunk_size)
+            if not chunk:
+                return
+            yield chunk
+            if remaining is not None:
+                remaining -= len(chunk)
+
+
 def iter_manifest_paths(runs_root: Path) -> list[Path]:
     """Return manifest files in newest-first order for catalog refresh."""
     return sorted(runs_root.rglob("*.run.json"), key=lambda path: path.stat().st_mtime, reverse=True)
@@ -186,15 +210,17 @@ def iter_manifest_paths(runs_root: Path) -> list[Path]:
 
 def determine_replay_status(payload: dict) -> str:
     """Flag whether the catalog entry is immediately replayable."""
-    has_video = bool(payload.get("video_path") and Path(payload["video_path"]).exists())
-    has_trace = bool(payload.get("trace_path") and Path(payload["trace_path"]).exists())
-    if has_video and has_trace:
+    playback = summarize_playback_availability(payload)
+    if playback["status"] == "ready_full_run":
         return "ready"
-    if has_video:
-        return "missing_trace"
-    if has_trace:
-        return "missing_video"
-    return "missing_video_and_trace"
+    if playback["status"] == "ready_segments_only":
+        return "ready_segments_only"
+    if playback["status"] == "lan_only":
+        return "lan_only"
+    if playback["status"] == "missing_trace":
+        has_video = bool(payload.get("video_path") and Path(payload["video_path"]).exists())
+        return "missing_trace" if has_video else "missing_video_and_trace"
+    return "missing_video"
 
 
 def refresh_catalog(runs_root: Path) -> dict:
@@ -212,15 +238,15 @@ def refresh_catalog(runs_root: Path) -> dict:
 
     with closing(get_db_connection(catalog_path)) as conn:
         init_catalog_db(conn)
-        seen_manifest_paths: set[str] = set()
         cataloged_at = dt.datetime.now(dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+        current_run_ids: set[str] = set()
 
         for manifest_path in manifests:
             payload = load_run_manifest(manifest_path)
             payload["has_video"] = bool(payload.get("video_path") and Path(payload["video_path"]).exists())
             payload["has_trace"] = bool(payload.get("trace_path") and Path(payload["trace_path"]).exists())
             payload["replay_status"] = determine_replay_status(payload)
-            seen_manifest_paths.add(payload["manifest_path"])
+            current_run_ids.add(payload["run_id"])
             run_summary = payload.get("run_tag_summary") or {}
             emit_log(
                 "[replay-app] "
@@ -287,6 +313,7 @@ def refresh_catalog(runs_root: Path) -> dict:
                     run_outcome_tag = excluded.run_outcome_tag,
                     primary_barcode = excluded.primary_barcode,
                     cataloged_at_utc = excluded.cataloged_at_utc
+                WHERE excluded.manifest_mtime_ns >= runs.manifest_mtime_ns
                 """,
                 (
                     payload["run_id"],
@@ -318,11 +345,11 @@ def refresh_catalog(runs_root: Path) -> dict:
                 ),
             )
 
-        if seen_manifest_paths:
-            placeholders = ",".join("?" for _ in seen_manifest_paths)
+        if current_run_ids:
+            placeholders = ",".join("?" for _ in current_run_ids)
             conn.execute(
-                f"DELETE FROM runs WHERE manifest_path NOT IN ({placeholders})",
-                tuple(seen_manifest_paths),
+                f"DELETE FROM runs WHERE run_id NOT IN ({placeholders})",
+                tuple(current_run_ids),
             )
         else:
             conn.execute("DELETE FROM runs")
@@ -432,7 +459,7 @@ def get_latest_ready_run(runs_root: Path) -> dict | None:
             """
             SELECT *
             FROM runs
-            WHERE replay_status = 'ready'
+            WHERE replay_status IN ('ready', 'ready_segments_only')
             ORDER BY COALESCE(started_at_local, '') DESC, manifest_mtime_ns DESC
             LIMIT 1
             """
@@ -459,6 +486,7 @@ def summarize_run(run: dict) -> dict:
     """Return lightweight metadata for the run picker."""
     trace_path = Path(run["trace_path"]) if run.get("trace_path") else None
     video_path = Path(run["video_path"]) if run.get("video_path") else None
+    playback = summarize_playback_availability(run)
     return {
         "run_id": run["run_id"],
         "label": run.get("label") or "run",
@@ -481,6 +509,10 @@ def summarize_run(run: dict) -> dict:
         "run_tag_summary": run.get("run_tag_summary") or {},
         "run_outcome": str((run.get("run_tag_summary") or {}).get("outcome") or ""),
         "primary_barcode": str((run.get("run_tag_summary") or {}).get("primary_barcode") or ""),
+        "playback_status": playback["status"],
+        "local_segment_count": playback["local_segment_count"],
+        "local_derived_segment_count": playback["local_derived_segment_count"],
+        "lan_available": playback["lan_available"],
     }
 
 
@@ -495,6 +527,21 @@ def get_run_detail(runs_root: Path, run_id: str) -> dict:
     run = get_run_by_id(runs_root, run_id)
     trace_path = Path(run["trace_path"]) if run.get("trace_path") else None
     events = parse_trace_events(trace_path) if trace_path and trace_path.exists() else []
+    playback = summarize_playback_availability(run)
+    segments: list[dict] = []
+    for item in run.get("segments") or []:
+        segment = dict(item)
+        resolved = resolve_segment_playback(segment, manifest_payload=run)
+        segment["playback_source_kind"] = resolved["source_kind"]
+        segment["resolved_video_path"] = resolved["video_path"]
+        segment["resolved_video_filename"] = resolved["video_filename"]
+        segment["resolved_video_encoding_profile"] = resolved["video_encoding_profile"]
+        segment["has_local_video"] = bool(resolved["is_local"] and resolved["is_available"])
+        if resolved["is_available"]:
+            segment["video_url"] = f"/api/runs/{run_id}/segments/{segment['segment_id']}/video"
+        else:
+            segment["video_url"] = ""
+        segments.append(segment)
     return {
         "run": summarize_run(run),
         "manifest": {
@@ -513,9 +560,12 @@ def get_run_detail(runs_root: Path, run_id: str) -> dict:
             "run_tags_version": run.get("run_tags_version"),
             "run_tags": run.get("run_tags") or [],
             "run_tag_summary": run.get("run_tag_summary") or {},
+            "local_retention": run.get("local_retention") or {},
+            "local_compaction": run.get("local_compaction") or {},
         },
+        "playback": playback,
         "chapters": run.get("chapters") or [],
-        "segments": run.get("segments") or [],
+        "segments": segments,
         "events": [asdict(event) for event in events],
     }
 
@@ -557,9 +607,8 @@ def make_handler(runs_root: Path, config: dict):
                 self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
                 self.send_header("Content-Length", str(length))
                 self.end_headers()
-                with path.open("rb") as handle:
-                    handle.seek(start)
-                    self._stream_file(handle, length)
+                for chunk in iter_file_chunks(path, start=start, length=length):
+                    self.wfile.write(chunk)
                 return
 
             self.send_response(HTTPStatus.OK)
@@ -567,16 +616,8 @@ def make_handler(runs_root: Path, config: dict):
             self.send_header("Accept-Ranges", "bytes")
             self.send_header("Content-Length", str(file_size))
             self.end_headers()
-            with path.open("rb") as handle:
-                self._stream_file(handle, file_size)
-
-        def _stream_file(self, handle, remaining_bytes: int) -> None:
-            while remaining_bytes > 0:
-                chunk = handle.read(min(FILE_STREAM_CHUNK_SIZE, remaining_bytes))
-                if not chunk:
-                    break
+            for chunk in iter_file_chunks(path):
                 self.wfile.write(chunk)
-                remaining_bytes -= len(chunk)
 
         def _parse_range_header(self, header_value: str, file_size: int) -> tuple[int, int]:
             """Parse a simple single-range header for MP4 seeking.
@@ -614,6 +655,16 @@ def make_handler(runs_root: Path, config: dict):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def _resolve_segment_request_path(self, run: dict, segment_id: str) -> Path | None:
+            for segment in run.get("segments") or []:
+                if str(segment.get("segment_id") or "") != segment_id:
+                    continue
+                resolved = resolve_segment_playback(segment, manifest_payload=run)
+                if resolved["is_local"] and resolved["is_available"] and resolved["video_path"]:
+                    return Path(resolved["video_path"])
+                return None
+            return None
 
         def do_GET(self) -> None:  # noqa: N802 - stdlib handler name
             parsed = urlparse(self.path)
@@ -703,6 +754,15 @@ def make_handler(runs_root: Path, config: dict):
                         return self._send_text("Run video is missing", HTTPStatus.NOT_FOUND)
                     try:
                         return self._send_file(video_path)
+                    except ValueError:
+                        return self._send_text("Invalid Range header", HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+
+                if len(parts) == 6 and parts[3] == "segments" and parts[5] == "video":
+                    segment_path = self._resolve_segment_request_path(run, parts[4])
+                    if segment_path is None:
+                        return self._send_text("Segment video is missing", HTTPStatus.NOT_FOUND)
+                    try:
+                        return self._send_file(segment_path)
                     except ValueError:
                         return self._send_text("Invalid Range header", HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
 

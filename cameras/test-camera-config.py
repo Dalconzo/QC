@@ -65,11 +65,21 @@ class CameraConfigTests(unittest.TestCase):
             self.assertTrue(config["central_ingest"]["staging_root"])
             self.assertTrue(config["central_ingest"]["upload_root"])
             self.assertEqual(config["central_ingest"]["transport"], "filesystem")
+            self.assertTrue(config["central_ingest"]["staging_cleanup"]["enabled"])
+            self.assertTrue(config["central_ingest"]["staging_cleanup"]["prune_after_ack"])
             self.assertEqual(config["live"]["default_profile"], "default")
             self.assertEqual(config["live"]["refresh_ms"], 1000)
             self.assertEqual(config["live"]["jpeg_quality"], 4)
+            self.assertIn("compaction", config["storage"])
+            self.assertFalse(config["storage"]["compaction"]["enabled"])
+            self.assertIn("retention", config["storage"])
+            self.assertEqual(config["storage"]["retention"]["original_retention_days"], 7)
+            self.assertEqual(config["storage"]["retention"]["derived_retention_days"], 30)
+            self.assertIn("emergency", config["storage"]["retention"])
+            self.assertEqual(config["storage"]["retention"]["emergency"]["min_free_gb"], 20)
             self.assertEqual(MODULE.get_profile(config)["id"], "top")
             self.assertTrue(config["daemon"]["task_name"])
+            self.assertFalse(config["daemon"]["enable_midrun_split"])
 
     def test_legacy_flat_keys_still_feed_nested_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -127,6 +137,148 @@ class CameraConfigTests(unittest.TestCase):
             config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
             validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
             self.assertTrue(any("live.default_profile" in item for item in validation["errors"]))
+
+    def test_validation_rejects_invalid_compaction_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "storage": {
+                            "compaction": {
+                                "enabled": True,
+                                "active_crf": 100,
+                                "active_preset": "",
+                                "idle_crf": -1,
+                                "idle_preset": "",
+                                "idle_fps": -2,
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("storage.compaction.active_crf" in item for item in validation["errors"]))
+            self.assertTrue(any("storage.compaction.active_preset" in item for item in validation["errors"]))
+            self.assertTrue(any("storage.compaction.idle_crf" in item for item in validation["errors"]))
+            self.assertTrue(any("storage.compaction.idle_preset" in item for item in validation["errors"]))
+            self.assertTrue(any("storage.compaction.idle_fps" in item for item in validation["errors"]))
+
+    def test_validation_rejects_negative_retention_days(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "storage": {"retention": {"original_retention_days": -7}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("storage.retention.original_retention_days" in item for item in validation["errors"]))
+
+    def test_validation_rejects_negative_derived_retention_days(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "storage": {"retention": {"derived_retention_days": -30}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("storage.retention.derived_retention_days" in item for item in validation["errors"]))
+
+    def test_validation_rejects_invalid_emergency_retention_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "storage": {
+                            "retention": {
+                                "emergency": {
+                                    "min_free_gb": 20,
+                                    "target_free_gb": 10,
+                                    "block_new_recording_free_gb": 25,
+                                }
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("target_free_gb" in item for item in validation["errors"]))
+            self.assertTrue(any("block_new_recording_free_gb" in item for item in validation["errors"]))
+
+    def test_validation_rejects_non_object_staging_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "central_ingest": {"staging_cleanup": False},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("central_ingest.staging_cleanup" in item for item in validation["errors"]))
+
+    def test_validation_rejects_non_boolean_midrun_split_toggle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            log_dir = root / "hamilton"
+            log_dir.mkdir()
+            base_path = root / "camera-recorder.json"
+            base_path.write_text(
+                json.dumps(
+                    {
+                        "hamilton": {"log_dir": str(log_dir), "process_name": "HxRun.exe"},
+                        "daemon": {"enable_midrun_split": "yes"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = MODULE.load_effective_config(config_path=base_path, local_override_path=root / "missing.local.json")
+            validation = MODULE.validate_config(config, require_hamilton_log_dir=False)
+            self.assertTrue(any("daemon.enable_midrun_split" in item for item in validation["errors"]))
 
 
 if __name__ == "__main__":

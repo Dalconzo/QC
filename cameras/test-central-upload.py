@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -107,6 +108,45 @@ class CentralUploadTests(unittest.TestCase):
         )
         return manifest_path
 
+    def write_ready_run_with_paths(
+        self,
+        run_dir: Path,
+        *,
+        label: str = "demo-ready",
+        source_name: str = "Arducam USB Camera",
+        started_at_local: str = "2026-04-10T10:00:00",
+        stopped_at_local: str = "2026-04-10T10:01:00",
+    ) -> Path:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        sample_trace = next((Path(__file__).resolve().parents[1] / "data" / "samples").glob("*.trc"))
+        trace_path = run_dir / "demo.trc"
+        trace_path.write_bytes(sample_trace.read_bytes())
+        video_path = run_dir / "demo.mp4"
+        video_path.write_bytes(b"\x00\x00\x00\x20ftypisomdemo-video")
+        manifest_path = run_dir / "demo.run.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "label": label,
+                    "source": source_name,
+                    "video_path": str(video_path),
+                    "video_filename": video_path.name,
+                    "started_at_local": started_at_local,
+                    "stopped_at_local": stopped_at_local,
+                    "duration_sec": 60.0,
+                    "stop_reason": "process_exit",
+                    "process_gate": "HxRun.exe",
+                    "hamilton_log_dir": str(trace_path.parent),
+                    "hamilton_log_glob": "*.trc",
+                    "trace_path": str(trace_path),
+                    "trace_filename": trace_path.name,
+                    "trace_mtime_delta_sec": 1.5,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return manifest_path
+
     def stage_one_ready_run(self, config_path: Path, local_path: Path, runs_root: Path, staging_root: Path) -> dict:
         self.write_ready_run(runs_root)
         return STAGE_MODULE.stage_runs(
@@ -141,6 +181,9 @@ class CentralUploadTests(unittest.TestCase):
             item = result["items"][0]
             self.assertEqual(item["action"], "acknowledged")
             self.assertTrue(Path(item["ack_path"]).exists())
+            local_manifest = json.loads((runs_root / "H7" / "2026-04-10" / "demo.run.json").read_text(encoding="utf-8"))
+            self.assertEqual(local_manifest["local_retention"]["upload_status"], "acknowledged")
+            self.assertTrue(local_manifest["local_retention"]["lan_available"])
 
             staging_catalog = staging_root / STAGE_MODULE.CATALOG_FILENAME
             with closing(STAGE_MODULE.get_db_connection(staging_catalog)) as conn:
@@ -218,6 +261,192 @@ class CentralUploadTests(unittest.TestCase):
                 artifact_count = conn.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
             self.assertEqual(run_count, 1)
             self.assertEqual(artifact_count, 3)
+
+    def test_upload_prunes_acknowledged_staging_bundle_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            upload_root = root / "central"
+            config_path, local_path = self.write_config(root, runs_root, staging_root, upload_root)
+            self.write_ready_run(runs_root)
+            stage_result = STAGE_MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=False,
+            )
+
+            run_dir = next((Path(stage_result["batch_dir"]) / "runs").iterdir())
+            result = UPLOAD_MODULE.upload_staged_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                staging_root=staging_root,
+                upload_root=upload_root,
+                limit=0,
+                batch_id="",
+            )
+
+            self.assertEqual(result["items"][0]["prune_action"], "pruned")
+            self.assertGreater(result["items"][0]["pruned_bytes"], 0)
+            self.assertTrue((run_dir / STAGE_MODULE.RUN_UPLOAD_FILENAME).exists())
+            self.assertTrue((run_dir / UPLOAD_MODULE.ACK_FILENAME).exists())
+            self.assertFalse((run_dir / "video.mp4").exists())
+            self.assertFalse((run_dir / "trace.trc").exists())
+            self.assertFalse((run_dir / "run_manifest.json").exists())
+
+            staging_catalog = staging_root / STAGE_MODULE.CATALOG_FILENAME
+            with closing(STAGE_MODULE.get_db_connection(staging_catalog)) as conn:
+                row = conn.execute(
+                    "SELECT staged_bundle_status, pruned_at_utc, pruned_bytes FROM staged_runs"
+                ).fetchone()
+            self.assertEqual(row["staged_bundle_status"], "metadata_only")
+            self.assertTrue(row["pruned_at_utc"])
+            self.assertGreater(row["pruned_bytes"], 0)
+
+    def test_restaged_run_after_path_change_reuses_existing_central_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            upload_root = root / "central"
+            config_path, local_path = self.write_config(root, runs_root, staging_root, upload_root)
+            original_dir = runs_root / "H7" / "2026-04-10"
+            moved_dir = runs_root / "H7" / "archive" / "2026-04-10"
+
+            self.write_ready_run_with_paths(original_dir)
+            STAGE_MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=False,
+            )
+            first = UPLOAD_MODULE.upload_staged_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                staging_root=staging_root,
+                upload_root=upload_root,
+                limit=0,
+                batch_id="",
+            )
+
+            shutil.rmtree(original_dir)
+            self.write_ready_run_with_paths(moved_dir)
+            STAGE_MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=True,
+            )
+            second = UPLOAD_MODULE.upload_staged_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                staging_root=staging_root,
+                upload_root=upload_root,
+                limit=0,
+                batch_id="",
+            )
+
+            self.assertEqual(second["uploaded_run_count"], 1)
+            self.assertFalse(second["items"][0]["created"])
+            self.assertEqual(first["items"][0]["central_run_id"], second["items"][0]["central_run_id"])
+
+    def test_retry_repair_replaces_corrupt_existing_central_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runs_root = root / "runs"
+            staging_root = root / "staging"
+            upload_root = root / "central"
+            config_path, local_path = self.write_config(root, runs_root, staging_root, upload_root)
+            self.stage_one_ready_run(config_path, local_path, runs_root, staging_root)
+            first = UPLOAD_MODULE.upload_staged_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                staging_root=staging_root,
+                upload_root=upload_root,
+                limit=0,
+                batch_id="",
+            )
+
+            self.assertEqual(first["uploaded_run_count"], 1)
+            video_relpath = next(
+                item["storage_relpath"]
+                for item in first["items"][0]["artifact_sync_actions"]
+                if item["artifact_type"] == "video_mp4"
+            )
+            central_video_path = upload_root / video_relpath
+            central_video_path.write_bytes(b"corrupt-central-video")
+
+            STAGE_MODULE.stage_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                runs_root=runs_root,
+                staging_root=staging_root,
+                limit=0,
+                restage=True,
+            )
+            second = UPLOAD_MODULE.upload_staged_runs(
+                config_path=config_path,
+                local_config_path=local_path,
+                staging_root=staging_root,
+                upload_root=upload_root,
+                limit=0,
+                batch_id="",
+            )
+
+            self.assertEqual(second["uploaded_run_count"], 1)
+            self.assertFalse(second["items"][0]["created"])
+            video_sync = next(
+                item
+                for item in second["items"][0]["artifact_sync_actions"]
+                if item["artifact_type"] == "video_mp4"
+            )
+            self.assertEqual(video_sync["sync_action"], "repaired_mismatch")
+
+            staged_payload = json.loads(
+                ((Path(second["items"][0]["ack_path"]).parent / "run-upload.json").read_text(encoding="utf-8"))
+            )
+            staged_video_sha = next(
+                item["sha256"]
+                for item in staged_payload["artifacts"]
+                if item["artifact_type"] == "video_mp4"
+            )
+            repaired_sha = STAGE_MODULE.compute_sha256(central_video_path)
+            self.assertEqual(repaired_sha, staged_video_sha)
+
+    def test_missing_target_copy_is_verified_before_ack(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source_path = root / "source.bin"
+            target_path = root / "central" / "artifact.bin"
+            source_bytes = b"expected-central-artifact"
+            source_path.write_bytes(source_bytes)
+            expected_sha256 = STAGE_MODULE.compute_sha256(source_path)
+
+            original_copy2 = UPLOAD_MODULE.shutil.copy2
+            try:
+                def corrupting_copy2(src, dst, *args, **kwargs):
+                    destination = Path(dst)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(b"corrupt-bytes")
+                    return str(destination)
+
+                UPLOAD_MODULE.shutil.copy2 = corrupting_copy2
+
+                with self.assertRaises(RuntimeError):
+                    UPLOAD_MODULE.ensure_central_artifact(
+                        source_path=source_path,
+                        target_path=target_path,
+                        expected_sha256=expected_sha256,
+                    )
+            finally:
+                UPLOAD_MODULE.shutil.copy2 = original_copy2
 
 
 if __name__ == "__main__":

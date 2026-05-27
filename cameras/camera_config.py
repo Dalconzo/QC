@@ -31,6 +31,30 @@ DEFAULT_CONFIG = {
         "runs_root": str(REPO_ROOT / "cameras" / "video_clips"),
         "manifest_dir": "",
         "recorder_log_dir": str(REPO_ROOT / "logs"),
+        "compaction": {
+            "enabled": False,
+            "artifacts_root": "",
+            "min_segment_duration_sec": 5.0,
+            "active_crf": 30,
+            "active_preset": "veryfast",
+            "idle_crf": 36,
+            "idle_preset": "veryfast",
+            "idle_fps": 2,
+        },
+        "retention": {
+            "enabled": True,
+            "original_retention_days": 7,
+            "derived_retention_days": 30,
+            "require_upload_ack": True,
+            "require_local_compaction": False,
+            "cleanup_on_run_complete": True,
+            "emergency": {
+                "enabled": True,
+                "min_free_gb": 20,
+                "target_free_gb": 30,
+                "block_new_recording_free_gb": 8,
+            },
+        },
     },
     "recorder": {
         "default_profile": "default",
@@ -59,6 +83,10 @@ DEFAULT_CONFIG = {
         "auto_upload_on_run_complete": False,
         "status_server_url": "",
         "status_timeout_sec": 5,
+        "staging_cleanup": {
+            "enabled": True,
+            "prune_after_ack": True,
+        },
     },
     "daemon": {
         "task_name": "HamiltonCameraRecorderDaemon",
@@ -69,6 +97,7 @@ DEFAULT_CONFIG = {
         "idle_poll_sec": 1.0,
         "heartbeat_sec": 10.0,
         "relaunch_delay_sec": 2.0,
+        "enable_midrun_split": False,
     },
     "profiles": [
         {
@@ -297,6 +326,10 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     if int(central_ingest.get("status_timeout_sec", 0) or 0) < 0:
         errors.append("central_ingest.status_timeout_sec cannot be negative.")
 
+    staging_cleanup = central_ingest.get("staging_cleanup", {})
+    if not isinstance(staging_cleanup, dict):
+        errors.append("central_ingest.staging_cleanup must be an object when provided.")
+
     default_live_profile = str(live.get("default_profile") or "").strip()
     if default_live_profile and default_live_profile not in {str(profile.get("id")) for profile in profiles}:
         errors.append(f"live.default_profile does not match a configured profile: {default_live_profile}")
@@ -309,6 +342,9 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
 
     if float(daemon.get("relaunch_delay_sec", 0)) < 0:
         errors.append("daemon.relaunch_delay_sec cannot be negative.")
+
+    if not isinstance(daemon.get("enable_midrun_split", False), bool):
+        errors.append("daemon.enable_midrun_split must be a boolean.")
 
     if not str(daemon.get("task_name") or "").strip():
         errors.append("daemon.task_name is required.")
@@ -352,5 +388,52 @@ def validate_config(config: dict, *, require_hamilton_log_dir: bool = True) -> d
     recorder_log_dir = str(storage.get("recorder_log_dir") or "")
     if recorder_log_dir and not Path(recorder_log_dir).exists():
         warnings.append(f"Recorder log dir does not exist yet and will be created on first use: {recorder_log_dir}")
+
+    compaction = storage.get("compaction") or {}
+    if not isinstance(compaction, dict):
+        errors.append("storage.compaction must be an object when provided.")
+    else:
+        min_segment_duration_sec = float(compaction.get("min_segment_duration_sec", 0) or 0)
+        if min_segment_duration_sec < 0:
+            errors.append("storage.compaction.min_segment_duration_sec cannot be negative.")
+
+        idle_fps = int(compaction.get("idle_fps", 0) or 0)
+        if idle_fps < 0:
+            errors.append("storage.compaction.idle_fps cannot be negative.")
+
+        for field_name in ("active_crf", "idle_crf"):
+            value = int(compaction.get(field_name, -1) or -1)
+            if value < 0 or value > 51:
+                errors.append(f"storage.compaction.{field_name} must be between 0 and 51.")
+
+        for field_name in ("active_preset", "idle_preset"):
+            if not str(compaction.get(field_name) or "").strip():
+                errors.append(f"storage.compaction.{field_name} is required.")
+
+    retention = storage.get("retention") or {}
+    if not isinstance(retention, dict):
+        errors.append("storage.retention must be an object when provided.")
+    else:
+        if int(retention.get("original_retention_days", 0) or 0) < 0:
+            errors.append("storage.retention.original_retention_days cannot be negative.")
+        if int(retention.get("derived_retention_days", 0) or 0) < 0:
+            errors.append("storage.retention.derived_retention_days cannot be negative.")
+        emergency = retention.get("emergency") or {}
+        if not isinstance(emergency, dict):
+            errors.append("storage.retention.emergency must be an object when provided.")
+        else:
+            for field_name in ("min_free_gb", "target_free_gb", "block_new_recording_free_gb"):
+                value = float(emergency.get(field_name, 0) or 0)
+                if value < 0:
+                    errors.append(f"storage.retention.emergency.{field_name} cannot be negative.")
+            min_free_gb = float(emergency.get("min_free_gb", 0) or 0)
+            target_free_gb = float(emergency.get("target_free_gb", 0) or 0)
+            block_new_recording_free_gb = float(emergency.get("block_new_recording_free_gb", 0) or 0)
+            if target_free_gb < min_free_gb:
+                errors.append("storage.retention.emergency.target_free_gb must be greater than or equal to min_free_gb.")
+            if block_new_recording_free_gb > min_free_gb:
+                errors.append(
+                    "storage.retention.emergency.block_new_recording_free_gb must be less than or equal to min_free_gb."
+                )
 
     return {"errors": errors, "warnings": warnings}
