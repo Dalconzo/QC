@@ -220,6 +220,7 @@ class CameraToolingTests(unittest.TestCase):
 
         def fake_load_effective_config(*, config_path, local_override_path):
             return {
+                "workstation": {"hostname": "DESKTOP-TEST"},
                 "hamilton": {"log_dir": str(config_path.parent), "log_glob": "*.trc", "process_name": "HxRun.exe"},
                 "storage": {
                     "runs_root": str(config_path.parent),

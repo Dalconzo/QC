@@ -12,13 +12,23 @@
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "camera-env.ps1")
+
+$pythonCommand = Get-CameraPythonCommand -RepoRoot $repoRoot
 $scriptPath = Join-Path $PSScriptRoot "start-recorder.ps1"
 $inspectPath = Join-Path $PSScriptRoot "inspect-camera-config.py"
 if (-not (Test-Path -LiteralPath $scriptPath) -or -not (Test-Path -LiteralPath $inspectPath)) {
   throw "Required camera scripts are missing."
 }
 
-$configJson = & python $inspectPath --config (Join-Path $repoRoot "config\camera-recorder.json") --json
+try {
+  $configJson = Invoke-CameraPython `
+    -PythonCommand $pythonCommand `
+    -ScriptPath $inspectPath `
+    -Arguments @("--config", (Join-Path $repoRoot "config\camera-recorder.json"), "--json")
+} catch {
+  throw "Failed to inspect camera config: $($_.Exception.Message)"
+}
 if ($LASTEXITCODE -ne 0) {
   throw "Failed to inspect camera config."
 }
