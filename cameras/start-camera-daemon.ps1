@@ -31,12 +31,19 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 . (Join-Path $scriptDir "camera-env.ps1")
 
+$configWasExplicit = [bool]$Config
 if (-not $Config) {
   $Config = Join-Path $repoRoot "config\camera-recorder.json"
 }
 
 if (-not $LocalConfig) {
-  $LocalConfig = Join-Path $repoRoot "config\camera-recorder.local.json"
+  if ($configWasExplicit) {
+    $configDirectory = Split-Path -Parent ([System.IO.Path]::GetFullPath($Config))
+    $configName = [System.IO.Path]::GetFileNameWithoutExtension($Config)
+    $LocalConfig = Join-Path $configDirectory ($configName + ".local.json")
+  } else {
+    $LocalConfig = Join-Path $repoRoot "config\camera-recorder.local.json"
+  }
 }
 
 $inspectScript = Join-Path $scriptDir "inspect-camera-config.py"
