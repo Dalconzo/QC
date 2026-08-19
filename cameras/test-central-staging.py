@@ -179,7 +179,7 @@ class CentralStagingTests(unittest.TestCase):
             self.assertTrue(payload_path.exists())
             payload = json.loads(payload_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["run"]["label"], "demo-ready")
-            self.assertEqual(payload["run"]["run_tags_version"], "replay-tags.v1")
+            self.assertEqual(payload["run"]["run_tags_version"], "replay-tags.v2")
             self.assertEqual(payload["run"]["run_tag_summary"]["primary_barcode"], "TBDR80300001000236")
             self.assertEqual(payload["run"]["run_tag_summary"]["outcome"], "error")
             self.assertTrue(any(item["key"] == "pillar_plate_barcode" for item in payload["run"]["run_tags"]))
@@ -223,6 +223,26 @@ class CentralStagingTests(unittest.TestCase):
             self.assertEqual(first["staged_run_count"], 1)
             self.assertEqual(second["staged_run_count"], 0)
             self.assertEqual(second["skipped_run_count"], 1)
+
+    def test_tag_contract_changes_invalidate_stage_signature(self) -> None:
+        item = {"run_id": "run-1"}
+        hashes = {
+            "run_manifest_json": "manifest",
+            "video_mp4": "video",
+            "trace_trc": "trace",
+        }
+        first_payload = {
+            "run_tags_version": "replay-tags.v2",
+            "run_tags": [{"key": "pillar_plate_barcode", "value": "ABC"}],
+            "run_tag_summary": {"primary_barcode": "ABC"},
+            "run_tag_search_text": "abc",
+        }
+        version_payload = {**first_payload, "run_tags_version": "replay-tags.v3"}
+        content_payload = {**first_payload, "run_tag_search_text": "abc corrected"}
+
+        original = MODULE.compute_stage_signature(item, hashes, first_payload)
+        self.assertNotEqual(original, MODULE.compute_stage_signature(item, hashes, version_payload))
+        self.assertNotEqual(original, MODULE.compute_stage_signature(item, hashes, content_payload))
 
     def test_duplicate_run_reuses_cached_media_hashes_without_rehashing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

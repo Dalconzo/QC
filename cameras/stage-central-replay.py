@@ -148,13 +148,17 @@ def stage_batch_id() -> str:
     return f"batch-{stamp}-{uuid.uuid4().hex[:8]}"
 
 
-def compute_stage_signature(item: dict, artifact_hashes: dict[str, str]) -> str:
-    """Build a durable duplicate key from the local run identity plus file hashes."""
+def compute_stage_signature(item: dict, artifact_hashes: dict[str, str], payload: dict) -> str:
+    """Build a durable duplicate key from run artifacts and derived tag content."""
     identity = {
         "run_id": item["run_id"],
         "manifest_sha256": artifact_hashes["run_manifest_json"],
         "video_sha256": artifact_hashes["video_mp4"],
         "trace_sha256": artifact_hashes["trace_trc"],
+        "run_tags_version": payload.get("run_tags_version") or "",
+        "run_tags": payload.get("run_tags") or [],
+        "run_tag_summary": payload.get("run_tag_summary") or {},
+        "run_tag_search_text": payload.get("run_tag_search_text") or "",
     }
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -502,7 +506,7 @@ def stage_one_run(
         "video_mp4": video_hash,
         "trace_trc": trace_hash,
     }
-    signature = compute_stage_signature(item, artifact_hashes)
+    signature = compute_stage_signature(item, artifact_hashes, payload)
     if (not restage) and is_already_staged(conn, signature):
         emit_log(f"[stage-central-replay] skip_duplicate run_id={item['run_id']} manifest={item['manifest_path']}")
         return {"action": "skipped_duplicate", "run_id": item["run_id"], "label": item["label"]}

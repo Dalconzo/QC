@@ -5,13 +5,18 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Callable
 
 
-TRACE_TAGS_VERSION = "replay-tags.v1"
-BARCODE_RE = re.compile(r"Barcode for (?P<slot>NO\d+) pillar plate is:\s*(?P<barcode>[A-Za-z0-9._-]+)", re.IGNORECASE)
+TRACE_TAGS_VERSION = "replay-tags.v2"
+SLOTTED_BARCODE_RE = re.compile(
+    r"Barcode for\s+(?P<slot>NO\d+)\s+pillar plate is:\s*(?P<barcode>[A-Za-z0-9._-]+)",
+    re.IGNORECASE,
+)
+UNSCOPED_BARCODE_RE = re.compile(r"pillar barcode:\s*(?P<barcode>[A-Za-z0-9._-]+)", re.IGNORECASE)
+END_METHOD_COMPLETE_RE = re.compile(r"SYSTEM\s*:\s*End method\s*-\s*complete\s*;", re.IGNORECASE)
 ABORT_TEXT_PATTERNS = (
     "step aborted",
+    "method has been aborted",
     "abort method",
     "abort command",
     ":abort",
@@ -57,7 +62,7 @@ def build_search_text(tags: list[dict], summary: dict) -> str:
     return " ".join(normalized.split())
 
 
-def derive_run_tags(trace_path: Path | None, *, log_fn: Callable[[str], None] | None = None) -> dict:
+def derive_run_tags(trace_path: Path | None) -> dict:
     """Extract a narrow set of replay-search tags from a Hamilton trace."""
     lines = _load_trace_lines(trace_path)
     tags: list[dict] = []
@@ -71,50 +76,61 @@ def derive_run_tags(trace_path: Path | None, *, log_fn: Callable[[str], None] | 
             "pillar_plate_barcodes": [],
             "has_error": False,
             "has_abort": False,
+            "end_method_complete": False,
             "error_count": 0,
             "abort_count": 0,
             "outcome": "unknown",
             "search_text": "",
         }
-        if log_fn:
-            trace_label = str(trace_path.resolve()) if trace_path else ""
-            log_fn(
-                f"[replay-tags] trace={trace_label or '<missing>'} lines=0 outcome=unknown primary_barcode= barcodes=0 errors=0 aborts=0"
-            )
         return {"version": TRACE_TAGS_VERSION, "tags": tags, "summary": summary, "search_text": ""}
 
-    seen_barcodes: set[str] = set()
-    ordered_barcodes: list[tuple[str, str]] = []
+    ordered_barcode_keys: list[str] = []
+    barcode_records: dict[str, dict] = {}
     error_count = 0
     abort_count = 0
+    end_method_complete = False
 
     for line in lines:
-        barcode_match = BARCODE_RE.search(line)
+        barcode_match = SLOTTED_BARCODE_RE.search(line)
+        slot = barcode_match.group("slot").upper() if barcode_match else ""
+        if barcode_match is None:
+            barcode_match = UNSCOPED_BARCODE_RE.search(line)
         if barcode_match:
-            slot = barcode_match.group("slot").upper()
             barcode = barcode_match.group("barcode").strip()
-            if barcode and barcode not in seen_barcodes:
-                ordered_barcodes.append((slot, barcode))
-                seen_barcodes.add(barcode)
+            barcode_key = barcode.casefold()
+            if barcode and barcode_key not in barcode_records:
+                ordered_barcode_keys.append(barcode_key)
+                barcode_records[barcode_key] = {"barcode": barcode, "slots": []}
+            if barcode and slot:
+                record = barcode_records[barcode_key]
+                record["barcode"] = barcode
+                if slot not in record["slots"]:
+                    record["slots"].append(slot)
         lowered = line.lower()
         if " - error" in lowered or "complete with error" in lowered:
             error_count += 1
         if any(pattern in lowered for pattern in ABORT_TEXT_PATTERNS):
             abort_count += 1
+        if END_METHOD_COMPLETE_RE.search(line):
+            end_method_complete = True
 
-    for slot, barcode in ordered_barcodes:
+    ordered_barcodes = [barcode_records[key] for key in ordered_barcode_keys]
+    for record in ordered_barcodes:
+        metadata = {"slots": record["slots"]}
+        if record["slots"]:
+            metadata["slot"] = record["slots"][0]
         tags.append(
             _normalize_tag(
                 key="pillar_plate_barcode",
-                value=barcode,
+                value=record["barcode"],
                 label="Pillar plate barcode",
-                metadata={"slot": slot},
+                metadata=metadata,
             )
         )
 
     has_error = error_count > 0
     has_abort = abort_count > 0
-    outcome = "aborted" if has_abort else "error" if has_error else "ok"
+    outcome = "aborted" if has_abort else "error" if has_error else "ok" if end_method_complete else "unknown"
     tags.append(_normalize_tag(key="run_outcome", value=outcome, label="Run outcome"))
     tags.append(_normalize_tag(key="has_error", value=str(has_error).lower(), label="Has trace error"))
     tags.append(_normalize_tag(key="has_abort", value=str(has_abort).lower(), label="Has trace abort"))
@@ -126,25 +142,16 @@ def derive_run_tags(trace_path: Path | None, *, log_fn: Callable[[str], None] | 
         "source": "trace",
         "trace_path": str(trace_path.resolve()) if trace_path else "",
         "tag_count": len(tags),
-        "primary_barcode": ordered_barcodes[0][1] if ordered_barcodes else "",
-        "pillar_plate_barcodes": [barcode for _slot, barcode in ordered_barcodes],
+        "primary_barcode": ordered_barcodes[0]["barcode"] if ordered_barcodes else "",
+        "pillar_plate_barcodes": [record["barcode"] for record in ordered_barcodes],
         "has_error": has_error,
         "has_abort": has_abort,
+        "end_method_complete": end_method_complete,
         "error_count": error_count,
         "abort_count": abort_count,
         "outcome": outcome,
     }
     summary["search_text"] = build_search_text(tags, summary)
-    if log_fn:
-        log_fn(
-            "[replay-tags] "
-            f"trace={summary['trace_path'] or '<missing>'} "
-            f"lines={len(lines)} "
-            f"outcome={summary['outcome']} "
-            f"primary_barcode={summary['primary_barcode'] or '-'} "
-            f"barcodes={len(summary['pillar_plate_barcodes'])} "
-            f"errors={summary['error_count']} aborts={summary['abort_count']}"
-        )
     return {
         "version": TRACE_TAGS_VERSION,
         "tags": tags,
