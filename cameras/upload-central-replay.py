@@ -83,6 +83,12 @@ def ensure_central_db_migrations(conn: sqlite3.Connection) -> None:
         "segment_count": "INTEGER NOT NULL DEFAULT 0",
         "idle_segment_count": "INTEGER NOT NULL DEFAULT 0",
         "active_segment_count": "INTEGER NOT NULL DEFAULT 0",
+        "run_tags_version": "TEXT NOT NULL DEFAULT ''",
+        "run_tags_json": "TEXT NOT NULL DEFAULT '[]'",
+        "run_tag_summary_json": "TEXT NOT NULL DEFAULT '{}'",
+        "run_tag_search_text": "TEXT NOT NULL DEFAULT ''",
+        "run_outcome_tag": "TEXT NOT NULL DEFAULT ''",
+        "primary_barcode": "TEXT NOT NULL DEFAULT ''",
     }
     existing_columns = {
         row["name"]
@@ -92,6 +98,10 @@ def ensure_central_db_migrations(conn: sqlite3.Connection) -> None:
         if column_name in existing_columns:
             continue
         conn.execute(f"ALTER TABLE runs ADD COLUMN {column_name} {column_type}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_runs_outcome_started "
+        "ON runs(run_outcome_tag, started_at_local DESC)"
+    )
 
 
 def get_pending_runs(conn: sqlite3.Connection, *, batch_id: str = "", limit: int = 0) -> list[sqlite3.Row]:
@@ -115,6 +125,18 @@ def get_pending_runs(conn: sqlite3.Connection, *, batch_id: str = "", limit: int
 def parse_payload(path: Path) -> dict:
     """Load one staged run payload."""
     return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def load_staged_payload(stage_row: sqlite3.Row) -> dict:
+    """Validate one staging ledger entry before touching the central catalog."""
+    run_dir = Path(stage_row["run_dir"])
+    if not run_dir.is_dir():
+        raise FileNotFoundError(f"Staged run directory not found: {run_dir}")
+
+    payload_path = Path(stage_row["payload_path"])
+    if not payload_path.is_file():
+        raise FileNotFoundError(f"Staged payload not found: {payload_path}")
+    return parse_payload(payload_path)
 
 
 def parse_local_timestamp(value: str) -> tuple[str, str]:
@@ -451,6 +473,12 @@ def ingest_one_run(
                 idle_segment_count,
                 active_segment_count,
                 replay_status,
+                run_tags_version,
+                run_tags_json,
+                run_tag_summary_json,
+                run_tag_search_text,
+                run_outcome_tag,
+                primary_barcode,
                 ready_artifact_count,
                 required_artifact_count,
                 first_ingested_utc,
@@ -483,6 +511,12 @@ def ingest_one_run(
                 int(run.get("idle_segment_count") or 0),
                 int(run.get("active_segment_count") or 0),
                 run.get("replay_status") or "ready",
+                run.get("run_tags_version") or "",
+                json.dumps(run.get("run_tags") or [], separators=(",", ":")),
+                json.dumps(run.get("run_tag_summary") or {}, separators=(",", ":")),
+                run.get("run_tag_search_text") or "",
+                str((run.get("run_tag_summary") or {}).get("outcome") or ""),
+                str((run.get("run_tag_summary") or {}).get("primary_barcode") or ""),
                 now_utc,
                 now_utc,
             ),
@@ -541,6 +575,12 @@ def ingest_one_run(
                 idle_segment_count = ?,
                 active_segment_count = ?,
                 replay_status = ?,
+                run_tags_version = ?,
+                run_tags_json = ?,
+                run_tag_summary_json = ?,
+                run_tag_search_text = ?,
+                run_outcome_tag = ?,
+                primary_barcode = ?,
                 ready_artifact_count = 3,
                 required_artifact_count = 3,
                 last_ingested_utc = ?
@@ -567,6 +607,12 @@ def ingest_one_run(
                 int(run.get("idle_segment_count") or 0),
                 int(run.get("active_segment_count") or 0),
                 run.get("replay_status") or "ready",
+                run.get("run_tags_version") or "",
+                json.dumps(run.get("run_tags") or [], separators=(",", ":")),
+                json.dumps(run.get("run_tag_summary") or {}, separators=(",", ":")),
+                run.get("run_tag_search_text") or "",
+                str((run.get("run_tag_summary") or {}).get("outcome") or ""),
+                str((run.get("run_tag_summary") or {}).get("primary_barcode") or ""),
                 now_utc,
                 central_run_id,
             ),
@@ -744,38 +790,44 @@ def upload_staged_runs(
         with closing(sqlite3.connect(central_catalog_path)) as central_conn:
             central_conn.row_factory = sqlite3.Row
             init_central_db(central_conn)
-            first_payload = parse_payload(Path(pending_runs[0]["payload_path"]))
-            workstation_id = ensure_workstation(central_conn, first_payload, now_utc=started_at_utc)
-            uploader_hostname = str(first_payload["workstation"].get("hostname") or workstation_id)
-            central_conn.execute(
-                """
-                INSERT INTO ingest_batches (
-                    ingest_batch_id,
-                    workstation_id,
-                    uploader_version,
-                    uploader_hostname,
-                    started_at_utc,
-                    completed_at_utc,
-                    status,
-                    notes
-                ) VALUES (?, ?, ?, ?, ?, '', 'uploading', '')
-                """,
-                (
-                    ingest_batch_id,
-                    workstation_id,
-                    UPLOADER_VERSION,
-                    uploader_hostname,
-                    started_at_utc,
-                ),
-            )
-
             items: list[dict] = []
             uploaded_count = 0
             failed_count = 0
+            ingest_batch_started = False
             for stage_row in pending_runs:
                 attempted_at_utc = utc_now_text()
-                payload = parse_payload(Path(stage_row["payload_path"]))
                 try:
+                    payload = load_staged_payload(stage_row)
+                    if not ingest_batch_started:
+                        workstation_id = ensure_workstation(
+                            central_conn,
+                            payload,
+                            now_utc=started_at_utc,
+                        )
+                        uploader_hostname = str(payload["workstation"].get("hostname") or workstation_id)
+                        central_conn.execute(
+                            """
+                            INSERT INTO ingest_batches (
+                                ingest_batch_id,
+                                workstation_id,
+                                uploader_version,
+                                uploader_hostname,
+                                started_at_utc,
+                                completed_at_utc,
+                                status,
+                                notes
+                            ) VALUES (?, ?, ?, ?, ?, '', 'uploading', '')
+                            """,
+                            (
+                                ingest_batch_id,
+                                workstation_id,
+                                UPLOADER_VERSION,
+                                uploader_hostname,
+                                started_at_utc,
+                            ),
+                        )
+                        ingest_batch_started = True
+
                     ingest_result = ingest_one_run(
                         central_conn,
                         central_root=effective_upload_root,
@@ -853,21 +905,22 @@ def upload_staged_runs(
                     )
 
             completed_at_utc = utc_now_text()
-            central_conn.execute(
-                """
-                UPDATE ingest_batches
-                SET completed_at_utc = ?,
-                    status = ?,
-                    notes = ?
-                WHERE ingest_batch_id = ?
-                """,
-                (
-                    completed_at_utc,
-                    "complete" if failed_count == 0 else "partial_failure",
-                    f"Uploaded {uploaded_count} runs; failed {failed_count}.",
-                    ingest_batch_id,
-                ),
-            )
+            if ingest_batch_started:
+                central_conn.execute(
+                    """
+                    UPDATE ingest_batches
+                    SET completed_at_utc = ?,
+                        status = ?,
+                        notes = ?
+                    WHERE ingest_batch_id = ?
+                    """,
+                    (
+                        completed_at_utc,
+                        "complete" if failed_count == 0 else "partial_failure",
+                        f"Uploaded {uploaded_count} runs; failed {failed_count}.",
+                        ingest_batch_id,
+                    ),
+                )
             central_conn.commit()
             stage_conn.commit()
 

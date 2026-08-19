@@ -11,8 +11,11 @@ import unittest
 import urllib.request
 from contextlib import closing
 from pathlib import Path
+from urllib.parse import urlencode
 
 import importlib.util
+
+from replay_tags import TRACE_TAGS_VERSION
 
 
 CAMERAS_DIR = Path(__file__).resolve().parent
@@ -64,7 +67,13 @@ class CentralReplayPipelineE2ETests(unittest.TestCase):
             staging_helper = TEST_STAGING_MODULE.CentralStagingTests()
             upload_helper = TEST_UPLOAD_MODULE.CentralUploadTests()
             config_path, local_path = staging_helper.write_config(root, runs_root, staging_root)
-            upload_helper.write_ready_run(runs_root)
+            manifest_path = upload_helper.write_ready_run(runs_root)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            with Path(manifest["trace_path"]).open("a", encoding="utf-8") as handle:
+                handle.write(
+                    "\n2026-04-10 10:00:10 Barcode for NO1 pillar plate is: E2E-BC-900\n"
+                    "2026-04-10 10:00:11 Step aborted\n"
+                )
 
             stage_result = STAGE_MODULE.stage_runs(
                 config_path=config_path,
@@ -84,6 +93,9 @@ class CentralReplayPipelineE2ETests(unittest.TestCase):
             upload_payload = json.loads(payload_path.read_text(encoding="utf-8"))
             self.assertEqual(upload_payload["run"]["replay_status"], "ready")
             self.assertEqual(len(upload_payload["artifacts"]), 3)
+            self.assertEqual(upload_payload["run"]["run_tags_version"], TRACE_TAGS_VERSION)
+            self.assertIn("E2E-BC-900", upload_payload["run"]["run_tag_summary"]["pillar_plate_barcodes"])
+            self.assertEqual(upload_payload["run"]["run_tag_summary"]["outcome"], "aborted")
 
             upload_result = UPLOAD_HELPER.upload_staged_runs(
                 config_path=config_path,
@@ -127,9 +139,16 @@ class CentralReplayPipelineE2ETests(unittest.TestCase):
                 run_count = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
                 artifact_count = conn.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
                 item_count = conn.execute("SELECT COUNT(*) FROM ingest_items").fetchone()[0]
+                stored_tags = conn.execute(
+                    "SELECT run_tags_version, run_tags_json, run_outcome_tag, primary_barcode FROM runs"
+                ).fetchone()
             self.assertEqual(run_count, 1)
             self.assertEqual(artifact_count, 3)
             self.assertEqual(item_count, 3)
+            self.assertEqual(stored_tags[0], TRACE_TAGS_VERSION)
+            self.assertTrue(any(tag["value"] == "E2E-BC-900" for tag in json.loads(stored_tags[1])))
+            self.assertEqual(stored_tags[2], "aborted")
+            self.assertTrue(stored_tags[3])
 
             server, thread = self.start_server(upload_root)
             try:
@@ -149,10 +168,21 @@ class CentralReplayPipelineE2ETests(unittest.TestCase):
                 self.assertEqual(len(runs["items"]), 1)
                 self.assertEqual(runs["items"][0]["central_run_id"], central_run_id)
 
+                tagged_runs = self.fetch_json(
+                    f"{base_url}/api/runs?{urlencode({'query': 'e2e-bc-900', 'outcome': 'aborted'})}"
+                )
+                self.assertEqual([item["central_run_id"] for item in tagged_runs["items"]], [central_run_id])
+                self.assertEqual(tagged_runs["items"][0]["run_outcome"], "aborted")
+
+                no_match = self.fetch_json(f"{base_url}/api/runs?{urlencode({'query': 'not-this-barcode'})}")
+                self.assertEqual(no_match["items"], [])
+
                 detail = self.fetch_json(f"{base_url}/api/runs/{central_run_id}")
                 self.assertEqual(detail["run"]["central_run_id"], central_run_id)
                 self.assertEqual(detail["workstation"]["workstation_id"], workstation_id)
                 self.assertEqual(len(detail["artifacts"]), 3)
+                self.assertEqual(detail["run"]["run_outcome"], "aborted")
+                self.assertTrue(any(tag["value"] == "E2E-BC-900" for tag in detail["run"]["run_tags"]))
 
                 artifacts = self.fetch_json(f"{base_url}/api/runs/{central_run_id}/artifacts")
                 self.assertEqual(len(artifacts["items"]), 3)

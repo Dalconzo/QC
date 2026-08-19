@@ -14,6 +14,20 @@
         <p>Browse centrally ingested Hamilton runs by workstation and replay status.</p>
         <div class="toolbar">
           <label class="field">
+            <span>Barcode or tag</span>
+            <input id="tag-filter" type="search" placeholder="Barcode, outcome, machine...">
+          </label>
+          <label class="field">
+            <span>Outcome</span>
+            <select id="outcome-filter">
+              <option value="">All outcomes</option>
+              <option value="ok">OK</option>
+              <option value="error">Error</option>
+              <option value="aborted">Aborted</option>
+              <option value="unknown">Unknown</option>
+            </select>
+          </label>
+          <label class="field">
             <span>Workstation</span>
             <select id="workstation-filter"></select>
           </label>

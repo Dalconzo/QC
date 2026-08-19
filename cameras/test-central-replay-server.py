@@ -14,8 +14,11 @@ import urllib.request
 import urllib.error
 from contextlib import closing
 from pathlib import Path
+from urllib.parse import urlencode
 
 import importlib.util
+
+from replay_tags import TRACE_TAGS_VERSION
 
 
 CAMERAS_DIR = Path(__file__).resolve().parent
@@ -119,7 +122,16 @@ class CentralReplayServerTests(unittest.TestCase):
         upload_root = root / "central"
         helper = TEST_UPLOAD_MODULE.CentralUploadTests()
         config_path, local_path = helper.write_config(root, runs_root, staging_root, upload_root)
-        helper.stage_one_ready_run(config_path, local_path, runs_root, staging_root)
+        helper.stage_one_ready_run(
+            config_path,
+            local_path,
+            runs_root,
+            staging_root,
+            trace_lines=[
+                "2026-04-10 10:00:10 Barcode for NO1 pillar plate is: CENTRAL-BC-001",
+                "2026-04-10 10:00:11 Step aborted",
+            ],
+        )
         result = UPLOAD_HELPER.upload_staged_runs(
             config_path=config_path,
             local_config_path=local_path,
@@ -277,6 +289,15 @@ class CentralReplayServerTests(unittest.TestCase):
                 self.assertEqual(detail["run"]["replay_manifest_version"], "hybrid-replay.v1")
                 self.assertIn("trace_segments", detail["run"]["replay_capabilities"])
                 self.assertGreaterEqual(detail["run"]["segment_count"], 1)
+                self.assertEqual(detail["run"]["run_tags_version"], TRACE_TAGS_VERSION)
+                self.assertEqual(detail["run"]["run_outcome"], "aborted")
+                self.assertIn("CENTRAL-BC-001", detail["run"]["run_tag_summary"]["pillar_plate_barcodes"])
+                self.assertTrue(
+                    any(
+                        tag["key"] == "pillar_plate_barcode" and tag["value"] == "CENTRAL-BC-001"
+                        for tag in detail["run"]["run_tags"]
+                    )
+                )
 
                 events = self.fetch_json(f"http://127.0.0.1:{server.server_port}/api/runs/{central_run_id}/trace-events")
                 self.assertGreater(events["item_count"], 10)
@@ -285,6 +306,54 @@ class CentralReplayServerTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
                 thread.join(timeout=5)
+
+    def test_runs_api_filters_by_query_and_outcome(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            upload_root, central_run_id = self.create_catalog_fixture(Path(tmpdir))
+            server, thread = self.start_server(upload_root)
+            try:
+                base_url = f"http://127.0.0.1:{server.server_port}/api/runs"
+                matching = self.fetch_json(f"{base_url}?{urlencode({'query': 'central-bc-001', 'outcome': 'ABORTED'})}")
+                self.assertEqual([item["central_run_id"] for item in matching["items"]], [central_run_id])
+                self.assertEqual(matching["filters"]["query"], "central-bc-001")
+                self.assertEqual(matching["filters"]["outcome"], "ABORTED")
+
+                no_query_match = self.fetch_json(f"{base_url}?{urlencode({'query': 'missing-barcode'})}")
+                self.assertEqual(no_query_match["items"], [])
+                no_outcome_match = self.fetch_json(f"{base_url}?{urlencode({'outcome': 'ok'})}")
+                self.assertEqual(no_outcome_match["items"], [])
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_stored_historical_trace_tags_are_backfilled_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            upload_root, central_run_id = self.create_catalog_fixture(Path(tmpdir))
+            catalog_path = upload_root / UPLOAD_HELPER.CENTRAL_CATALOG_FILENAME
+            import sqlite3
+
+            with closing(sqlite3.connect(catalog_path)) as conn:
+                conn.execute(
+                    """
+                    UPDATE runs
+                    SET run_tags_version = '', run_tags_json = '[]', run_tag_summary_json = '{}',
+                        run_tag_search_text = '', run_outcome_tag = '', primary_barcode = ''
+                    WHERE central_run_id = ?
+                    """,
+                    (central_run_id,),
+                )
+                conn.commit()
+
+            self.assertEqual(SERVER_MODULE.backfill_run_tags(upload_root, catalog_path), 1)
+            self.assertEqual(SERVER_MODULE.backfill_run_tags(upload_root, catalog_path), 0)
+            with closing(sqlite3.connect(catalog_path)) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute("SELECT * FROM runs WHERE central_run_id = ?", (central_run_id,)).fetchone()
+            self.assertEqual(row["run_tags_version"], TRACE_TAGS_VERSION)
+            self.assertEqual(row["run_outcome_tag"], "aborted")
+            self.assertIn("central-bc-001", row["run_tag_search_text"])
+            self.assertTrue(any(tag["value"] == "CENTRAL-BC-001" for tag in json.loads(row["run_tags_json"])))
 
     def test_media_endpoint_supports_byte_ranges(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

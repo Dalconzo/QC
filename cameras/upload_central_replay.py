@@ -16,4 +16,5 @@ SPEC.loader.exec_module(MODULE)
 
 
 CENTRAL_CATALOG_FILENAME = MODULE.CENTRAL_CATALOG_FILENAME
+init_central_db = MODULE.init_central_db
 upload_staged_runs = MODULE.upload_staged_runs

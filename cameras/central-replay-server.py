@@ -23,7 +23,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from camera_config import DEFAULT_CONFIG_PATH, DEFAULT_LOCAL_OVERRIDE_PATH, load_effective_config
-from upload_central_replay import CENTRAL_CATALOG_FILENAME
+from replay_tags import derive_run_tags, serialize_summary, serialize_tags
+from upload_central_replay import CENTRAL_CATALOG_FILENAME, init_central_db
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "central_replay_static"
@@ -413,6 +414,8 @@ def summarize_run_row(row: sqlite3.Row, artifacts: list[dict]) -> dict:
     trace_artifact = artifact_by_type.get("trace_trc")
     manifest_artifact = artifact_by_type.get("run_manifest_json")
     artifact_health = summarize_artifact_health(artifacts)
+    run_tags = json.loads(row["run_tags_json"] or "[]")
+    run_tag_summary = json.loads(row["run_tag_summary_json"] or "{}")
     return {
         "central_run_id": row["central_run_id"],
         "local_run_id": row["local_run_id"],
@@ -434,6 +437,11 @@ def summarize_run_row(row: sqlite3.Row, artifacts: list[dict]) -> dict:
         "idle_segment_count": row["idle_segment_count"],
         "active_segment_count": row["active_segment_count"],
         "replay_status": row["replay_status"],
+        "run_tags_version": row["run_tags_version"],
+        "run_tags": run_tags,
+        "run_tag_summary": run_tag_summary,
+        "run_outcome": row["run_outcome_tag"] or run_tag_summary.get("outcome") or "",
+        "primary_barcode": row["primary_barcode"] or run_tag_summary.get("primary_barcode") or "",
         "ready_artifact_count": artifact_health["ready_artifact_count"],
         "required_artifact_count": artifact_health["required_artifact_count"],
         "missing_required_artifact_count": artifact_health["missing_required_artifact_count"],
@@ -863,6 +871,8 @@ def list_runs(
     replay_status: str = "",
     started_after: str = "",
     started_before: str = "",
+    query_text: str = "",
+    outcome: str = "",
     limit: int = 100,
 ) -> list[dict]:
     uploaded_query = """
@@ -886,6 +896,12 @@ def list_runs(
                runs.idle_segment_count,
                runs.active_segment_count,
                runs.replay_status,
+               runs.run_tags_version,
+               runs.run_tags_json,
+               runs.run_tag_summary_json,
+               runs.run_tag_search_text,
+               runs.run_outcome_tag,
+               runs.primary_barcode,
                runs.ready_artifact_count,
                runs.required_artifact_count,
                runs.first_ingested_utc,
@@ -916,6 +932,23 @@ def list_runs(
     if started_before:
         uploaded_query += " AND runs.started_at_local <= ?"
         params.append(started_before)
+    normalized_query = query_text.strip().lower()
+    if normalized_query:
+        like_value = f"%{normalized_query}%"
+        uploaded_query += """
+            AND (
+                LOWER(runs.label) LIKE ?
+                OR LOWER(workstations.hostname) LIKE ?
+                OR LOWER(workstations.machine_alias) LIKE ?
+                OR LOWER(runs.run_tag_search_text) LIKE ?
+                OR LOWER(runs.primary_barcode) LIKE ?
+            )
+        """
+        params.extend([like_value, like_value, like_value, like_value, like_value])
+    normalized_outcome = outcome.strip().lower()
+    if normalized_outcome:
+        uploaded_query += " AND LOWER(runs.run_outcome_tag) = ?"
+        params.append(normalized_outcome)
     uploaded_query += " ORDER BY COALESCE(runs.started_at_local, '') DESC, runs.last_ingested_utc DESC"
     if limit > 0:
         uploaded_query += " LIMIT ?"
@@ -1138,6 +1171,12 @@ def get_run_detail(catalog_path: Path, central_run_id: str) -> dict:
                    runs.idle_segment_count,
                    runs.active_segment_count,
                    runs.replay_status,
+                   runs.run_tags_version,
+                   runs.run_tags_json,
+                   runs.run_tag_summary_json,
+                   runs.run_tag_search_text,
+                   runs.run_outcome_tag,
+                   runs.primary_barcode,
                    runs.ready_artifact_count,
                    runs.required_artifact_count,
                    runs.first_ingested_utc,
@@ -1255,6 +1294,46 @@ def get_health_payload(
     }
 
 
+def backfill_run_tags(upload_root: Path, catalog_path: Path) -> int:
+    """Index stored traces for runs uploaded before replay tags existed."""
+    updated = 0
+    with closing(get_db_connection(catalog_path)) as conn:
+        init_central_db(conn)
+        rows = conn.execute(
+            """
+            SELECT runs.central_run_id, artifacts.storage_relpath
+            FROM runs
+            JOIN artifacts ON artifacts.central_run_id = runs.central_run_id
+            WHERE artifacts.artifact_type = 'trace_trc'
+              AND runs.run_tags_version = ''
+            """
+        ).fetchall()
+        for row in rows:
+            trace_path = resolve_storage_path(upload_root, row["storage_relpath"])
+            tag_payload = derive_run_tags(trace_path if trace_path.exists() else None)
+            summary = tag_payload["summary"]
+            conn.execute(
+                """
+                UPDATE runs
+                SET run_tags_version = ?, run_tags_json = ?, run_tag_summary_json = ?,
+                    run_tag_search_text = ?, run_outcome_tag = ?, primary_barcode = ?
+                WHERE central_run_id = ?
+                """,
+                (
+                    tag_payload["version"],
+                    serialize_tags(tag_payload["tags"]),
+                    serialize_summary(summary),
+                    tag_payload["search_text"],
+                    summary.get("outcome") or "",
+                    summary.get("primary_barcode") or "",
+                    row["central_run_id"],
+                ),
+            )
+            updated += 1
+        conn.commit()
+    return updated
+
+
 def configure_logging(log_path: Path) -> logging.Logger:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("central_replay_server")
@@ -1284,6 +1363,8 @@ def make_handler(
     workstation_heartbeat_timeout_sec: float = 30.0,
     logger: logging.Logger | None = None,
 ):
+    backfill_run_tags(upload_root, catalog_path)
+
     class CentralReplayHandler(BaseHTTPRequestHandler):
         server_version = "CentralHamiltonReplay/1.1"
 
@@ -1394,6 +1475,8 @@ def make_handler(
                     replay_status = (params.get("replay_status") or [""])[0].strip()
                     started_after = (params.get("started_after") or [""])[0].strip()
                     started_before = (params.get("started_before") or [""])[0].strip()
+                    query_text = (params.get("query") or [""])[0].strip()
+                    outcome = (params.get("outcome") or [""])[0].strip()
                     limit_text = (params.get("limit") or ["100"])[0].strip()
                     try:
                         limit = max(1, int(limit_text))
@@ -1406,6 +1489,8 @@ def make_handler(
                         replay_status=replay_status,
                         started_after=started_after,
                         started_before=started_before,
+                        query_text=query_text,
+                        outcome=outcome,
                         limit=limit,
                     )
                     return self._send_json(
@@ -1418,6 +1503,8 @@ def make_handler(
                                 "replay_status": replay_status,
                                 "started_after": started_after,
                                 "started_before": started_before,
+                                "query": query_text,
+                                "outcome": outcome,
                                 "limit": limit,
                             },
                         }
@@ -1502,7 +1589,12 @@ def make_handler(
 
         def log_message(self, format: str, *args) -> None:  # noqa: A003
             if logger:
-                logger.info("%s %s %s", self.command, self.path, getattr(self, "_status_code", "-"))
+                logger.info(
+                    "%s %s %s",
+                    getattr(self, "command", "-"),
+                    getattr(self, "path", "-"),
+                    getattr(self, "_status_code", "-"),
+                )
 
     return CentralReplayHandler
 

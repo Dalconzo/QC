@@ -8,6 +8,8 @@ const terminalCountEl = document.getElementById("terminal-count");
 const catalogStateEl = document.getElementById("catalog-state");
 const workstationFilterEl = document.getElementById("workstation-filter");
 const statusFilterEl = document.getElementById("status-filter");
+const tagFilterEl = document.getElementById("tag-filter");
+const outcomeFilterEl = document.getElementById("outcome-filter");
 const refreshRunsEl = document.getElementById("refresh-runs");
 const runDetailsEl = document.getElementById("run-details");
 const artifactListEl = document.getElementById("artifact-list");
@@ -179,11 +181,19 @@ async function loadRuns() {
   const params = new URLSearchParams();
   const workstationId = workstationFilterEl.value || "";
   const replayStatus = statusFilterEl.value || "";
+  const query = tagFilterEl.value.trim();
+  const outcome = outcomeFilterEl.value || "";
   if (workstationId) {
     params.set("workstation_id", workstationId);
   }
   if (replayStatus) {
     params.set("replay_status", replayStatus);
+  }
+  if (query) {
+    params.set("query", query);
+  }
+  if (outcome) {
+    params.set("outcome", outcome);
   }
   params.set("limit", "200");
   const response = await fetch(`/api/runs?${params.toString()}`);
@@ -287,6 +297,29 @@ workstationFilterEl.addEventListener("change", () => {
 });
 
 statusFilterEl.addEventListener("change", () => {
+  activeRunId = "";
+  loadRuns().catch((error) => {
+    catalogStateEl.textContent = error.message;
+  });
+});
+
+tagFilterEl.addEventListener("search", () => {
+  activeRunId = "";
+  loadRuns().catch((error) => {
+    catalogStateEl.textContent = error.message;
+  });
+});
+
+tagFilterEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    activeRunId = "";
+    loadRuns().catch((error) => {
+      catalogStateEl.textContent = error.message;
+    });
+  }
+});
+
+outcomeFilterEl.addEventListener("change", () => {
   activeRunId = "";
   loadRuns().catch((error) => {
     catalogStateEl.textContent = error.message;
