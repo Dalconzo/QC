@@ -150,6 +150,8 @@ def stage_batch_id() -> str:
 
 def compute_stage_signature(item: dict, artifact_hashes: dict[str, str], payload: dict) -> str:
     """Build a durable duplicate key from run artifacts and derived tag content."""
+    tag_summary = dict(payload.get("run_tag_summary") or {})
+    tag_summary.pop("trace_path", None)
     identity = {
         "run_id": item["run_id"],
         "manifest_sha256": artifact_hashes["run_manifest_json"],
@@ -157,7 +159,7 @@ def compute_stage_signature(item: dict, artifact_hashes: dict[str, str], payload
         "trace_sha256": artifact_hashes["trace_trc"],
         "run_tags_version": payload.get("run_tags_version") or "",
         "run_tags": payload.get("run_tags") or [],
-        "run_tag_summary": payload.get("run_tag_summary") or {},
+        "run_tag_summary": tag_summary,
         "run_tag_search_text": payload.get("run_tag_search_text") or "",
     }
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()

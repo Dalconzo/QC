@@ -135,7 +135,12 @@ class ReplayAppTests(unittest.TestCase):
 
             for label, trace_bytes in (
                 ("tagged", source_trace),
-                ("clean", b"2026-03-24 14:00:00> SYSTEM : Start method - progress\n2026-03-24 14:00:02> USER : Trace - complete; finished successfully\n"),
+                (
+                    "clean",
+                    b"2026-03-24 14:00:00> SYSTEM : Start method - progress\n"
+                    b"2026-03-24 14:00:02> USER : Trace - complete; finished successfully\n"
+                    b"2026-03-24 14:00:03> SYSTEM : End method - complete;\n",
+                ),
             ):
                 video_path = root / f"{label}.mp4"
                 trace_path = root / f"{label}.trc"

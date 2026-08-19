@@ -147,8 +147,20 @@ class CentralUploadTests(unittest.TestCase):
         )
         return manifest_path
 
-    def stage_one_ready_run(self, config_path: Path, local_path: Path, runs_root: Path, staging_root: Path) -> dict:
-        self.write_ready_run(runs_root)
+    def stage_one_ready_run(
+        self,
+        config_path: Path,
+        local_path: Path,
+        runs_root: Path,
+        staging_root: Path,
+        *,
+        trace_lines: list[str] | None = None,
+    ) -> dict:
+        manifest_path = self.write_ready_run(runs_root)
+        if trace_lines:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            with Path(manifest["trace_path"]).open("a", encoding="utf-8") as handle:
+                handle.write("\n" + "\n".join(trace_lines) + "\n")
         return STAGE_MODULE.stage_runs(
             config_path=config_path,
             local_config_path=local_path,

@@ -285,8 +285,8 @@ def build_recorder_command(
     source: str,
     out_dir: str,
     label: str,
-    enable_midrun_split: bool,
-    discard_without_trace: bool,
+    enable_midrun_split: bool = False,
+    discard_without_trace: bool = False,
 ) -> list[str]:
     """Construct one child recorder invocation for a single Hamilton run."""
     if recorder_script.suffix.lower() == ".exe":
@@ -556,8 +556,8 @@ class AsyncIngestManager:
             with self._lock:
                 self._pending_count = max(0, self._pending_count - 1)
                 self._active_job = None
-            self._active_phase = ""
-        self._completions.put(result)
+                self._active_phase = ""
+            self._completions.put(result)
 
 
 def run_supervisor(

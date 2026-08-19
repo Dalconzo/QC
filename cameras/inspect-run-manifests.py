@@ -25,7 +25,7 @@ from replay_tags import derive_run_tags
 def emit_log(message: str) -> None:
     """Mirror manifest inspection diagnostics to the operator shell."""
     logging.getLogger("camera.inspect_run_manifests").info(message)
-    print(message, file=sys.stdout)
+    print(message, file=sys.stderr)
 
 
 def load_run_manifest(manifest_path: Path, *, log_fn=emit_log) -> dict:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Callable
 
 
 TRACE_TAGS_VERSION = "replay-tags.v2"
@@ -62,7 +63,7 @@ def build_search_text(tags: list[dict], summary: dict) -> str:
     return " ".join(normalized.split())
 
 
-def derive_run_tags(trace_path: Path | None) -> dict:
+def derive_run_tags(trace_path: Path | None, *, log_fn: Callable[[str], None] | None = None) -> dict:
     """Extract a narrow set of replay-search tags from a Hamilton trace."""
     lines = _load_trace_lines(trace_path)
     tags: list[dict] = []
@@ -82,6 +83,12 @@ def derive_run_tags(trace_path: Path | None) -> dict:
             "outcome": "unknown",
             "search_text": "",
         }
+        if log_fn:
+            trace_label = str(trace_path.resolve()) if trace_path else ""
+            log_fn(
+                f"[replay-tags] trace={trace_label or '<missing>'} lines=0 "
+                "outcome=unknown primary_barcode= barcodes=0 errors=0 aborts=0"
+            )
         return {"version": TRACE_TAGS_VERSION, "tags": tags, "summary": summary, "search_text": ""}
 
     ordered_barcode_keys: list[str] = []
@@ -152,6 +159,15 @@ def derive_run_tags(trace_path: Path | None) -> dict:
         "outcome": outcome,
     }
     summary["search_text"] = build_search_text(tags, summary)
+    if log_fn:
+        log_fn(
+            "[replay-tags] "
+            f"trace={summary['trace_path'] or '<missing>'} "
+            f"lines={len(lines)} outcome={summary['outcome']} "
+            f"primary_barcode={summary['primary_barcode'] or '-'} "
+            f"barcodes={len(summary['pillar_plate_barcodes'])} "
+            f"errors={summary['error_count']} aborts={summary['abort_count']}"
+        )
     return {
         "version": TRACE_TAGS_VERSION,
         "tags": tags,

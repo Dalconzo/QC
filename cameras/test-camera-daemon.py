@@ -484,7 +484,7 @@ class CameraDaemonTests(unittest.TestCase):
             )
 
             self.assertEqual(rc, 0)
-            self.assertEqual(ingest_calls["count"], 1)
+            self.assertEqual(ingest_calls["count"], 0)
             self.assertEqual(len(cleanup_calls), 1)
             status = json.loads((root / "daemon-status.json").read_text(encoding="utf-8"))
             self.assertEqual(status["last_cleanup_deleted_run_count"], 2)

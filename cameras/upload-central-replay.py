@@ -484,7 +484,7 @@ def ingest_one_run(
                 first_ingested_utc,
                 last_ingested_utc,
                 archived_at_utc
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 3, 3, ?, ?, '')
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 central_run_id,
@@ -517,8 +517,11 @@ def ingest_one_run(
                 run.get("run_tag_search_text") or "",
                 str((run.get("run_tag_summary") or {}).get("outcome") or ""),
                 str((run.get("run_tag_summary") or {}).get("primary_barcode") or ""),
+                3,
+                3,
                 now_utc,
                 now_utc,
+                "",
             ),
         )
         for artifact in artifact_rows:
